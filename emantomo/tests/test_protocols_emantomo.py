@@ -259,10 +259,10 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
         self.assertIsNotNone(protImportTomogram.outputTomograms,
                              "There was a problem with tomogram output")
 
-        if emantomo.Plugin.getActiveVersion(versions=[emantomo.V2_39]):
-            boxSize = 128
-        else:
-            boxSize = 32
+        # if emantomo.Plugin.getActiveVersion(versions=[emantomo.V2_39]):
+        boxSize = 128
+        # else:
+        #     boxSize = 32
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
                                                    auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
                                                    filesPath=self.coords3D,
