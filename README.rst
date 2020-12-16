@@ -49,7 +49,7 @@ For example:
 
     CONDA_ACTIVATION_CMD = . ~/anaconda3/etc/profile.d/conda.sh
 
-    * Default installation path assumed is ``software/em/eman-2.39``, if you want to change it, set *EMANTOMO_HOME* in ``scipion.conf`` file pointing to the folder where the EMANTOMO is installed.
+* Default installation path assumed is ``software/em/eman-2.39``, if you want to change it, set *EMANTOMO_HOME* in ``scipion.conf`` file pointing to the folder where the EMANTOMO is installed.
 
 To check the installation, simply run one of the following Scipion tests:
 
