@@ -33,10 +33,11 @@ from pwem.objects.data import Coordinate, CTFModel
 from pwem.objects.data_tiltpairs import Angles
 from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR,
                                  MDL_PICKING_PARTICLE_SIZE)
-from .convert import loadJson, readCTFModel, readSetOfParticles
+# from .convert import loadJson, readCTFModel, readSetOfParticles
+from .convert import loadJson, readCTFModel
 
 
-class EmanImport:
+class EmanTomoImport:
 
     def __init__(self, protocol, lstFile=''):
         self.protocol = protocol
@@ -61,42 +62,42 @@ class EmanImport:
             else:
                 raise Exception('Unknown extension "%s" to import Eman tilt pair angles' % ext)
 
-    def importCoordinates(self, fileName, addCoordinate):
-        if pwutils.exists(fileName):
-            ext = pwutils.getExt(fileName)
-
-            if ext == ".json":
-                jsonPosDict = loadJson(fileName)
-                boxes = []
-
-                if "boxes" in jsonPosDict:
-                    boxes = jsonPosDict["boxes"]
-                elif "boxes_rct" in jsonPosDict:
-                    boxes = jsonPosDict["boxes_rct"]
-                if boxes:
-                    for box in boxes:
-                        x, y = box[:2]
-                        coord = Coordinate()
-                        coord.setPosition(x, y)
-                        addCoordinate(coord)
-
-            elif ext == ".box":
-                md = MetaData()
-                md.readPlain(fileName, "xcoor ycoor particleSize")
-                size = md.getValue(MDL_PICKING_PARTICLE_SIZE, md.firstObject())
-                if size is None:
-                    print(">>> WARNING: Error parsing coordinate file: %s" % fileName)
-                    print("             Skipping this file.")
-                else:
-                    half = size / 2
-                    for objId in md:
-                        x = md.getValue(MDL_XCOOR, objId)
-                        y = md.getValue(MDL_YCOOR, objId)
-                        coord = Coordinate()
-                        coord.setPosition(x + half, y + half)
-                        addCoordinate(coord)
-            else:
-                raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
+    # def importCoordinates(self, fileName, addCoordinate):
+    #     if pwutils.exists(fileName):
+    #         ext = pwutils.getExt(fileName)
+    #
+    #         if ext == ".json":
+    #             jsonPosDict = loadJson(fileName)
+    #             boxes = []
+    #
+    #             if "boxes" in jsonPosDict:
+    #                 boxes = jsonPosDict["boxes"]
+    #             elif "boxes_rct" in jsonPosDict:
+    #                 boxes = jsonPosDict["boxes_rct"]
+    #             if boxes:
+    #                 for box in boxes:
+    #                     x, y = box[:2]
+    #                     coord = Coordinate()
+    #                     coord.setPosition(x, y)
+    #                     addCoordinate(coord)
+    #
+    #         elif ext == ".box":
+    #             md = MetaData()
+    #             md.readPlain(fileName, "xcoor ycoor particleSize")
+    #             size = md.getValue(MDL_PICKING_PARTICLE_SIZE, md.firstObject())
+    #             if size is None:
+    #                 print(">>> WARNING: Error parsing coordinate file: %s" % fileName)
+    #                 print("             Skipping this file.")
+    #             else:
+    #                 half = size / 2
+    #                 for objId in md:
+    #                     x = md.getValue(MDL_XCOOR, objId)
+    #                     y = md.getValue(MDL_YCOOR, objId)
+    #                     coord = Coordinate()
+    #                     coord.setPosition(x + half, y + half)
+    #                     addCoordinate(coord)
+    #         else:
+    #             raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
 
     def importCoordinates3D(self, fileName, addCoordinate):
         from tomo.objects import Coordinate3D
@@ -163,19 +164,19 @@ class EmanImport:
         readCTFModel(ctf, fileName)
         return ctf
 
-    def importParticles(self):
-        """ Import particles from 'imageSet.lst' file. """
-        partSet = self.protocol._createSetOfParticles()
-        partSet.setObjComment('Particles imported from EMAN lst file:\n%s' % self._lstFile)
-        self.protocol.setSamplingRate(partSet)
-        partSet.setIsPhaseFlipped(self.protocol.haveDataBeenPhaseFlipped.get())
-        self.protocol.fillAcquisition(partSet.getAcquisition())
+    # def importParticles(self):
+    #     """ Import particles from 'imageSet.lst' file. """
+    #     partSet = self.protocol._createSetOfParticles()
+    #     partSet.setObjComment('Particles imported from EMAN lst file:\n%s' % self._lstFile)
+    #     self.protocol.setSamplingRate(partSet)
+    #     partSet.setIsPhaseFlipped(self.protocol.haveDataBeenPhaseFlipped.get())
+    #     self.protocol.fillAcquisition(partSet.getAcquisition())
+    #
+    #     direc = self.protocol._getExtraPath()
+    #     readSetOfParticles(self._lstFile, partSet, self.copyOrLink, direc)
+    #     # Register the output set of particles
+    #     self.protocol._defineOutputs(outputParticles=partSet)
 
-        direc = self.protocol._getExtraPath()
-        readSetOfParticles(self._lstFile, partSet, self.copyOrLink, direc)
-        # Register the output set of particles
-        self.protocol._defineOutputs(outputParticles=partSet)
-
-    def validateParticles(self):
-        errors = []
-        return errors
+    # def validateParticles(self):
+    #     errors = []
+    #     return errors

@@ -108,32 +108,32 @@ def jsonToCtfModel(ctfJsonFn, ctfModel):
         readCTFModel(ctfModel, mdFn)
 
 
-def readSetOfCoordinates(workDir, micSet, coordSet, invertY=False, newBoxer=False):
-    """ Read from Eman .json files.
-    Params:
-        workDir: where the Eman boxer output files are located.
-        micSet: the SetOfMicrographs to associate the .json, which
-            name should be the same of the micrographs.
-        coordSet: the SetOfCoordinates that will be populated.
-    """
-    if newBoxer:
-        # read boxSize from info/project.json
-        jsonFnbase = pwutils.join(workDir, 'info', 'project.json')
-        jsonBoxDict = loadJson(jsonFnbase)
-        size = int(jsonBoxDict["global.boxsize"])
-    else:
-        # read boxSize from e2boxercache/base.json
-        jsonFnbase = pwutils.join(workDir, 'e2boxercache', 'base.json')
-        jsonBoxDict = loadJson(jsonFnbase)
-        size = int(jsonBoxDict["box_size"])
-
-    jsonFninfo = pwutils.join(workDir, 'info/')
-
-    for mic in micSet:
-        micBase = pwutils.removeBaseExt(mic.getFileName())
-        micPosFn = ''.join(glob.glob(jsonFninfo + '*' + micBase + '_info.json'))
-        readCoordinates(mic, micPosFn, coordSet, invertY)
-    coordSet.setBoxSize(size)
+# def readSetOfCoordinates(workDir, micSet, coordSet, invertY=False, newBoxer=False):
+#     """ Read from Eman .json files.
+#     Params:
+#         workDir: where the Eman boxer output files are located.
+#         micSet: the SetOfMicrographs to associate the .json, which
+#             name should be the same of the micrographs.
+#         coordSet: the SetOfCoordinates that will be populated.
+#     """
+#     if newBoxer:
+#         # read boxSize from info/project.json
+#         jsonFnbase = pwutils.join(workDir, 'info', 'project.json')
+#         jsonBoxDict = loadJson(jsonFnbase)
+#         size = int(jsonBoxDict["global.boxsize"])
+#     else:
+#         # read boxSize from e2boxercache/base.json
+#         jsonFnbase = pwutils.join(workDir, 'e2boxercache', 'base.json')
+#         jsonBoxDict = loadJson(jsonFnbase)
+#         size = int(jsonBoxDict["box_size"])
+#
+#     jsonFninfo = pwutils.join(workDir, 'info/')
+#
+#     for mic in micSet:
+#         micBase = pwutils.removeBaseExt(mic.getFileName())
+#         micPosFn = ''.join(glob.glob(jsonFninfo + '*' + micBase + '_info.json'))
+#         readCoordinates(mic, micPosFn, coordSet, invertY)
+#     coordSet.setBoxSize(size)
 
 
 def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None):
@@ -154,23 +154,23 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
             coord3DSet.append(newCoord)
 
 
-def readCoordinates(mic, fileName, coordsSet, invertY=False):
-    if pwutils.exists(fileName):
-        jsonPosDict = loadJson(fileName)
-
-        if "boxes" in jsonPosDict:
-            boxes = jsonPosDict["boxes"]
-
-            for box in boxes:
-                x, y = box[:2]
-
-                if invertY:
-                    y = mic.getYDim() - y
-
-                coord = Coordinate()
-                coord.setPosition(x, y)
-                coord.setMicrograph(mic)
-                coordsSet.append(coord)
+# def readCoordinates(mic, fileName, coordsSet, invertY=False):
+#     if pwutils.exists(fileName):
+#         jsonPosDict = loadJson(fileName)
+#
+#         if "boxes" in jsonPosDict:
+#             boxes = jsonPosDict["boxes"]
+#
+#             for box in boxes:
+#                 x, y = box[:2]
+#
+#                 if invertY:
+#                     y = mic.getYDim() - y
+#
+#                 coord = Coordinate()
+#                 coord.setPosition(x, y)
+#                 coord.setMicrograph(mic)
+#                 coordsSet.append(coord)
 
 
 def readCoordinate3D(box, inputTomo):
@@ -246,105 +246,105 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         proc.kill()
 
 
-def writeSetOfMicrographs(micSet, filename):
-    """ Simplified function borrowed from xmipp. """
-    mdata = md.MetaData()
-
-    for img in micSet:
-        objId = mdata.addObject()
-        imgRow = md.Row()
-        imgRow.setValue(md.MDL_ITEM_ID, objId)
-
-        index, fname = img.getLocation()
-        fn = ImageHandler.locationToXmipp((index, fname))
-        imgRow.setValue(md.MDL_MICROGRAPH, fn)
-
-        if img.isEnabled():
-            enabled = 1
-        else:
-            enabled = -1
-        imgRow.setValue(md.MDL_ENABLED, enabled)
-        imgRow.writeToMd(mdata, objId)
-
-    mdata.write('Micrographs@%s' % filename)
-
-
-def readSetOfParticles(lstFile, partSet, copyOrLink, direc):
-    for index, fn in iterLstFile(lstFile):
-        item = Particle()
-        # set full path to particles stack file
-        abspath = os.path.abspath(lstFile)
-        fn = abspath.replace('sets/%s' % os.path.basename(lstFile), '') + fn
-        newFn = pwutils.join(direc, os.path.basename(fn))
-        if not pwutils.exists(newFn):
-            copyOrLink(fn, newFn)
-
-        item.setLocation(index, newFn)
-        partSet.append(item)
+# def writeSetOfMicrographs(micSet, filename):
+#     """ Simplified function borrowed from xmipp. """
+#     mdata = md.MetaData()
+#
+#     for img in micSet:
+#         objId = mdata.addObject()
+#         imgRow = md.Row()
+#         imgRow.setValue(md.MDL_ITEM_ID, objId)
+#
+#         index, fname = img.getLocation()
+#         fn = ImageHandler.locationToXmipp((index, fname))
+#         imgRow.setValue(md.MDL_MICROGRAPH, fn)
+#
+#         if img.isEnabled():
+#             enabled = 1
+#         else:
+#             enabled = -1
+#         imgRow.setValue(md.MDL_ENABLED, enabled)
+#         imgRow.writeToMd(mdata, objId)
+#
+#     mdata.write('Micrographs@%s' % filename)
 
 
-def writeSetOfParticles(partSet, path, **kwargs):
-    """ Convert the imgSet particles to .hdf files as expected by Eman.
-    This function should be called from a current dir where
-    the images in the set are available.
-    """
-    ext = pwutils.getExt(partSet.getFirstItem().getFileName())[1:]
-    if ext == 'hdf':
-        # create links if input has hdf format
-        for fn in partSet.getFiles():
-            newFn = pwutils.removeBaseExt(fn).split('__ctf')[0] + '.hdf'
-            newFn = pwutils.join(path, newFn)
-            pwutils.createLink(fn, newFn)
-            print("   %s -> %s" % (fn, newFn))
-    else:
-        firstCoord = partSet.getFirstItem().getCoordinate() or None
-        hasMicName = False
-        if firstCoord:
-            hasMicName = firstCoord.getMicName() or False
-
-        fileName = ""
-        a = 0
-        proc = Plugin.createEmanProcess(args='write')
-
-        for i, part in iterParticlesByMic(partSet):
-            micName = micId = part.getMicId()
-            if hasMicName:
-                micName = pwutils.removeBaseExt(part.getCoordinate().getMicName())
-            objDict = part.getObjDict()
-
-            if not micId:
-                micId = 0
-
-            suffix = kwargs.get('suffix', '')
-            if hasMicName and (micName != str(micId)):
-                objDict['hdfFn'] = pwutils.join(path,
-                                                "%s%s.hdf" % (micName, suffix))
-            else:
-                objDict['hdfFn'] = pwutils.join(path,
-                                                "mic_%06d%s.hdf" % (micId, suffix))
-
-            alignType = kwargs.get('alignType')
-
-            if alignType != emcts.ALIGN_NONE:
-                shift, angles = alignmentToRow(part.getTransform(), alignType)
-                # json cannot encode arrays so I convert them to lists
-                # json fail if has -0 as value
-                objDict['_shifts'] = shift.tolist()
-                objDict['_angles'] = angles.tolist()
-            objDict['_itemId'] = part.getObjId()
-
-            # the index in EMAN begins with 0
-            if fileName != objDict['_filename']:
-                fileName = objDict['_filename']
-                if objDict['_index'] == 0:  # TODO: Index appears to be the problem (when not given it works ok)
-                    a = 0
-                else:
-                    a = 1
-            objDict['_index'] = int(objDict['_index'] - a)
-            # Write the e2converter.py process from where to read the image
-            print(json.dumps(objDict), file=proc.stdin, flush=True)
-            proc.stdout.readline()
-        proc.kill()
+# def readSetOfParticles(lstFile, partSet, copyOrLink, direc):
+#     for index, fn in iterLstFile(lstFile):
+#         item = Particle()
+#         # set full path to particles stack file
+#         abspath = os.path.abspath(lstFile)
+#         fn = abspath.replace('sets/%s' % os.path.basename(lstFile), '') + fn
+#         newFn = pwutils.join(direc, os.path.basename(fn))
+#         if not pwutils.exists(newFn):
+#             copyOrLink(fn, newFn)
+#
+#         item.setLocation(index, newFn)
+#         partSet.append(item)
+#
+#
+# def writeSetOfParticles(partSet, path, **kwargs):
+#     """ Convert the imgSet particles to .hdf files as expected by Eman.
+#     This function should be called from a current dir where
+#     the images in the set are available.
+#     """
+#     ext = pwutils.getExt(partSet.getFirstItem().getFileName())[1:]
+#     if ext == 'hdf':
+#         # create links if input has hdf format
+#         for fn in partSet.getFiles():
+#             newFn = pwutils.removeBaseExt(fn).split('__ctf')[0] + '.hdf'
+#             newFn = pwutils.join(path, newFn)
+#             pwutils.createLink(fn, newFn)
+#             print("   %s -> %s" % (fn, newFn))
+#     else:
+#         firstCoord = partSet.getFirstItem().getCoordinate() or None
+#         hasMicName = False
+#         if firstCoord:
+#             hasMicName = firstCoord.getMicName() or False
+#
+#         fileName = ""
+#         a = 0
+#         proc = Plugin.createEmanProcess(args='write')
+#
+#         for i, part in iterParticlesByMic(partSet):
+#             micName = micId = part.getMicId()
+#             if hasMicName:
+#                 micName = pwutils.removeBaseExt(part.getCoordinate().getMicName())
+#             objDict = part.getObjDict()
+#
+#             if not micId:
+#                 micId = 0
+#
+#             suffix = kwargs.get('suffix', '')
+#             if hasMicName and (micName != str(micId)):
+#                 objDict['hdfFn'] = pwutils.join(path,
+#                                                 "%s%s.hdf" % (micName, suffix))
+#             else:
+#                 objDict['hdfFn'] = pwutils.join(path,
+#                                                 "mic_%06d%s.hdf" % (micId, suffix))
+#
+#             alignType = kwargs.get('alignType')
+#
+#             if alignType != emcts.ALIGN_NONE:
+#                 shift, angles = alignmentToRow(part.getTransform(), alignType)
+#                 # json cannot encode arrays so I convert them to lists
+#                 # json fail if has -0 as value
+#                 objDict['_shifts'] = shift.tolist()
+#                 objDict['_angles'] = angles.tolist()
+#             objDict['_itemId'] = part.getObjId()
+#
+#             # the index in EMAN begins with 0
+#             if fileName != objDict['_filename']:
+#                 fileName = objDict['_filename']
+#                 if objDict['_index'] == 0:  # TODO: Index appears to be the problem (when not given it works ok)
+#                     a = 0
+#                 else:
+#                     a = 1
+#             objDict['_index'] = int(objDict['_index'] - a)
+#             # Write the e2converter.py process from where to read the image
+#             print(json.dumps(objDict), file=proc.stdin, flush=True)
+#             proc.stdout.readline()
+#         proc.kill()
 
 
 def getImageDimensions(imageFile):
@@ -460,11 +460,11 @@ def rowToAlignment(alignmentList, alignType):
     return alignment
 
 
-def iterParticlesByMic(partSet):
-    """ Iterate the particles ordered by micrograph """
-    for i, part in enumerate(partSet.iterItems(orderBy=['_micId', 'id'],
-                                               direction='ASC')):
-        yield i, part
+# def iterParticlesByMic(partSet):
+#     """ Iterate the particles ordered by micrograph """
+#     for i, part in enumerate(partSet.iterItems(orderBy=['_micId', 'id'],
+#                                                direction='ASC')):
+#         yield i, part
 
 
 def iterSubtomogramsByVol(subtomogramSet):
