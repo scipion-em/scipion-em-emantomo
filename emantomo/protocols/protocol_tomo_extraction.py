@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 
-import os
+# import os
 import glob
 from os.path import abspath
 
@@ -35,7 +35,7 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
-import emantomo
+# import emantomo
 from emantomo.constants import *
 
 # Tomogram type constants for particle extraction
@@ -238,6 +238,52 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             summary.append('*Black over white.*')
         return summary
+
+    def _validate(self):
+        errors = []
+        if self.tomoSource.get() == SAME_AS_PICKING:
+            return errors
+        tomo_from_coords = self.inputCoordinates.get().getPrecedents()
+        tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
+        coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
+        numberMatches = len(set(tomoFiles) & set(coordFiles))
+        if numberMatches == 0:
+            errors.append("Cannot relate Coordinate Tomograms and New Tomograms. In order to stablish a "
+                          "relation, the filename of the corresponding Coordinate Tomograms and New Tomogram "
+                          "files must be equal. For example, if a coordinate Coordinate Tomogram file is named Tomo_1.mrc, "
+                          "then the New Tomogram file to be associated to it should be named Tomo_1.ext "
+                          "(being 'ext' any valid extension - '.mrc', '.em'...).\n")
+        return errors
+
+    def _warnings(self):
+        warnings = []
+        if self.tomoSource.get() == SAME_AS_PICKING:
+            return warnings
+        tomo_from_coords = self.inputCoordinates.get().getPrecedents()
+        tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
+        coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
+        numberMatches = len(set(tomoFiles) & set(coordFiles))
+        if numberMatches < max(len(tomoFiles), len(coordFiles)):
+            warnings.append("Couldn't find a correspondence between all tomogram files. "
+                            "Association is performed in terms of the file name of the Coordinate Tomograms and the New Tomograms "
+                            "(without the extension). For example, if a Coordinate Tomogram file is named Tomo_1.mrc, then the New Tomogram file "
+                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
+                            "- '.mrc', '.em'...).\n")
+            mismatches_coords = set(coordFiles).difference(tomoFiles)
+            if mismatches_coords:
+                warnings.append("The following Coordinate Tomogram files will not be associated to any New Tomogram "
+                                "(name without extension):")
+                for file in mismatches_coords:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+            mismatches_tomos = set(tomoFiles).difference(coordFiles)
+            if mismatches_tomos:
+                warnings.append("The following New Tomogram files will not be associated to any Coordinate Tomogram "
+                                "(name without extension):")
+                for file in mismatches_tomos:
+                    warnings.append("\t%s" % file)
+                warnings.append("\n")
+        return warnings
 
     # --------------------------- UTILS functions ----------------------------------
 

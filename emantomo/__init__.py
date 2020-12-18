@@ -32,7 +32,7 @@ import pwem
 import pyworkflow.utils as pwutils
 from scipion.install.funcs import VOID_TGZ
 
-from .constants import EMANTOMO_HOME, V2_39, COMMIT
+from .constants import EMANTOMO_HOME, V2_39, COMMIT, CONDA_V2_39
 
 
 _logo = "eman2_logo.png"
@@ -163,8 +163,7 @@ class Plugin(pwem.Plugin):
         # Eman Installation using Conda
         def getCondaInstallation(version=V2_39):
             installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda create -y -n emantomo-' + version + ' eman-deps-dev -c cryoem -c defaults -c conda-forge && '
-            installationCmd += 'mkdir eman-build && '
+            installationCmd += 'conda create -y -n emantomo-' + version + ' --file ' + CONDA_V2_39 + ' && '
             installationCmd += 'conda activate emantomo-' + version + ' && '
             installationCmd += 'cd eman-build && '
             installationCmd += 'cmake ../eman-source/ -DENABLE_OPTIMIZE_MACHINE=ON && '
@@ -176,6 +175,7 @@ class Plugin(pwem.Plugin):
         eman239_commands.append(('wget -c https://github.com/cryoem/eman2/archive/%s.tar.gz' % COMMIT, "2f7a976.tar.gz"))
         eman239_commands.append(("tar -xvf %s.tar.gz" % COMMIT, []))
         eman239_commands.append(("mv eman2*/ eman-source", "eman-source"))
+        eman239_commands.append(('mkdir eman-build', 'eman-build'))
         installationCmd_239 = getCondaInstallation(V2_39)
         eman239_commands.append((installationCmd_239,
                                  "eman-build/libpyEM/CMakeFiles/pyPolarData2.dir/libpyPolarData2.cpp.o"))

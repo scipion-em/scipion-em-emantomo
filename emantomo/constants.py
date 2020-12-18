@@ -25,6 +25,9 @@
 # *
 # **************************************************************************
 
+import os
+import emantomo
+
 EMANTOMO_HOME = 'EMANTOMO_HOME'
 
 # Supported versions
@@ -32,6 +35,9 @@ V2_39 = '2.39-dev'
 
 # Installation commit
 COMMIT = '2f7a976'
+
+# Installation requirements
+CONDA_V2_39 = os.path.join(emantomo.__path__[0], 'requirements', 'Conda_Eman2_39.txt')
 
 # ------------------ Constants values -----------------------------------------
 
