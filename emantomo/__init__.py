@@ -32,7 +32,7 @@ import pwem
 import pyworkflow.utils as pwutils
 from scipion.install.funcs import VOID_TGZ
 
-from .constants import EMANTOMO_HOME, V2_39, COMMIT, CONDA_V2_39
+from .constants import EMANTOMO_HOME, V2_39, COMMIT, CONDA_V2_39, MISDEPS
 
 
 _logo = "eman2_logo.png"
@@ -166,7 +166,7 @@ class Plugin(pwem.Plugin):
             installationCmd += 'conda create -y -n emantomo-' + version + ' --file ' + CONDA_V2_39 + ' && '
             installationCmd += 'conda activate emantomo-' + version + ' && '
             installationCmd += 'cd eman-build && '
-            installationCmd += 'cmake ../eman-source/ -DENABLE_OPTIMIZE_MACHINE=ON && '
+            installationCmd += 'cmake ../eman-source/ -DENABLE_OPTIMIZE_MACHINE=ON || { cat %s; exit 1; } && ' % MISDEPS
             installationCmd += 'make -j %d && make install' % env.getProcessors()
             return installationCmd
 

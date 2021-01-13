@@ -39,6 +39,9 @@ COMMIT = '2f7a976'
 # Installation requirements
 CONDA_V2_39 = os.path.join(emantomo.__path__[0], 'requirements', 'Conda_Eman2_39.txt')
 
+# Missing dependencies
+MISDEPS = os.path.join(emantomo.__path__[0], 'requirements', 'Missing_Dependencies')
+
 # ------------------ Constants values -----------------------------------------
 
 # ctf processing type
