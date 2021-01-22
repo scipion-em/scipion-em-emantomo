@@ -603,6 +603,98 @@ class TestEmanTomoTempMatch(TestEmanTomoBase):
 
         return protTomoTempMatch
 
+class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
+    """This class check if the protocol Multi-particle refinement works properly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from tomo.tests import DataSet
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.tomogram = cls.dataset.getFile('tomo1')
+        cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
+        cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+
+    def _runTomoMultiReferenceRefinement(self, niter=2, mass=500.0, threads=1, tarres=20.0,
+                                         sym="c1", localfilter=False):
+        from tomo.protocols import ProtImportCoordinates3D, ProtImportTomograms
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+
+        self.launchProtocol(protImportTomogram)
+
+        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
+                                                   auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   filesPath=self.coords3D,
+                                                   importTomograms=protImportTomogram.outputTomograms,
+                                                   filesPattern='', boxSize=32,
+                                                   samplingRate=5)
+
+        self.launchProtocol(protImportCoordinates3d)
+        self.assertIsNotNone(protImportTomogram.outputTomograms,
+                             "There was a problem with tomogram output")
+        self.assertIsNotNone(protImportCoordinates3d.outputCoordinates,
+                             "There was a problem with coordinates 3d output")
+
+        doInvert = False
+        doNormalize = False
+        boxSize = 32
+        protTomoExtraction = self.newProtocol(EmanProtTomoExtraction,
+                                              inputTomograms=protImportTomogram.outputTomograms,
+                                              inputCoordinates=protImportCoordinates3d.outputCoordinates,
+                                              downsampleType=0,
+                                              doInvert=doInvert,
+                                              doNormalize=doNormalize,
+                                              boxSize=boxSize)
+
+        self.launchProtocol(protTomoExtraction)
+        self.assertIsNotNone(protTomoExtraction.outputSetOfSubtomogram,
+                             "There was a problem with SetOfSubtomogram output")
+
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+        self.launchProtocol(protImportTomogram)
+
+        protMultiReferenceRefinement = self.newProtocol(EmanProtTomoMultiReferenceRefinement,
+                                                        inputSetOfSubTomogram=protTomoExtraction.outputSetOfSubtomogram,
+                                                        inputRef=protTomoExtraction,
+                                                        niter=niter,
+                                                        tarres=tarres,
+                                                        mass=mass,
+                                                        threads=threads,
+                                                        sym=sym,
+                                                        localfilter=localfilter)
+        protMultiReferenceRefinement.inputRef.setExtended("outputSetOfSubtomogram.1")
+
+        self.launchProtocol(protMultiReferenceRefinement)
+        self.assertIsNotNone(protMultiReferenceRefinement.outputSubTomogram,
+                             "There was a problem with subTomogram output")
+        self.assertIsNotNone(protMultiReferenceRefinement.outputSetOfSubTomograms,
+                             "There was a problem with SetOfSubTomograms output")
+        return protMultiReferenceRefinement
+
+    def test_defaultTomoMultiReferenceRefinement(self):
+        protTomoMultiReferenceRefinement = self._runTomoMultiReferenceRefinement()
+        outputSetOfSubTomograms = protTomoMultiReferenceRefinement.outputSetOfSubTomograms
+        outputSubTomogram = protTomoMultiReferenceRefinement.outputSubTomogram
+        '''
+        self.assertEqual(outputSetOfSubTomograms.getDimensions(), (32, 32, 32))
+        self.assertEqual(outputSetOfSubTomograms.getSize(), 5)
+        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getObjValue().getSize(), 5)
+        for subTomogram in outputSetOfSubTomograms:
+            self.assertEqual(subTomogram.getSamplingRate(), 5)
+            self.assertTrue(hasattr(subTomogram, "coverage"))
+            self.assertTrue(hasattr(subTomogram, "score"))
+            matrix = subTomogram.getTransform().getMatrix()
+            self.assertEqual(matrix.shape, (4, 4))
+        self.assertTrue("threed" in outputSubTomogram.getFileName())
+        self.assertEqual(outputSubTomogram.getSamplingRate(), 5)
+        '''
+        return protTomoMultiReferenceRefinement
+
 
 class TestEmanTomoReconstruction(TestEmanTomoBase):
     @classmethod
