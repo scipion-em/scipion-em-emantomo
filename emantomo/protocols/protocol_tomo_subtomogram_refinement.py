@@ -150,7 +150,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         args += ' --pkeep=%f ' % self.pkeep
         args += ' --sym=%s ' % self.sym
         args += ' --maxtilt=%s ' % self.maxtilt
-        args += ' --path=%s ' % os.path.join(self.getOutputPath(), '')
+        args += ' --path=%s ' % self.getOutputPath()
         if self.niter > 1:
             args += ' --niter=%d' % self.niter
         if self.goldcontinue:
@@ -165,8 +165,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
         self._log.info('Launching: ' + program + ' ' + args)
-        self.runJob(program, args,
-                    numberOfMpi=1, numberOfThreads=1)
+        self.runJob(program, args)
 
     def getLastFromOutputPath(self, pattern):
         threedPaths = glob(self.getOutputPath("*"))
