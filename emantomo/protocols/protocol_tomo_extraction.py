@@ -299,7 +299,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             return self.inputTomograms.get()
 
     def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId):
-        outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '*.mrc')
+        outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
         ih = ImageHandler()
         for counter, subtomoFile in enumerate(subtomoFileList):
