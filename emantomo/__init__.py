@@ -32,7 +32,7 @@ import pwem
 import pyworkflow.utils as pwutils
 from scipion.install.funcs import VOID_TGZ
 
-from .constants import EMANTOMO_HOME, V2_39, COMMIT, CONDA_V2_39
+from .constants import EMANTOMO_HOME, V2_9, TAG, CONDA_V2_9, MISDEPS
 
 
 _logo = "eman2_logo.png"
@@ -46,11 +46,11 @@ SCRATCHDIR = pwutils.getEnvVariable('EMANTOMOSCRATCHDIR', default='/tmp/')
 class Plugin(pwem.Plugin):
     _homeVar = EMANTOMO_HOME
     _pathVars = [EMANTOMO_HOME]
-    _supportedVersions = [V2_39]
+    _supportedVersions = [V2_9]
 
     @classmethod
     def _defineVariables(cls):
-        cls._defineEmVar(EMANTOMO_HOME, 'eman-' + V2_39)
+        cls._defineEmVar(EMANTOMO_HOME, 'eman-' + V2_9)
 
     @classmethod
     def getEnviron(cls):
@@ -87,11 +87,11 @@ class Plugin(pwem.Plugin):
         return ''
 
     @classmethod
-    def isVersion(cls, version=V2_39):
+    def isVersion(cls, version=V2_9):
         return cls.getActiveVersion() == version
 
     @classmethod
-    def getEmanActivation(cls, version=V2_39):
+    def getEmanActivation(cls, version=V2_9):
         return "conda activate emantomo-" + version
 
     @classmethod
@@ -150,37 +150,26 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        # SW_EM = env.getEmFolder()
-
-        # shell = os.environ.get("SHELL", "bash")
-        # eman23_commands = [
-        #     (shell + ' ./emantomo.3.linux64.sh -b -p "%s/eman-2.3"' %
-        #      SW_EM, '%s/eman-2.3/bin/python' % SW_EM)]
-        # eman231_commands = [
-        #     (shell + ' ./emantomo.31_sphire1.3.linux64.sh -b -p "%s/eman-2.31"' %
-        #      SW_EM, '%s/eman-2.31/bin/python' % SW_EM)]
-
-        # Eman Installation using Conda
-        def getCondaInstallation(version=V2_39):
+        def getCondaInstallation(version=V2_9):
             installationCmd = cls.getCondaActivationCmd()
-            installationCmd += 'conda create -y -n emantomo-' + version + ' --file ' + CONDA_V2_39 + ' && '
+            installationCmd += 'conda create -y -n emantomo-' + version + ' --file ' + CONDA_V2_9 + ' && '
             installationCmd += 'conda activate emantomo-' + version + ' && '
             installationCmd += 'cd eman-build && '
-            installationCmd += 'cmake ../eman-source/ -DENABLE_OPTIMIZE_MACHINE=ON && '
+            installationCmd += 'cmake ../eman-source/ -DENABLE_OPTIMIZE_MACHINE=ON || { cat %s; exit 1; } && ' % MISDEPS
             installationCmd += 'make -j %d && make install' % env.getProcessors()
             return installationCmd
 
         # For Eman-2.39
-        eman239_commands = []
-        eman239_commands.append(('wget -c https://github.com/cryoem/eman2/archive/%s.tar.gz' % COMMIT, "2f7a976.tar.gz"))
-        eman239_commands.append(("tar -xvf %s.tar.gz" % COMMIT, []))
-        eman239_commands.append(("mv eman2*/ eman-source", "eman-source"))
-        eman239_commands.append(('mkdir eman-build', 'eman-build'))
-        installationCmd_239 = getCondaInstallation(V2_39)
-        eman239_commands.append((installationCmd_239,
+        eman29_commands = []
+        eman29_commands.append(('wget -c https://github.com/cryoem/eman2/archive/%s.tar.gz' % TAG, "%s.tar.gz" % TAG))
+        eman29_commands.append(("tar -xvf %s.tar.gz" % TAG, []))
+        eman29_commands.append(("mv eman2*/ eman-source", "eman-source"))
+        eman29_commands.append(('mkdir eman-build', 'eman-build'))
+        installationCmd_29 = getCondaInstallation(V2_9)
+        eman29_commands.append((installationCmd_29,
                                  "eman-build/libpyEM/CMakeFiles/pyPolarData2.dir/libpyPolarData2.cpp.o"))
 
-        env.addPackage('eman', version=V2_39,
-                       commands=eman239_commands,
+        env.addPackage('eman', version=V2_9,
+                       commands=eman29_commands,
                        tar=VOID_TGZ,
                        default=True)

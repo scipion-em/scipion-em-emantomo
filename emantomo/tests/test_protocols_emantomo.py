@@ -28,6 +28,7 @@ import os
 from pyworkflow.tests import (BaseTest, setupTestProject, DataSet)
 from pwem.protocols import (ProtImportMicrographs, ProtImportParticles, ProtImportVolumes,
                             ProtImportAverages)
+import pyworkflow.utils as pwutils
 
 import emantomo
 
@@ -127,6 +128,7 @@ class TestEmanTomoBase(TestEmanBase):
         cls.dataset = DataSet.getDataSet(projectData)
         cls.tomogram = cls.dataset.getFile('tomo1')
         cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+        cls.coords3D_Large = cls.dataset.getFile('overview_wbp_large.txt')
         cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
         cls.smallTomogram = cls.dataset.getFile('coremask_normcorona.mrc')
 
@@ -405,9 +407,12 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
 
         self.launchProtocol(protImportTomogram)
 
+        coords = pwutils.removeBaseExt(self.coords3D)
+        coords = protImportTomogram._getExtraPath(coords + '.txt')
+        pwutils.createAbsLink(self.coords3D_Large, coords)
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
                                                    auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                   filesPath=self.coords3D,
+                                                   filesPath=coords,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,
                                                    samplingRate=5)
@@ -443,8 +448,8 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
         self.assertEqual(averageSubTomogram.getSamplingRate(), 5.0)
 
         self.assertEqual(outputSetOfSubTomograms.getDimensions(), (32, 32, 32))
-        self.assertEqual(outputSetOfSubTomograms.getSize(), 5)
-        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getObjValue().getSize(), 5)
+        self.assertEqual(outputSetOfSubTomograms.getSize(), 15)
+        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getObjValue().getSize(), 15)
 
         for subTomogram in outputSetOfSubTomograms:
             self.assertEqual(subTomogram.getSamplingRate(), 5)
@@ -453,7 +458,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
             matrix = subTomogram.getTransform().getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
-    def _runTomoSubtomogramRefinementWithSubtomo(self, niter=2, mass=500.0, threads=1, pkeep=0.8, goldstandard=-1,
+    def _runTomoSubtomogramRefinementWithSubtomo(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
                                                  goldcontinue=False, sym="c1", localfilter=False, maxtilt=90.0):
         protTomoExtraction = self._runPreviousProtocols()
         protTomoRefinement = self.newProtocol(EmanProtTomoRefinement,
@@ -479,7 +484,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
 
         return protTomoRefinement
 
-    def _runTomoSubtomogramRefinementWithVolume(self, niter=2, mass=500.0, threads=1, pkeep=0.8, goldstandard=-1,
+    def _runTomoSubtomogramRefinementWithVolume(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
                                                 goldcontinue=False, sym="c1", localfilter=False, maxtilt=90.0):
         protTomoExtraction = self._runPreviousProtocols()
 
