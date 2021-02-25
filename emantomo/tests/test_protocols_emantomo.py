@@ -619,6 +619,7 @@ class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
         cls.dataset = DataSet.getDataSet('tomo-em')
         cls.tomogram = cls.dataset.getFile('tomo1')
         cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
+        cls.coords3D_Large = cls.dataset.getFile('overview_wbp_large.txt')
         cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
 
     def _runTomoMultiReferenceRefinement(self, niter=2, mass=500.0, threads=1, tarres=20.0,
@@ -630,9 +631,12 @@ class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
 
         self.launchProtocol(protImportTomogram)
 
-        protImportCoordinates3d = self.newProtocol(ProtImportCoordinates3D,
-                                                   auto=ProtImportCoordinates3D.IMPORT_FROM_EMAN,
-                                                   filesPath=self.coords3D,
+        coords = pwutils.removeBaseExt(self.coords3D)
+        coords = protImportTomogram._getExtraPath(coords + '.txt')
+        pwutils.createAbsLink(self.coords3D_Large, coords)
+        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
+                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   filesPath=coords,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,
                                                    samplingRate=5)

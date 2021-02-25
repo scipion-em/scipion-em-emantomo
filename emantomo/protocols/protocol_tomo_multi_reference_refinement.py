@@ -3,8 +3,10 @@
 # *
 # * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
 # *              Matias Garcia   (matias@eyeseetea.com) [1]
+# *              David Herreros  (dherreros@cnb.csic.es) [2]
 # *
 # * [1] EyeSeeTea Ltd, London, UK
+# * [2] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -105,10 +107,6 @@ class EmanProtTomoMultiReferenceRefinement(EMProtocol, ProtTomoBase):
                       label='Local filter',
                       help='use tophat local')
 
-        form.addParam('threads', params.IntParam, default=2,
-                       label='Threads:',
-                       help='Number of threads')
-
         form.addParam('maskFile', params.PointerParam, allowsNull=True,
                        expertLevel=params.LEVEL_ADVANCED,
                        pointerClass='VolumeMask', label='Mask file',
@@ -132,7 +130,8 @@ class EmanProtTomoMultiReferenceRefinement(EMProtocol, ProtTomoBase):
         storePath = self._getExtraPath("subtomograms")
         pwutils.makePath(storePath)
 
-        self.newFn = pwutils.removeBaseExt(list(self.inputSetOfSubTomogram.get().getFiles())[0]).split('__ctf')[0] + '.hdf'
+        volName = self.inputSetOfSubTomogram.get().getFirstItem().getVolName()
+        self.newFn = pwutils.removeBaseExt(volName).split('__ctf')[0] + '.hdf'
         self.newFn = pwutils.join(storePath, self.newFn)
         writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath)
 
@@ -141,15 +140,15 @@ class EmanProtTomoMultiReferenceRefinement(EMProtocol, ProtTomoBase):
         args = ' %s' % self.newFn
         if not isinstance(self.inputRef.get(), type(None)):
             args += (' --refs=%s ' % self.newFn)
-        args += ' --tarres=%f' % self.tarres
-        args += ' --threads=%d' % self.threads
-        args += ' --sym=%s ' % self.sym
+        args += ' --tarres=%f' % self.tarres.get()
+        args += ' --threads=%d' % self.numberOfThreads.get()
+        args += ' --sym=%s ' % self.sym.get()
         args += ' --path=%s ' % self.getOutputPath()
         if self.mask.get():
-            args += ' --mask=%s' % self.mask
-        if self.niter > 1:
-            args += ' --niter=%d' % self.niter
-        if self.localfilter:
+            args += ' --mask=%s' % self.mask.get()
+        if self.niter.get() > 1:
+            args += ' --niter=%d' % self.niter.get()
+        if self.localfilter.get():
             args += ' --localfilter '
 
         program = emantomo.Plugin.getProgram('e2spt_classify.py')
