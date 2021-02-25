@@ -105,7 +105,7 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
 
     def preprocess(self):
         program = emantomo.Plugin.getProgram("e2proc3d.py")
-        setDim = self.inputSet.get().getDim()
+        # setDim = self.inputSet.get().getDim()
         # if min(setDim) > 1000:
         #     sizeThreshold = max(self.inputSet.get().getDim())
         self.correctOffset = None

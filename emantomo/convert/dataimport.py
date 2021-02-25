@@ -36,6 +36,8 @@ from pwem.emlib.metadata import (MetaData, MDL_XCOOR, MDL_YCOOR, MDL_ZCOOR,
 # from .convert import loadJson, readCTFModel, readSetOfParticles
 from .convert import loadJson, readCTFModel
 
+import tomo.constants as const
+
 
 class EmanTomoImport:
 
@@ -114,19 +116,7 @@ class EmanTomoImport:
                     for box in boxes:
                         x, y, z = box[:3]
                         coord = Coordinate3D()
-                        coord.setPosition(x, y, z)
-                        addCoordinate(coord)
-
-            elif ext == ".txt":
-                md = MetaData()
-                md.readPlain(fileName, "xcoor ycoor zcoor")
-                for objId in md:
-                    x = md.getValue(MDL_XCOOR, objId)
-                    y = md.getValue(MDL_YCOOR, objId)
-                    z = md.getValue(MDL_ZCOOR, objId)
-                    coord = Coordinate3D()
-                    coord.setPosition(x, y, z)
-                    addCoordinate(coord)
+                        addCoordinate(coord, x, y, z)
 
             else:
                 raise Exception('Unknown extension "%s" to import Eman coordinates' % ext)
