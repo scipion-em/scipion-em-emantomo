@@ -26,14 +26,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+
 from glob import glob
 import os
 import re
 
-from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol import STEPS_PARALLEL
+# from pyworkflow.protocol import STEPS_PARALLEL
+
+from pwem.protocols import EMProtocol
 
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
 import emantomo
@@ -61,6 +65,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     _outputClassName = 'SubTomogramRefinement'
     _label = 'subtomogram refinement'
+    _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfClassesSubTomograms'
     OUTPUT_DIR = "spt_00"
 

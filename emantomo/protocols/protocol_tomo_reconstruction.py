@@ -24,13 +24,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
+
 import os
 import glob
 
 import emantomo
 
-from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.protocol import params
+
+from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import Tomogram, SetOfTomograms
@@ -47,6 +51,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     On a typical workstation reconstruction takes about 4-5 minutes per tomogram.
     """
     _label = 'tomo reconstruction'
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)

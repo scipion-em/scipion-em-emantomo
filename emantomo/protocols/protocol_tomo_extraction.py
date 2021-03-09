@@ -24,18 +24,21 @@
 # *
 # **************************************************************************
 
-# import os
+
 import glob
 from os.path import abspath
 
-from pwem.emlib.image import ImageHandler
+from pyworkflow import BETA
 from pyworkflow import utils as pwutils
-from pwem.protocols import EMProtocol
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
+
+from pwem.emlib.image import ImageHandler
+from pwem.protocols import EMProtocol
+
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
-# import emantomo
+
 from emantomo.constants import *
 
 # Tomogram type constants for particle extraction
@@ -46,6 +49,7 @@ OTHER = 1
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'tomo extraction'
+    _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfSubtomogram'
 
     def __init__(self, **kwargs):
