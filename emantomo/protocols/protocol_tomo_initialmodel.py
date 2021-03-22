@@ -24,9 +24,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from pwem.protocols import EMProtocol
+
+
+from pyworkflow import BETA
 from pyworkflow.protocol import params
 from pyworkflow.utils.path import makePath
+
+from pwem.protocols import EMProtocol
 
 import emantomo
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
@@ -45,6 +49,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     plus the score, coverage and align matrix per subtomogram .
     """
     _label = 'tomo initial model'
+    _devStatus = BETA
     OUTPUT_DIR = 'sptsgd_00'
 
     def __init__(self, **kwargs):
