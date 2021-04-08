@@ -149,7 +149,9 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         """ Run the Subtomogram refinement. """
         args = ' %s' % self.newFn
         if self.inputRef.get() is not None:
-            args += (' --reference=%s ' % self.inputRef.get().getFileName())
+            reference = self.inputRef.get().getFileName()
+            reference = reference.split(":")[0]
+            args += (' --reference=%s ' % reference)
         args += (' --mass=%f' % self.mass)
         args += ' --goldstandard=%d ' % self.goldstandard
         args += ' --pkeep=%f ' % self.pkeep
