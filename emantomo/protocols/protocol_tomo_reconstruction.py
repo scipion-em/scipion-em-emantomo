@@ -65,15 +65,21 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       label="Tilt Series", important=True,
                       help='Select the set of tilt series to reconstruct a tomogram')
 
+        form.addParam('rawtlt', params.BooleanParam,
+                      default=True,
+                      label="Use Tilt Angles stored in metadata?")
+
         form.addParam('tiltStep', params.FloatParam,
                       default=2.0,
+                      condition="rawtlt==False",
                       label='Tilt step',
-                      help='Step between tilts. Ignored when rawtlt is provided')
+                      help='Step between tilts.')
 
         form.addParam('zeroid', params.IntParam,
                       default=-1,
+                      condition="rawtlt==False",
                       label='Zero ID',
-                      help='Index of the center tilt. Ignored when rawtlt is provided')
+                      help='Index of the center tilt.')
 
         form.addParam('npk', params.IntParam,
                       default=20,
@@ -183,6 +189,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions -----------------------------
     def createCommandStep(self):
         command_params = {
+            'rawtlt': self.rawtlt.get(),
             'tiltStep': self.tiltStep.get(),
             'zeroid': self.zeroid.get(),
             'npk': self.npk.get(),
@@ -201,13 +208,17 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
         args = " ".join(self._getInputPaths())
 
-        args += (' --notmp --tltstep=%(tiltStep)f --zeroid=%(zeroid)d --npk=%(npk)d'
-                 ' --bxsz=%(bxsz)d --tltkeep=%(tltkeep)f --outsize=%(outsize)s'
-                 ' --niter=%(niter)s --clipz=%(clipz)d'
+        args += (' --notmp --npk=%(npk)d --tltkeep=%(tltkeep)f --outsize=%(outsize)s'
+                 ' --bxsz=%(bxsz)d --niter=%(niter)s --clipz=%(clipz)d'
                  ' --pk_mindist=%(pk_mindist)f --pkkeep=%(pkkeep)f'
                  ' --filterto=%(filterto)f --rmbeadthr=%(rmbeadthr)f'
                  )
 
+        if command_params["rawtlt"]:
+            rawtlt_file = self._getRawTiltAngles()
+            args += ' --rawtlt=%s' % rawtlt_file
+        else:
+            args += ' --tltstep=%(tiltStep)f --zeroid=%(zeroid)d'
         if command_params["tltax"] is not None:
             args += ' --tltax=%(tltax)f'
         if self.bytile.get():
@@ -259,6 +270,15 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     def _getInputPaths(self):
         tilt_series = self.tiltSeries.get()
         return [path for item in tilt_series for path in item.getFiles()]
+
+    def _getRawTiltAngles(self):
+        tilt_series = self.tiltSeries.get()
+        tilt_angles = [tilt.aggregate(["MAX"], "_tiltAngle", ["_tiltAngle"]) for tilt in tilt_series.iterItems()]
+        tilt_angles = ["%f" % d['_tiltAngle'] for dictionary in tilt_angles for d in dictionary]
+        file_tilt_angles = self._getExtraPath("tilt_angles.txt")
+        with open(file_tilt_angles, 'w') as file:
+            file.write('\n'.join(tilt_angles))
+        return os.path.abspath(file_tilt_angles)
 
     def _getOutputTomograms(self):
         pattern = os.path.join(self._getExtraPath("tomograms"), '*.hdf')
