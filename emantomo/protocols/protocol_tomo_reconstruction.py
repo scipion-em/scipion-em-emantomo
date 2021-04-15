@@ -52,6 +52,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     """
     _label = 'tomo reconstruction'
     _devStatus = BETA
+    choices = ['1k', '2k', '4k']
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -103,7 +104,8 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       default=0,
                       choices=['1k', '2k', '4k'],
                       label='Size of output tomograms',
-                      help='Size of output tomograms')
+                      help='Size of output tomograms:\n\t*1k*: Binning 4\n\t*2k*: Binning 2'
+                           '\n\t*4k*: Binning 1')
 
         form.addParam('niter', params.StringParam,
                       default='2,1,1,1',
@@ -119,6 +121,14 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       default=True,
                       label='By tiles',
                       help='Make final tomogram by tiles')
+
+        form.addParam('autoclipxy', params.BooleanParam,
+                      default=True,
+                      condition="bytile==True",
+                      label='Non-Square Tomograms?',
+                      help='Optimize the x-y shape of the tomogram to fit in the tilt images. '
+                           'Only works in bytile reconstruction. '
+                           'Useful for non square cameras.')
 
         form.addParam('load', params.BooleanParam,
                       default=False,
@@ -179,7 +189,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
             'bxsz': self.bxsz.get(),
             'tltkeep': self.tltkeep.get(),
             'tltax': self.tltax.get(),
-            'outsize': self.outsize.get(),
+            'outsize': self.choices[self.outsize.get()],
             'niter': self.niter.get(),
             'clipz': self.clipz.get(),
             'pk_mindist': self.pkMindist.get(),
@@ -202,6 +212,8 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
             args += ' --tltax=%(tltax)f'
         if self.bytile.get():
             args += ' --bytile'
+        if self.autoclipxy.get() and self.bytile.get():
+            args += ' --autoclipxy'
         if self.load.get():
             args += ' --load'
         if self.correctrot.get():
@@ -221,16 +233,24 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         tilt_series = self.tiltSeries.get()
 
+        sampling_rate = tilt_series.getSamplingRate()
+        if self.outsize.get() == 0:
+            sampling_rate *= 4
+        elif self.outsize.get() == 1:
+            sampling_rate *= 2
+
         # Output 1: Main tomograms
         tomograms_paths = self._getOutputTomograms()
         tomograms = self._createSet(SetOfTomograms, 'tomograms%s.sqlite', "")
         tomograms.copyInfo(tilt_series)
+        tomograms.setSamplingRate(sampling_rate)
 
         for tomogram_path in tomograms_paths:
             self._log.info('Main tomogram: ' + tomogram_path)
             tomogram = Tomogram()
             tomogram.setFileName(tomogram_path)
             tomogram.copyInfo(tilt_series)
+            tomogram.setSamplingRate(sampling_rate)
             tomograms.append(tomogram)
 
         self._defineOutputs(tomograms=tomograms)
