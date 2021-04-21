@@ -39,17 +39,7 @@ b) Developer's version
 
 EMAN2 binaries will be installed automatically with the plugin using a Conda environment.
 
-The installetion presuppose that you have Anaconda or Miniconda installed on your computer.
-In ``~/.config/scipion/scipion.conf`` (Option View > Show Hidden Files must be enabled) or
-``path/to/scipion/config/scipion.conf``, set **CONDA_ACTIVATION_CMD** variable in the Packages section.
-
-For example:
-
-.. code-block::
-
-    CONDA_ACTIVATION_CMD = . ~/anaconda3/etc/profile.d/conda.sh
-
-* Default installation path assumed is ``software/em/eman-2.39``, if you want to change it, set *EMANTOMO_HOME* in ``scipion.conf`` file pointing to the folder where the EMANTOMO is installed.
+* Default installation path assumed is ``software/em/eman-2.91``, if you want to change it, set *EMANTOMO_HOME* in ``scipion.conf`` file pointing to the folder where the EMANTOMO is installed.
 
 To check the installation, simply run one of the following Scipion tests:
 
@@ -66,7 +56,8 @@ A complete list of tests can also be seen by executing ``scipion test --show --g
 Supported versions
 ------------------
 
-2.39
+* 2.9
+* 2.91 (**Default version**)
 
 Protocols
 ---------

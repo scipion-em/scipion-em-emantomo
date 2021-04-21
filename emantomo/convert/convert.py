@@ -208,7 +208,8 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         for i, subtomo in iterSubtomogramsByVol(subtomogramSet):
             volName = volId = subtomo.getVolId()
             if hasVolName:
-                volName = pwutils.removeBaseExt(subtomogramSet.getFirstItem().getVolName())
+                volName = subtomogramSet.getFirstItem().getVolName().split(":")[0]
+                volName = pwutils.removeBaseExt(volName)
             objDict = subtomo.getObjDict()
 
             if not volId:
@@ -235,6 +236,8 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
             # the index in EMAN begins with 0
             if fileName != objDict['_filename']:
                 fileName = objDict['_filename']
+                fileName = fileName.split(":")[0]
+                objDict['_filename'] = fileName
                 if objDict['_index'] == 0:
                     a = 0
                 else:

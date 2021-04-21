@@ -2,7 +2,7 @@
 
 --------------------------------------------
 
-Sometimes installation fails do to missing dependencies:
+Sometimes installation fails due to missing dependencies:
 
 
 - OpenGL::OpenGL or similar does not exists --> sudo apt-get install libsm-dev libxrender-dev build-essential libgl1-mesa-dev mesa-utils mesa-common-dev libglu1-mesa libglu1-mesa-dev
