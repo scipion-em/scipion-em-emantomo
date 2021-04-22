@@ -67,7 +67,7 @@ def writeParticles():
                            "dfang": objDict['_ctfModel._defocusAngle'],
                            "dfdiff": (defU - defV) / 10000.0,
                            "voltage": objDict['_acquisition._voltage'],
-                           "cs": objDict['_acquisition._sphericalAberration'],
+                           "cs": max(objDict['_acquisition._sphericalAberration'], 0.0001),
                            "ampcont": objDict['_acquisition._amplitudeContrast'] * 100.0,
                            "apix": objDict['_samplingRate']})
             imageData.set_attr('ctf', ctf)
@@ -84,9 +84,9 @@ def writeParticles():
                                              "phi": angles[0],
                                              "theta": angles[1],
                                              "psi": angles[2],
-                                             "tx": shifts[0],
-                                             "ty": shifts[1],
-                                             "tz": shifts[2],
+                                             "tx": -shifts[0],
+                                             "ty": -shifts[1],
+                                             "tz": -shifts[2],
                                              "mirror": 0,  # TODO: test flip
                                              "scale": 1.0})
 
