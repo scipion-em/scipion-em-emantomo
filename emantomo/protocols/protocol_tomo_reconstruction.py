@@ -28,12 +28,14 @@
 
 import os
 import glob
+import numpy as np
 
 import emantomo
 
 from pyworkflow import BETA
 from pyworkflow.protocol import params
 
+from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
@@ -135,6 +137,13 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       help='Optimize the x-y shape of the tomogram to fit in the tilt images. '
                            'Only works in bytile reconstruction. '
                            'Useful for non square cameras.')
+
+        form.addParam('fit', params.BooleanParam,
+                      default=False,
+                      label="Fit to tilt series size?",
+                      help="By default, Eman increases the dimensions of the output tomograms by a small "
+                           "factor compared to the tilt series. Use this parameter to rescale the Tomograms so "
+                           "they completely fit in the tilt series size.")
 
         form.addParam('load', params.BooleanParam,
                       default=False,
@@ -240,6 +249,19 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
         self._log.info('Launching: ' + program + ' ' + args % command_params)
         self.runJob(program, args % command_params, cwd=self._getExtraPath(),
                     numberOfMpi=1, numberOfThreads=1)
+
+        if self.fit.get():
+            program = emantomo.Plugin.getProgram('e2proc3d.py')
+            ih = ImageHandler()
+            tomograms_paths = self._getOutputTomograms()
+            size_tomos = ih.read(tomograms_paths[0]).getDimensions()
+            size_ts = np.asarray(self.tiltSeries.get().getDimensions())
+            factor = size_ts[:-1] / size_tomos[:-2]
+            size_ts = size_ts[:-1] / np.round(factor).astype(int)
+            args = " ".join(tomograms_paths) + " " + " ".join(tomograms_paths)
+            args += " --fftclip=%d,%d,%d" % (size_ts[0], size_ts[1], size_tomos[2])
+            self.runJob(program, args, cwd=self._getExtraPath(),
+                        numberOfMpi=1, numberOfThreads=1)
 
     def createOutputStep(self):
         tilt_series = self.tiltSeries.get()
