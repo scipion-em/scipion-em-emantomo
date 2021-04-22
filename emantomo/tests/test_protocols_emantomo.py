@@ -654,8 +654,8 @@ class TestEmanTomoReconstruction(TestEmanTomoBase):
         # 1 tomogram per input file
         self.assertEqual(len(tomograms), 1)
         for tomogram in tomograms:
-            self.assertEqual(tomogram.getSamplingRate(), 1.35)
-            self.assertEqual(tomogram.getDimensions(), (1024, 1024, 256))
+            self.assertEqual(tomogram.getSamplingRate(), 5.4)
+            self.assertEqual(tomogram.getDimensions(), (1120, 1120, 256))
 
     def test_protocol(self):
         protTomoExtraction = self._runPreviousProtocols()
