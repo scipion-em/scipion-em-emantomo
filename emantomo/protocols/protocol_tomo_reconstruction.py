@@ -34,6 +34,7 @@ import emantomo
 
 from pyworkflow import BETA
 from pyworkflow.protocol import params
+import pyworkflow.utils as pwutils
 
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
@@ -138,12 +139,12 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                            'Only works in bytile reconstruction. '
                            'Useful for non square cameras.')
 
-        form.addParam('fit', params.BooleanParam,
-                      default=False,
-                      label="Fit to tilt series size?",
-                      help="By default, Eman increases the dimensions of the output tomograms by a small "
-                           "factor compared to the tilt series. Use this parameter to rescale the Tomograms so "
-                           "they completely fit in the tilt series size.")
+        # form.addParam('fit', params.BooleanParam,
+        #               default=False,
+        #               label="Fit to tilt series size?",
+        #               help="By default, Eman increases the dimensions of the output tomograms by a small "
+        #                    "factor compared to the tilt series. Use this parameter to rescale the Tomograms so "
+        #                    "they completely fit in the tilt series size.")
 
         form.addParam('load', params.BooleanParam,
                       default=False,
@@ -215,19 +216,14 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
             'threads': self.numberOfThreads.get()
         }
 
-        args = " ".join(self._getInputPaths())
-
-        args += (' --notmp --npk=%(npk)d --tltkeep=%(tltkeep)f --outsize=%(outsize)s'
-                 ' --bxsz=%(bxsz)d --niter=%(niter)s --clipz=%(clipz)d'
-                 ' --pk_mindist=%(pk_mindist)f --pkkeep=%(pkkeep)f'
-                 ' --filterto=%(filterto)f --rmbeadthr=%(rmbeadthr)f'
-                 )
+        args = (' --notmp --npk=%(npk)d --tltkeep=%(tltkeep)f --outsize=%(outsize)s'
+                ' --bxsz=%(bxsz)d --niter=%(niter)s --clipz=%(clipz)d'
+                ' --pk_mindist=%(pk_mindist)f --pkkeep=%(pkkeep)f'
+                ' --filterto=%(filterto)f --rmbeadthr=%(rmbeadthr)f'
+                )
 
         if command_params["rawtlt"]:
-            rawtlt_file = self._getRawTiltAngles()
-            args += ' --rawtlt=%s' % rawtlt_file
-        else:
-            args += ' --tltstep=%(tiltStep)f --zeroid=%(zeroid)d'
+            self._getRawTiltAngles()
         if command_params["tltax"] is not None:
             args += ' --tltax=%(tltax)f'
         if self.bytile.get():
@@ -245,23 +241,34 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
         args += ' --threads=%(threads)d'
 
-        program = emantomo.Plugin.getProgram("e2tomogram.py")
-        self._log.info('Launching: ' + program + ' ' + args % command_params)
-        self.runJob(program, args % command_params, cwd=self._getExtraPath(),
-                    numberOfMpi=1, numberOfThreads=1)
+        for path in self._getInputPaths():
 
-        if self.fit.get():
-            program = emantomo.Plugin.getProgram('e2proc3d.py')
-            ih = ImageHandler()
-            tomograms_paths = self._getOutputTomograms()
-            size_tomos = ih.read(tomograms_paths[0]).getDimensions()
-            size_ts = np.asarray(self.tiltSeries.get().getDimensions())
-            factor = size_ts[:-1] / size_tomos[:-2]
-            size_ts = size_ts[:-1] / np.round(factor).astype(int)
-            args = " ".join(tomograms_paths) + " " + " ".join(tomograms_paths)
-            args += " --fftclip=%d,%d,%d" % (size_ts[0], size_ts[1], size_tomos[2])
-            self.runJob(program, args, cwd=self._getExtraPath(),
+            tlt_file = os.path.abspath(self._getExtraPath(pwutils.removeBaseExt(path) + ".txt"))
+
+            if os.path.isfile(tlt_file):
+                args_file = '--rawtlt=%s ' % tlt_file + args
+            else:
+                args_file = '--tltstep=%(tiltStep)f --zeroid=%(zeroid)d ' + args
+
+            args_file = path + " " + args_file
+
+            program = emantomo.Plugin.getProgram("e2tomogram.py")
+            self._log.info('Launching: ' + program + ' ' + args_file % command_params)
+            self.runJob(program, args_file % command_params, cwd=self._getExtraPath(),
                         numberOfMpi=1, numberOfThreads=1)
+
+            # if self.fit.get():
+            #     program = emantomo.Plugin.getProgram('e2proc3d.py')
+            #     ih = ImageHandler()
+            #     tomograms_paths = self._getOutputTomograms()
+            #     size_tomos = ih.read(tomograms_paths[0]).getDimensions()
+            #     size_ts = np.asarray(self.tiltSeries.get().getDimensions())
+            #     factor = size_ts[:-1] / size_tomos[:-2]
+            #     size_ts = size_ts[:-1] / np.round(factor).astype(int)
+            #     args = " ".join(tomograms_paths) + " " + " ".join(tomograms_paths)
+            #     args += " --fftclip=%d,%d,%d" % (size_ts[0], size_ts[1], size_tomos[2])
+            #     self.runJob(program, args, cwd=self._getExtraPath(),
+            #                 numberOfMpi=1, numberOfThreads=1)
 
     def createOutputStep(self):
         tilt_series = self.tiltSeries.get()
@@ -295,12 +302,12 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
     def _getRawTiltAngles(self):
         tilt_series = self.tiltSeries.get()
-        tilt_angles = [tilt.aggregate(["MAX"], "_tiltAngle", ["_tiltAngle"]) for tilt in tilt_series.iterItems()]
-        tilt_angles = ["%f" % d['_tiltAngle'] for dictionary in tilt_angles for d in dictionary]
-        file_tilt_angles = self._getExtraPath("tilt_angles.txt")
-        with open(file_tilt_angles, 'w') as file:
-            file.write('\n'.join(tilt_angles))
-        return os.path.abspath(file_tilt_angles)
+        for tilt in tilt_series.iterItems():
+            tilt_angles_dict = tilt.aggregate(["MAX"], "_tiltAngle", ["_tiltAngle"])
+            tilt_angles = ["%f" % d['_tiltAngle'] for d in tilt_angles_dict]
+            file_tilt_angles = self._getExtraPath(pwutils.removeBaseExt(tilt.getTsId()) + ".txt")
+            with open(file_tilt_angles, 'w') as file:
+                file.write('\n'.join(tilt_angles))
 
     def _getOutputTomograms(self):
         pattern = os.path.join(self._getExtraPath("tomograms"), '*.hdf')
