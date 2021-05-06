@@ -291,7 +291,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
     def _getInputPaths(self):
         tilt_series = self.tiltSeries.get()
-        return [path for item in tilt_series for path in item.getFiles()]
+        return [os.path.abspath(path) for item in tilt_series for path in item.getFiles()]
 
     def _getRawTiltAngles(self):
         tilt_series = self.tiltSeries.get()
