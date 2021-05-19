@@ -26,8 +26,10 @@
 
 
 from .protocol_tomo_boxing import EmanProtTomoBoxing
+from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet
 from .protocol_tomo_template_match import EmanProtTomoTempMatch
 from .protocol_tomo_extraction import EmanProtTomoExtraction
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
 from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
 from .protocol_tomo_reconstruction import EmanProtTomoReconstruction
+from .protocol_tomo_fill_mw import EmanProtTomoFillMW
