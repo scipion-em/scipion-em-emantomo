@@ -136,7 +136,7 @@ def jsonToCtfModel(ctfJsonFn, ctfModel):
 #     coordSet.setBoxSize(size)
 
 
-def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None):
+def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None, displace=0, scale=1):
     if "boxes_3d" in jsonBoxDict.keys():
         boxes = jsonBoxDict["boxes_3d"]
 
@@ -145,7 +145,7 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
             coord3DSet = coord3DSetDict[classKey]
             coord3DSet.enableAppend()
 
-            newCoord = readCoordinate3D(box, inputTomo)
+            newCoord = readCoordinate3D(box, inputTomo, displace=displace, scale=scale)
 
             # Execute Callback
             if updateItem:
@@ -173,9 +173,9 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
 #                 coordsSet.append(coord)
 
 
-def readCoordinate3D(box, inputTomo):
+def readCoordinate3D(box, inputTomo, displace=0, scale=1):
     from tomo.objects import Coordinate3D
-    x, y, z = box[:3]
+    x, y, z = scale * numpy.asarray(box[:3]) + displace
     coord = Coordinate3D()
     coord.setPosition(x, y, z)
     coord.setVolume(inputTomo)
