@@ -123,7 +123,6 @@ class EmanProtTomoConvNet(ProtTomoPicking):
             size = np.asarray(tomo.getDim()) / 2
             factor = self.minBoxSize.get() / self.nn_boxSize if self.minBoxSize.get() is not None else 1
             readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone(), displace=size, scale=factor)
-            # pwutils.cleanPath(jsonFnbase)
 
         name = self.OUTPUT_PREFIX + suffix
         args = {}
@@ -137,10 +136,11 @@ class EmanProtTomoConvNet(ProtTomoPicking):
 
     # --------------------------- UTILS functions -----------------------------
     def writeInfoJson(self, tomo_file, info_path):
+        boxSize = self.minBoxSize.get() if self.minBoxSize.get() else self.nn_boxSize
         contents = '{ "boxes_3d": [], "apix_unbin": %.2f, ' \
                    '"class_list": { "0": { "boxsize": %d, "name": ' \
-                   '"particles_00"} } }' % (self.minBoxSize.get(),
-                                            self.inputTomograms.get().getSamplingRate())
+                   '"particles_00"} } }' % (self.inputTomograms.get().getSamplingRate(),
+                                            boxSize)
         info_file = os.path.join(info_path, pwutils.removeBaseExt(tomo_file) + "_info.json")
         with open(info_file, 'w') as fid:
             fid.write(contents)
