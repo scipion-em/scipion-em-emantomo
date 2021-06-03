@@ -38,6 +38,7 @@ from pyworkflow.protocol.params import IntParam
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D
+import tomo.constants as const
 
 from emantomo.convert import loadJson, readSetOfCoordinates3D
 import emantomo
@@ -116,11 +117,11 @@ class EmanProtTomoConvNet(ProtTomoPicking):
             coord3DSetDict[index] = coord3DSet
 
             # Populate Set of 3D Coordinates with 3D Coordinates
-            size = np.asarray(tomo.getDim()) / 2
             sr = setTomograms.getSamplingRate()
             factor = self.minBoxSize.get() / self.nn_boxSize if self.minBoxSize.get() is not None else 1
             factor *= sr
-            readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone(), displace=size, scale=factor)
+            readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone(),
+                                   origin=const.CENTER_GRAVITY, scale=factor)
 
         name = self.OUTPUT_PREFIX + suffix
         args = {}
