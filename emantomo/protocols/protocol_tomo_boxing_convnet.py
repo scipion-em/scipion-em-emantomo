@@ -58,7 +58,7 @@ class EmanProtTomoConvNet(ProtTomoPicking):
         ProtTomoPicking._defineParams(self, form)
 
         form.addParam('minBoxSize', IntParam, label="Minimum Box Size",
-                      allowsNull=True,
+                      allowsNull=96,
                       help='Eman ConvNet picking requires a minimum box size of 96. In order to use '
                            'other common box sizes (16, 32, 64... which might be useful for binned tomograms), '
                            'Scipion will upscale the input tomograms so a box size of 96 corresponds to this '
@@ -76,7 +76,7 @@ class EmanProtTomoConvNet(ProtTomoPicking):
         pwutils.makePath(info_path)
         for tomo_file in self.inputTomograms.get().getFiles():
             # Only rescale Tomomgrams if needed. Otherwise create a symbolic link to save space
-            if self.minBoxSize.get() is not None:
+            if self.minBoxSize.get() < self.nn_boxSize:
                 out_file = os.path.join(out_path, pwutils.removeBaseExt(tomo_file) + ".mrc")
                 factor = self.nn_boxSize / self.minBoxSize.get()
                 ImageHandler.scaleSplines(tomo_file + ':mrc', out_file, factor)
@@ -100,7 +100,7 @@ class EmanProtTomoConvNet(ProtTomoPicking):
         coord3DSet.setName("tomoCoord")
         coord3DSet.setPrecedents(setTomograms)
         coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
-        first = True
+        coord3DSet.setBoxSize(self.minBoxSize.get())
         for tomo in setTomograms.iterItems():
             outFile = '*%s_info.json' % pwutils.removeBaseExt(tomo.getFileName().split("__")[0])
             pattern = os.path.join(outPath, outFile)
@@ -112,18 +112,15 @@ class EmanProtTomoConvNet(ProtTomoPicking):
             jsonFnbase = files[0]
             jsonBoxDict = loadJson(jsonFnbase)
 
-            if first:
-                coord3DSet.setBoxSize(int(jsonBoxDict["class_list"]["0"]["boxsize"]))
-                first = False
-
             index = int((list(jsonBoxDict["class_list"].keys()))[0])
             coord3DSetDict[index] = coord3DSet
 
             # Populate Set of 3D Coordinates with 3D Coordinates
             size = np.asarray(tomo.getDim()) / 2
+            sr = setTomograms.getSamplingRate()
             factor = self.minBoxSize.get() / self.nn_boxSize if self.minBoxSize.get() is not None else 1
+            factor *= sr
             readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone(), displace=size, scale=factor)
-            # pwutils.cleanPath(jsonFnbase)
 
         name = self.OUTPUT_PREFIX + suffix
         args = {}
@@ -137,10 +134,11 @@ class EmanProtTomoConvNet(ProtTomoPicking):
 
     # --------------------------- UTILS functions -----------------------------
     def writeInfoJson(self, tomo_file, info_path):
+        boxSize = self.minBoxSize.get() if self.minBoxSize.get() else self.nn_boxSize
         contents = '{ "boxes_3d": [], "apix_unbin": %.2f, ' \
                    '"class_list": { "0": { "boxsize": %d, "name": ' \
-                   '"particles_00"} } }' % (self.minBoxSize.get(),
-                                            self.inputTomograms.get().getSamplingRate())
+                   '"particles_00"} } }' % (self.inputTomograms.get().getSamplingRate(),
+                                            boxSize)
         info_file = os.path.join(info_path, pwutils.removeBaseExt(tomo_file) + "_info.json")
         with open(info_file, 'w') as fid:
             fid.write(contents)
@@ -171,5 +169,13 @@ class EmanProtTomoConvNet(ProtTomoPicking):
                 msg = self.getInfo(output)
                 summary.append("%s: \n %s" % (self.getObjectTag(output), msg))
         return summary
+
+    def _warnings(self):
+        warnings = []
+        if self.minBoxSize.get() < self.nn_boxSize:
+            warnings.append("Boxsize is smaller than the minimum size allowed by Eman (96). This implies "
+                            "that temporary rescaled Tomograms will be created so your boxsize corresponds "
+                            " to a size of 96 to work with Eman. This may occupy a large space in disk.")
+        return warnings
 
 
