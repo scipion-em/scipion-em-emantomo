@@ -58,7 +58,7 @@ class EmanProtTomoConvNet(ProtTomoPicking):
         ProtTomoPicking._defineParams(self, form)
 
         form.addParam('minBoxSize', IntParam, label="Minimum Box Size",
-                      allowsNull=96,
+                      default=96,
                       help='Eman ConvNet picking requires a minimum box size of 96. In order to use '
                            'other common box sizes (16, 32, 64... which might be useful for binned tomograms), '
                            'Scipion will upscale the input tomograms so a box size of 96 corresponds to this '
