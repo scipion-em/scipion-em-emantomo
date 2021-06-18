@@ -41,6 +41,8 @@ from pyworkflow.object import Float
 from pwem.emlib.image import ImageHandler
 import pwem.emlib.metadata as md
 
+import tomo.constants as const
+
 from .. import Plugin
 
 
@@ -136,7 +138,8 @@ def jsonToCtfModel(ctfJsonFn, ctfModel):
 #     coordSet.setBoxSize(size)
 
 
-def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None):
+def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None,
+                           origin=const.BOTTOM_LEFT_CORNER, scale=1):
     if "boxes_3d" in jsonBoxDict.keys():
         boxes = jsonBoxDict["boxes_3d"]
 
@@ -145,7 +148,7 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
             coord3DSet = coord3DSetDict[classKey]
             coord3DSet.enableAppend()
 
-            newCoord = readCoordinate3D(box, inputTomo)
+            newCoord = readCoordinate3D(box, inputTomo, origin=origin, scale=scale)
 
             # Execute Callback
             if updateItem:
@@ -173,12 +176,12 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
 #                 coordsSet.append(coord)
 
 
-def readCoordinate3D(box, inputTomo):
+def readCoordinate3D(box, inputTomo, origin=const.BOTTOM_LEFT_CORNER, scale=1):
     from tomo.objects import Coordinate3D
-    x, y, z = box[:3]
+    x, y, z = scale * numpy.asarray(box[:3])
     coord = Coordinate3D()
-    coord.setPosition(x, y, z)
     coord.setVolume(inputTomo)
+    coord.setPosition(x, y, z, origin)
     return coord
 
 
@@ -585,7 +588,10 @@ def setCoords3D2Jsons(setTomograms, setCoords, path):
         coords = []
         for coor in setCoords.iterCoordinates():
             if pwutils.removeBaseExt(tomo) == pwutils.removeBaseExt(coor.getVolName()):
-                coords.append([coor.getX(), coor.getY(), coor.getZ(), "manual", 0.0, 0])
+                coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
+                               coor.getY(const.BOTTOM_LEFT_CORNER),
+                               coor.getZ(const.BOTTOM_LEFT_CORNER),
+                               "manual", 0.0, 0])
 
         coordDict = {"boxes_3d": coords,
                      "class_list": {"0": {"boxsize": setCoords.getBoxSize(), "name": "particles_00"}}

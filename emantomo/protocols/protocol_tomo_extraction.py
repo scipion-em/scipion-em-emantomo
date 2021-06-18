@@ -41,6 +41,8 @@ from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
 
 from emantomo.constants import *
 
+import tomo.constants as const
+
 # Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
 OTHER = 1
@@ -139,7 +141,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 coords = self.inputCoordinates.get()
                 for coord3D in coords.iterCoordinates(volume=tomo):
                     if os.path.basename(tomo.getFileName()) == os.path.basename(coord3D.getVolName()):
-                        out.write("%d\t%d\t%d\n" % (coord3D.getX(), coord3D.getY(), coord3D.getZ()))
+                        out.write("%d\t%d\t%d\n" % (coord3D.getX(const.BOTTOM_LEFT_CORNER),
+                                                    coord3D.getY(const.BOTTOM_LEFT_CORNER),
+                                                    coord3D.getZ(const.BOTTOM_LEFT_CORNER)))
                         newCoord = coord3D.clone()
                         newCoord.setVolume(coord3D.getVolume())
                         coordDict.append(newCoord)
@@ -238,9 +242,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
-            summary.append('*White over black.*')
-        else:
-            summary.append('*Black over white.*')
+            summary.append('*Contrast was inverted.*')
         return summary
 
     def _validate(self):
