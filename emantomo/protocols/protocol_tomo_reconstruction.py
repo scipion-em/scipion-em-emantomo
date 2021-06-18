@@ -28,7 +28,7 @@
 
 import os
 import glob
-import numpy as np
+# import numpy as np
 
 import emantomo
 
@@ -36,7 +36,7 @@ from pyworkflow import BETA
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
-from pwem.emlib.image import ImageHandler
+# from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
