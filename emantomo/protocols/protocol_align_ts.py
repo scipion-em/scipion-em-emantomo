@@ -189,7 +189,8 @@ class EmanProtAlignTs(EMProtocol, ProtTomoBase):
             out_tilt_serie = tomoObj.TiltSeries(tsId=tilt_serie.getTsId())
             out_tilt_serie.copyInfo(tilt_serie)
             out_tilt_series.append(out_tilt_serie)
-            item_basename = 'extra-' + tilt_serie.getTsId() + '_info'
+            item_basename = os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +\
+                            '-' + tilt_serie.getTsId() + '_info'
             json_path = [path for path in json_paths if item_basename == pwutils.removeBaseExt(path)]
             params = loadJson(json_path[0])['tlt_params']
             for idx, tiltImage in enumerate(tilt_serie.iterItems()):
