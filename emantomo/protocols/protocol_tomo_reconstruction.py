@@ -163,7 +163,6 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
         args += ' --threads=%(threads)d'
 
         for path in self._processInput():
-            print(path)
             args_file = path + " " + args
 
             program = emantomo.Plugin.getProgram("e2tomogram.py")
@@ -202,9 +201,11 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
         paths = []
         info_path = self._getExtraPath('info')
         pwutils.makePath(info_path)
-        for tilt_serie in tilt_series.iterItems():
+        for tilt_serie in tilt_series.iterItems(iterate=False):
             tlt_params = []
-            json_file = os.path.join(info_path, 'extra-' + tilt_serie.getTsId() + '_info.json')
+            json_file = os.path.join(info_path,
+                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
+                                     '-' + tilt_serie.getTsId() + '_info.json')
             tlt_dict = {"ali_loss": [0] * tilt_serie.getSize(),
                         "apix_unbin": tilt_serie.getSamplingRate(),
                         "tlt_file": os.path.abspath(tilt_serie[1].getFileName()),
