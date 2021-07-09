@@ -29,7 +29,7 @@
 import os
 import glob
 import math
-# import numpy as np
+import numpy as np
 
 import emantomo
 
@@ -212,7 +212,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                         }
             for idx, tiltImage in enumerate(tilt_serie.iterItems()):
                 paths.append(os.path.abspath(tiltImage.getFileName()))
-                tr_matrix = tiltImage.getTransform().getMatrix()
+                tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else np.eye(4)
                 a1, a2, a3 = euler_from_matrix(tr_matrix, 'szyx')
                 s1, s2 = tr_matrix[0, 3], tr_matrix[1, 3]
                 tlt_params.append([s1, s2, math.degrees(a1), math.degrees(a2), math.degrees(a3)])
