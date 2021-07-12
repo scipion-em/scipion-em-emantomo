@@ -59,6 +59,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     _label = 'tomo reconstruction'
     _devStatus = BETA
     choices = ['1k', '2k', '4k']
+    resolution = {'1k': 1024, '2k': 2048, '4k': 4096}
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -172,12 +173,11 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
     def createOutputStep(self):
         tilt_series = self.tiltSeries.get()
+        size_x = tilt_series.getXDim()
 
-        sampling_rate = tilt_series.getSamplingRate()
-        if self.outsize.get() == 0:
-            sampling_rate *= 4
-        elif self.outsize.get() == 1:
-            sampling_rate *= 2
+        exponent = np.ceil(np.log2(size_x / self.resolution[self.choices[self.outsize.get()]]).clip(min=0))
+        binning = 2 ** exponent
+        sampling_rate = binning * tilt_series.getSamplingRate()
 
         # Output 1: Main tomograms
         tomograms_paths = self._getOutputTomograms()
