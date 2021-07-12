@@ -631,20 +631,29 @@ class TestEmanTomoReconstruction(TestEmanTomoBase):
             doseInitial=0,
             dosePerFrame=0.3)
 
-    def _getProtReconstruct(self, protImportTs):
+    def _getProtAlignTs(self, protImportTs):
         return self.newProtocol(
-            EmanProtTomoReconstruction,
+            EmanProtAlignTs,
             tiltSeries=protImportTs.outputTiltSeries,
             tiltStep=2.0,
             niter='1,1,1,1',
             bxsz=64)
+
+    def _getProtReconstruct(self, protAlignTs):
+        return self.newProtocol(
+            EmanProtTomoReconstruction,
+            tiltSeries=protAlignTs.alignedTiltSeries)
 
     def _runPreviousProtocols(self):
         protImportTs = self._getProtImportTs()
         self.launchProtocol(protImportTs)
         self.assertIsNotNone(protImportTs.outputTiltSeries, "Output tilt series not found")
 
-        protReconstruct = self._getProtReconstruct(protImportTs)
+        protAlignTs = self._getProtAlignTs(protImportTs)
+        self.launchProtocol(protAlignTs)
+        self.assertIsNotNone(protImportTs.outputTiltSeries, "Output aligned tilt series not found")
+
+        protReconstruct = self._getProtReconstruct(protAlignTs)
         self.launchProtocol(protReconstruct)
 
         return protReconstruct
