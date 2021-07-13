@@ -190,10 +190,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
         self.outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
         self.outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
-        acquisition = TomoAcquisition()
-        acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
-        acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
-        acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
+        acquisition = self.getInputTomograms().getFirstItem().getAcquisition().clone()
         self.outputSubTomogramsSet.setAcquisition(acquisition)
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
@@ -304,7 +301,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return self.inputTomograms.get()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId):
+    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet,
+                              volId):
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
         ih = ImageHandler()
@@ -312,10 +310,12 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subtomoFile)
+            subtomogram.setAcquisition(outputSubTomogramsSet.getAcquisition().clone())
             dfactor = self.downFactor.get()
             if dfactor != 1:
                 fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % counter)
-                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, dfactor)
+                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc',
+                                          fnSubtomo, dfactor)
                 subtomogram.setVolId(volId)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[counter])

@@ -143,7 +143,8 @@ class TestEmanTomoExtraction(TestEmanTomoBase):
         setupTestProject(cls)
         TestEmanTomoBase.setData()
 
-    def _runTomoExtraction(self, tomoSource=0, doInvert=False, doNormalize=False, boxSize=32, downFactor=1):
+    def _runTomoExtraction(self, tomoSource=0, doInvert=False,
+                           doNormalize=False, boxSize=32, downFactor=1):
         protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
                                               filesPath=self.tomogram,
                                               samplingRate=5)
@@ -183,6 +184,8 @@ class TestEmanTomoExtraction(TestEmanTomoBase):
         self.launchProtocol(protTomoExtraction)
         self.assertSetSize(protTomoExtraction.outputSetOfSubtomogram, 5,
                            "There was a problem with SetOfSubtomogram output")
+        self.assertIsNotNone(protTomoExtraction.outputSetOfSubtomogram.getFirstItem().getAcquisition(),
+                             "The acquisition values are None")
         return protTomoExtraction
 
     def test_extractParticlesSameAsPicking(self):
@@ -234,7 +237,9 @@ class TestEmanTomoExtraction(TestEmanTomoBase):
         return protTomoExtraction
 
     def test_extractParticlesWithAllOptions(self):
-        protTomoExtraction = self._runTomoExtraction(boxSize=64, downFactor=2, doNormalize=True, doInvert=True)
+        protTomoExtraction = self._runTomoExtraction(boxSize=64, downFactor=2,
+                                                     doNormalize=True,
+                                                     doInvert=True)
         output = getattr(protTomoExtraction, 'outputSetOfSubtomogram', None)
         self.assertTrue(output)
         self.assertTrue(output.hasCoordinates3D())
