@@ -28,23 +28,29 @@
 
 import os
 import glob
+import math
+import numpy as np
 
 import emantomo
 
 from pyworkflow import BETA
 from pyworkflow.protocol import params
+import pyworkflow.utils as pwutils
 
 from pwem.protocols import EMProtocol
+from pwem.convert.transformations import euler_from_matrix
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import Tomogram, SetOfTomograms
+
+from emantomo.convert import writeJson
 
 
 class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     """
     This protocol wraps *e2tomogram.py* EMAN2 program.
 
-    Alignment of the tilt-series is performed iteratively in conjunction with tomogram reconstruction.
+    Tomogram reconstruction from aligned tilt series.
     Tomograms are not normally reconstructed at full resolution, generally limited to 1k x 1k or 2k x 2k,
     but the tilt-series are aligned at full resolution. For high resolution subtomogram averaging, the raw
     tilt-series data is used, based on coordinates from particle picking in the downsampled tomograms.
@@ -53,6 +59,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     _label = 'tomo reconstruction'
     _devStatus = BETA
     choices = ['1k', '2k', '4k']
+    resolution = {'1k': 1024, '2k': 2048, '4k': 4096}
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -65,45 +72,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       label="Tilt Series", important=True,
                       help='Select the set of tilt series to reconstruct a tomogram')
 
-        form.addParam('rawtlt', params.BooleanParam,
-                      default=True,
-                      label="Use Tilt Angles stored in metadata?")
-
-        form.addParam('tiltStep', params.FloatParam,
-                      default=2.0,
-                      condition="rawtlt==False",
-                      label='Tilt step',
-                      help='Step between tilts.')
-
-        form.addParam('zeroid', params.IntParam,
-                      default=-1,
-                      condition="rawtlt==False",
-                      label='Zero ID',
-                      help='Index of the center tilt.')
-
-        form.addParam('npk', params.IntParam,
-                      default=20,
-                      label='Number of landmarks (npk)',
-                      help='Number of landmarks to use (such as gold fiducials)')
-
-        form.addParam('bxsz', params.IntParam,
-                      default=32,
-                      label='Box size for tracking (bxsz)',
-                      help='Box size of the particles for tracking. May be helpful to use a larger one for '
-                           'fiducial-less cases')
-
         form.addSection(label='Optimization')
-
-        form.addParam('tltkeep', params.FloatParam,
-                      default=0.9,
-                      label='Fraction to keep',
-                      help='Fraction (0.0 -> 1.0) of tilts to keep in the reconstruction')
-
-        form.addParam('tltax', params.FloatParam,
-                      allowsNull=True,
-                      default=None,
-                      label='Title axis angle',
-                      help='Angle of the tilt axis. The program will calculate one if this option is not provided')
 
         form.addParam('outsize', params.EnumParam,
                       display=params.EnumParam.DISPLAY_COMBO,
@@ -112,11 +81,6 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       label='Size of output tomograms',
                       help='Size of output tomograms:\n\t*1k*: Binning 4\n\t*2k*: Binning 2'
                            '\n\t*4k*: Binning 1')
-
-        form.addParam('niter', params.StringParam,
-                      default='2,1,1,1',
-                      label='Number of iterations',
-                      help='Number of iterations for bin8, bin4, bin2 images')
 
         form.addParam('clipz', params.IntParam,
                       default=-1,
@@ -135,21 +99,6 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       help='Optimize the x-y shape of the tomogram to fit in the tilt images. '
                            'Only works in bytile reconstruction. '
                            'Useful for non square cameras.')
-
-        form.addParam('load', params.BooleanParam,
-                      default=False,
-                      label='Load existing parameters',
-                      help='Load existing tilt parameters')
-
-        form.addParam('pkMindist', params.FloatParam,
-                      default=0.125,
-                      label='Min landmarks distance',
-                      help='Minimum distance between landmarks, as fraction of micrograph length')
-
-        form.addParam('pkkeep', params.FloatParam,
-                      default=0.9,
-                      label='Landmarks to keep',
-                      help='Fraction of landmarks to keep in the tracking')
 
         form.addParam('filterto', params.FloatParam,
                       default=0.45,
@@ -178,7 +127,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
                       help='Pad extra for tilted reconstruction. Slower and costs more memory, but reduces boundary '
                            'artifacts when the sample is thick')
 
-        form.addParallelSection(threads=12, mpi=0)
+        form.addParallelSection(threads=4, mpi=0)
 
         # --------------------------- INSERT steps functions ----------------------
 
@@ -189,44 +138,22 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions -----------------------------
     def createCommandStep(self):
         command_params = {
-            'rawtlt': self.rawtlt.get(),
-            'tiltStep': self.tiltStep.get(),
-            'zeroid': self.zeroid.get(),
-            'npk': self.npk.get(),
-            'bxsz': self.bxsz.get(),
-            'tltkeep': self.tltkeep.get(),
-            'tltax': self.tltax.get(),
             'outsize': self.choices[self.outsize.get()],
-            'niter': self.niter.get(),
             'clipz': self.clipz.get(),
-            'pk_mindist': self.pkMindist.get(),
-            'pkkeep': self.pkkeep.get(),
             'filterto': self.filterto.get(),
             'rmbeadthr': self.rmbeadthr.get(),
             'threads': self.numberOfThreads.get()
         }
 
-        args = " ".join(self._getInputPaths())
+        args = (' --notmp --outsize=%(outsize)s'
+                ' --clipz=%(clipz)d --filterto=%(filterto)f'
+                ' --rmbeadthr=%(rmbeadthr)f --load --niter=0,0,0,0'
+                )
 
-        args += (' --notmp --npk=%(npk)d --tltkeep=%(tltkeep)f --outsize=%(outsize)s'
-                 ' --bxsz=%(bxsz)d --niter=%(niter)s --clipz=%(clipz)d'
-                 ' --pk_mindist=%(pk_mindist)f --pkkeep=%(pkkeep)f'
-                 ' --filterto=%(filterto)f --rmbeadthr=%(rmbeadthr)f'
-                 )
-
-        if command_params["rawtlt"]:
-            rawtlt_file = self._getRawTiltAngles()
-            args += ' --rawtlt=%s' % rawtlt_file
-        else:
-            args += ' --tltstep=%(tiltStep)f --zeroid=%(zeroid)d'
-        if command_params["tltax"] is not None:
-            args += ' --tltax=%(tltax)f'
         if self.bytile.get():
             args += ' --bytile'
         if self.autoclipxy.get() and self.bytile.get():
             args += ' --autoclipxy'
-        if self.load.get():
-            args += ' --load'
         if self.correctrot.get():
             args += ' --correctrot'
         if self.normslice.get():
@@ -236,19 +163,21 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
         args += ' --threads=%(threads)d'
 
-        program = emantomo.Plugin.getProgram("e2tomogram.py")
-        self._log.info('Launching: ' + program + ' ' + args % command_params)
-        self.runJob(program, args % command_params, cwd=self._getExtraPath(),
-                    numberOfMpi=1, numberOfThreads=1)
+        for path in self._processInput():
+            args_file = path + " " + args
+
+            program = emantomo.Plugin.getProgram("e2tomogram.py")
+            self._log.info('Launching: ' + program + ' ' + args_file % command_params)
+            self.runJob(program, args_file % command_params, cwd=self._getExtraPath(),
+                        numberOfMpi=1, numberOfThreads=1)
 
     def createOutputStep(self):
         tilt_series = self.tiltSeries.get()
+        size_x = tilt_series.getXDim()
 
-        sampling_rate = tilt_series.getSamplingRate()
-        if self.outsize.get() == 0:
-            sampling_rate *= 4
-        elif self.outsize.get() == 1:
-            sampling_rate *= 2
+        exponent = np.ceil(np.log2(size_x / self.resolution[self.choices[self.outsize.get()]]).clip(min=0))
+        binning = 2 ** exponent
+        sampling_rate = binning * tilt_series.getSamplingRate()
 
         # Output 1: Main tomograms
         tomograms_paths = self._getOutputTomograms()
@@ -267,18 +196,39 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
         self._defineOutputs(tomograms=tomograms)
         self._defineSourceRelation(self.tiltSeries, tomograms)
 
-    def _getInputPaths(self):
+    def _processInput(self):
         tilt_series = self.tiltSeries.get()
-        return [path for item in tilt_series for path in item.getFiles()]
+        paths = []
+        info_path = self._getExtraPath('info')
+        pwutils.makePath(info_path)
+        for tilt_serie in tilt_series.iterItems(iterate=False):
+            tlt_params = []
+            json_file = os.path.join(info_path,
+                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
+                                     '-' + tilt_serie.getTsId() + '_info.json')
+            tlt_dict = {"ali_loss": [0] * tilt_serie.getSize(),
+                        "apix_unbin": tilt_serie.getSamplingRate(),
+                        "tlt_file": os.path.abspath(tilt_serie[1].getFileName()),
+                        "tlt_params": []
+                        }
+            for idx, tiltImage in enumerate(tilt_serie.iterItems()):
+                paths.append(os.path.abspath(tiltImage.getFileName()))
+                tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else np.eye(4)
+                a1, a2, a3 = euler_from_matrix(tr_matrix, 'szyx')
+                s1, s2 = tr_matrix[0, 3], tr_matrix[1, 3]
+                tlt_params.append([s1, s2, math.degrees(a1), math.degrees(a2), math.degrees(a3)])
+            tlt_dict["tlt_params"] = tlt_params
+            writeJson(tlt_dict, json_file)
+        return list(set(paths))
 
     def _getRawTiltAngles(self):
         tilt_series = self.tiltSeries.get()
-        tilt_angles = [tilt.aggregate(["MAX"], "_tiltAngle", ["_tiltAngle"]) for tilt in tilt_series.iterItems()]
-        tilt_angles = ["%f" % d['_tiltAngle'] for dictionary in tilt_angles for d in dictionary]
-        file_tilt_angles = self._getExtraPath("tilt_angles.txt")
-        with open(file_tilt_angles, 'w') as file:
-            file.write('\n'.join(tilt_angles))
-        return os.path.abspath(file_tilt_angles)
+        for tilt in tilt_series.iterItems():
+            tilt_angles_dict = tilt.aggregate(["MAX"], "_tiltAngle", ["_tiltAngle"])
+            tilt_angles = ["%f" % d['_tiltAngle'] for d in tilt_angles_dict]
+            file_tilt_angles = self._getExtraPath(pwutils.removeBaseExt(tilt.getTsId()) + ".txt")
+            with open(file_tilt_angles, 'w') as file:
+                file.write('\n'.join(tilt_angles))
 
     def _getOutputTomograms(self):
         pattern = os.path.join(self._getExtraPath("tomograms"), '*.hdf')
@@ -288,7 +238,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
     def _methods(self):
         return [
-            "From an unaligned tilt series: aligned, and generated a tomogram using e2tomogram.py",
+            "From an aligned tilt series: generated a tomogram using e2tomogram.py",
             "Note: Tiltseries must have the correct Apix values in their headers"
         ]
 
@@ -296,5 +246,4 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
         tilt_series = self.tiltSeries.get()
         return [
             "Input tilt series: {} (size: {})".format(tilt_series.getName(), tilt_series.getSize()),
-            "Tilt step: {}".format(self.tiltStep.get())
         ]

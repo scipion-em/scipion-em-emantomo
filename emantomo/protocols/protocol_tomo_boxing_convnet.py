@@ -26,7 +26,6 @@
 
 import os
 import glob
-import numpy as np
 
 
 from pwem.emlib.image import ImageHandler
@@ -117,9 +116,14 @@ class EmanProtTomoConvNet(ProtTomoPicking):
             coord3DSetDict[index] = coord3DSet
 
             # Populate Set of 3D Coordinates with 3D Coordinates
-            sr = setTomograms.getSamplingRate()
             factor = self.minBoxSize.get() / self.nn_boxSize if self.minBoxSize.get() is not None else 1
-            factor *= sr
+            # FIXME: Correct the scaling factor when there is a mismatch between the sr in the header and in Scipion
+            # FIXME: Could be useful in the future?
+            # sr = setTomograms.getSamplingRate()
+            # if mrcfile.validate(tomo.getFileName()):
+            #     with mrcfile.open(tomo.getFileName()) as mrc:
+            #         sr_header = mrc.voxel_size.tolist()[0]
+            # factor *= sr / sr_header
             readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone(),
                                    origin=const.CENTER_GRAVITY, scale=factor)
 
