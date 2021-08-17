@@ -158,14 +158,12 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         for tomo in self.tomoFiles:
             args = '%s ' % os.path.abspath(tomo)
-            args += "--coords % s --boxsize % d" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
+            args += "--coords %s --boxsize %i" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
             if self.doInvert:
                 args += ' --invert'
             if self.doNormalize:
                 args += ' --normproc %s' % self.getEnumText('normproc')
-            self.cshrink = float(samplingRateCoord / samplingRateTomo)
-            if self.cshrink > 1:
-                args += ' --cshrink %d' % self.cshrink
+            args += ' --cshrink %d' % (samplingRateCoord / samplingRateTomo)
 
             # Uncomment once migrated to new tomo extraction (e2spt_extract.py)
             # args += ' --threads=% d' % self.numberOfThreads.get()
@@ -307,7 +305,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId):
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
-        ih = ImageHandler()
+        # ih = ImageHandler()
         for counter, subtomoFile in enumerate(subtomoFileList):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
