@@ -84,16 +84,15 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
                       help='Maximum number of particles per tomogram')
         form.addParam('dthr', FloatParam, default=-1,
                       label='Distance threshold',
-                      help='', expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('vthr', FloatParam, default=2.0,
                       label='Value threshold',
-                      help='', expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('delta', FloatParam, default=30.0,
                       label='Delta angle',
-                      help='', expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('sym', StringParam, default='c1',
-                      label='Point-group symmetry',
-                      help='')
+                      label='Point-group symmetry')
         form.addParam('boxSize', FloatParam, important=True, label='Box size',
                       help="The wizard selects same box size as reference size")
 
