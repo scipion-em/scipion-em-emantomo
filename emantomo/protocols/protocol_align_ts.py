@@ -28,16 +28,16 @@
 
 import os
 import glob
-import math
+import numpy as np
 
 import emantomo
 
 from pyworkflow import BETA
+from pyworkflow.object import Float
 from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
 from pwem.protocols import EMProtocol
-from pwem.convert.transformations import euler_matrix
 import pwem.objects as data
 
 from tomo.protocols import ProtTomoBase
@@ -103,7 +103,7 @@ class EmanProtAlignTs(EMProtocol, ProtTomoBase):
         form.addParam('tltax', params.FloatParam,
                       allowsNull=True,
                       default=None,
-                      label='Title axis angle',
+                      label='Tilt axis angle',
                       help='Angle of the tilt axis. The program will calculate one if this option is not provided')
 
         form.addParam('niter', params.StringParam,
@@ -197,11 +197,13 @@ class EmanProtAlignTs(EMProtocol, ProtTomoBase):
                 out_tiltImage = tomoObj.TiltImage()
                 out_tiltImage.copyInfo(tiltImage, copyId=True)
                 out_tiltImage.setLocation(tiltImage.getLocation())
-                matrix = euler_matrix(math.radians(params[idx][2]),
-                                      math.radians(params[idx][3]),
-                                      math.radians(params[idx][4]),
-                                      'szyx')
-                matrix[0, 3], matrix[1, 3] = params[idx][0], params[idx][1]
+                matrix = np.eye(3)
+                matrix[0, 0] = matrix[1, 1] = np.cos(np.deg2rad(params[idx][2]))
+                matrix[0, 1], matrix[1, 0] = np.sin(np.deg2rad(params[idx][2])), \
+                                             -np.sin(np.deg2rad(params[idx][2]))
+                out_tiltImage.tiltAngleAxis = Float(params[idx][4])
+                out_tiltImage.setTiltAngle(params[idx][3])
+                matrix[0, 2], matrix[1, 2] = params[idx][0], params[idx][1]
                 transform = data.Transform()
                 transform.setMatrix(matrix)
                 out_tiltImage.setTransform(transform)
