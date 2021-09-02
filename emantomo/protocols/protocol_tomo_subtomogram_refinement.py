@@ -174,6 +174,13 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args)
 
+        # Fix the sampling rate as it might be set wrong
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        lastImage = self.getLastFromOutputPath("threed_\d+.hdf")
+        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
+                                    lastImage, lastImage)
+        self.runJob(program, args)
+
     def getLastFromOutputPath(self, pattern):
         threedPaths = glob(self.getOutputPath("*"))
         imagePaths = sorted(path for path in threedPaths if re.match(pattern, os.path.basename(path)))
