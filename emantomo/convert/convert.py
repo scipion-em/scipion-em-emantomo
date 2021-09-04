@@ -37,11 +37,12 @@ import os
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
 from pwem.objects.data import Coordinate, Particle, Transform
-from pyworkflow.object import Float
+from pyworkflow.object import Float, RELATION_SOURCE, RELATION_PARENTS, OBJECT_PARENT_ID, Pointer
 from pwem.emlib.image import ImageHandler
 import pwem.emlib.metadata as md
 
 import tomo.constants as const
+from tomo.objects import SetOfTiltSeries
 
 from .. import Plugin
 
@@ -58,6 +59,15 @@ def writeJson(jsonDict, jsonFn):
     """ This function write a Json dictionary """
     with open(jsonFn, 'w') as outfile:
         json.dump(jsonDict, outfile)
+
+
+def appendJson(jsonDict, jsonFn):
+    """ Append a new dictionary to a already existing Json file"""
+    with open(jsonFn, 'r+') as outfile:
+        data = json.load(outfile)
+        data.update(jsonDict)
+        outfile.seek(0)
+        json.dump(data, outfile)
 
 
 def readCTFModel(ctfModel, filename):
@@ -583,7 +593,8 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
                                       itemDataIterator=itertools.count(0))
 
 
-def setCoords3D2Jsons(setTomograms, setCoords, path):
+def setCoords3D2Jsons(setTomograms, setCoords, path, mode="w"):
+    paths = []
     for tomo in setTomograms.getFiles():
         coords = []
         for coor in setCoords.iterCoordinates():
@@ -593,22 +604,29 @@ def setCoords3D2Jsons(setTomograms, setCoords, path):
                                coor.getZ(const.BOTTOM_LEFT_CORNER),
                                "manual", 0.0, 0])
 
-        coordDict = {"boxes_3d": coords,
-                     "class_list": {"0": {"boxsize": setCoords.getBoxSize(), "name": "particles_00"}}
-                     }
-        tomoBasename = pwutils.removeBaseExt(tomo)
-        if "__" in tomoBasename:
-            fnInputCoor = '%s_info.json' % tomoBasename.split("__")[0]
-        else:
-            parentFolder = pwutils.removeBaseExt(os.path.dirname(tomo))
-            fnInputCoor = '%s-%s_info.json' % (parentFolder, tomoBasename)
-        pathInputCoor = pwutils.join(path, fnInputCoor)
         if coords:
-            writeJson(coordDict, pathInputCoor)
+            coordDict = {"boxes_3d": coords,
+                         "class_list": {"0": {"boxsize": setCoords.getBoxSize(), "name": "particles_00"}}
+                         }
+            tomoBasename = pwutils.removeBaseExt(tomo)
+            if "__" in tomoBasename:
+                fnInputCoor = '%s_info.json' % tomoBasename.split("__")[0]
+            else:
+                parentFolder = pwutils.removeBaseExt(os.path.dirname(tomo))
+                fnInputCoor = '%s-%s_info.json' % (parentFolder, tomoBasename)
+            pathInputCoor = pwutils.join(path, fnInputCoor)
+            if mode == "w":
+                writeJson(coordDict, pathInputCoor)
+                paths.append((tomo, pathInputCoor))
+            elif mode == "a":
+                appendJson(coordDict, pathInputCoor)
+                paths.append((tomo, pathInputCoor))
+    return paths
 
 
-def jsons2SetCoords3D(protocol, setTomograms, outPath):
+def jsons2SetCoords3D(protocol, pointer, outPath):
     from tomo.objects import SetOfCoordinates3D
+    setTomograms = pointer.get()
     coord3DSetDict = {}
     suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
     coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
@@ -642,8 +660,64 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
     args = {}
     args[name] = coord3DSet
     protocol._defineOutputs(**args)
-    protocol._defineSourceRelation(setTomograms, coord3DSet)
+    protocol._defineSourceRelation(pointer, coord3DSet)
 
     # Update Outputs
     for index, coord3DSet in coord3DSetDict.items():
         protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
+
+
+def tltParams2Json(setTomograms, tltSeries, path, mode="w"):
+    paths = []
+    sr = setTomograms.getSamplingRate()
+    for tomo_obj in setTomograms.iterItems():
+        tomo = tomo_obj.getFileName()
+        tilt_serie = tltSeries[tomo_obj.getObjId()]
+        tlt_params = []
+        for idx, tiltImage in enumerate(tilt_serie.iterItems()):
+            paths.append(os.path.abspath(tiltImage.getFileName()))
+            tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
+            a1 = numpy.rad2deg(numpy.arccos(tr_matrix[0, 0]))
+            a2 = tiltImage.getTiltAngle()
+            a3 = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
+            s1, s2 = tr_matrix[0, 2], tr_matrix[1, 2]
+            tlt_params.append([s1, s2, a1, a2, a3])
+        tlt_files = os.path.abspath(tilt_serie[1].getFileName())
+        if tlt_params:
+            tlt_dict = {"apix_unbin": sr,
+                        "tlt_file": tlt_files,
+                        "tlt_params": tlt_params
+                        }
+            tomoBasename = pwutils.removeBaseExt(tomo)
+            if "__" in tomoBasename:
+                fnInputCoor = '%s_info.json' % tomoBasename.split("__")[0]
+            else:
+                parentFolder = pwutils.removeBaseExt(os.path.dirname(tomo))
+                fnInputCoor = '%s-%s_info.json' % (parentFolder, tomoBasename)
+            pathInputCoor = pwutils.join(path, fnInputCoor)
+
+            if mode == "w":
+                writeJson(tlt_dict, pathInputCoor)
+                paths.append((tomo, pathInputCoor))
+            elif mode == "a":
+                appendJson(tlt_dict, pathInputCoor)
+                paths.append((tomo, pathInputCoor))
+
+
+def recoverTSFromObj(child_obj, protocol):
+    p = protocol.getProject()
+    graph = p.getSourceGraph(False)
+    relations = p.mapper.getRelationsByName(RELATION_SOURCE)
+    n = graph.getNode(child_obj.strId())
+    connection = []
+    while n is not None and not n.getParent().isRoot():
+        n = n.getParent()
+        connection.append(n.pointer.getUniqueId())
+        connection.append(n.pointer.get().strId())
+    for rel in relations:
+        pObj = p.getObject(rel[OBJECT_PARENT_ID])
+        pExt = rel['object_parent_extended']
+        pp = Pointer(pObj, extended=pExt)
+        if pp.getUniqueId() in connection:
+            if isinstance(pObj, SetOfTiltSeries) and pObj.getFirstItem().getFirstItem().hasTransform():
+                return pObj
