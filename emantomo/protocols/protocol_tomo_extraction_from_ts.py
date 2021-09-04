@@ -107,27 +107,6 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
                            'all particles). 0.5 might be a good choice for '
                            'removing gold beads but may need some testing...')
 
-        form.addSection(label='Preprocess')
-        form.addParam('doInvert', params.BooleanParam, default=False,
-                      label='Invert contrast?',
-                      help='Invert the contrast if your tomogram is black '
-                           'over a white background.  Xmipp, Spider, Relion '
-                           'and Eman require white particles over a black '
-                           'background. Frealign (up to v9.07) requires black '
-                           'particles over a white background')
-
-        form.addParam('doNormalize', params.BooleanParam, default=False,
-                      label='Normalize subtomogram?',
-                      help='Normalization processor applied to subtomograms before extraction.')
-
-        form.addParam('normproc', params.EnumParam,
-                      choices=['normalize', 'normalize.edgemean'],
-                      label='Normalize method',
-                      condition='doNormalize',
-                      default=PROC_NORMALIZE,
-                      display=params.EnumParam.DISPLAY_COMBO,
-                      help='Use normalize.edgemean if the particles have a clear solvent background '
-                           '(i.e., they are not part of a larger complex or embeded in a membrane)')
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -204,14 +183,9 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
             methodsMsgs.append(msg)
         else:
             methodsMsgs.append("Set of Subtomograms not ready yet")
-        if self.doInvert:
-            methodsMsgs.append("Inverted contrast on images.")
         if self.downFactor.get() != 1:
             methodsMsgs.append("Subtomograms downsample by factor %d."
                                % self.downFactor.get())
-        if self.doNormalize:
-            methodsMsgs.append("Particles were normalised. Using normalization method %s"
-                               % self.getEnumText('normproc'))
         return methodsMsgs
 
     def _summary(self):
