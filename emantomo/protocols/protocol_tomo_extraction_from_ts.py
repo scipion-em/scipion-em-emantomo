@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
+# * Authors:     David Herreros (dherreros@cnb.csic.es) [1]
 # *
-# * [1] EyeSeeTea Ltd, London, UK
+# * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -44,7 +44,7 @@ from emantomo.constants import *
 import tomo.constants as const
 
 # Tomogram type constants for particle extraction
-from emantomo.convert import setCoords3D2Jsons, tltParams2Json, loadJson, recoverTSFromObj
+from emantomo.convert import setCoords3D2Jsons, tltParams2Json, loadJson, recoverTSFromObj, jsonFilesFromSet, ctf2Json
 
 SAME_AS_PICKING = 0
 OTHER = 1
@@ -52,7 +52,7 @@ OTHER = 1
 
 class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
     """ Extraction of subtomograms from tilt serie using EMAN2 e2spt_extract.py."""
-    _label = 'extraction from TS'
+    _label = 'extraction from tilt-series'
     _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfSubtomogram'
 
@@ -62,28 +62,13 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputCoordinates', params.PointerParam, label="Input Coordinates", important=True,
+        form.addParam('inputCoordinates', params.PointerParam, label="Input coordinates", important=True,
                       pointerClass='SetOfCoordinates3D', help='Select the SetOfCoordinates3D.')
-
-        form.addParam('tomoSource', params.EnumParam,
-                      choices=['same as picking', 'other'],
-                      default=0,
-                      display=params.EnumParam.DISPLAY_HLIST,
-                      label='Tomogram source',
-                      help='By default the subtomograms will be extracted '
-                           'from the tomogram used in the picking '
-                           'step ( _same as picking_ option ). \n'
-                           'If you select _other_ option, you must provide '
-                           'a different tomogram to extract from. \n'
-                           '*Note*: In the _other_ case, ensure that provided '
-                           'tomogram and coordinates are related ')
-
-        form.addParam('inputTomograms', params.PointerParam,
-                      pointerClass='SetOfTomograms',
-                      condition='tomoSource != %s' % SAME_AS_PICKING,
-                      label='Input tomogram',
-                      help='Select the tomogram from which to extract.')
-
+        form.addParam('inputCTF', params.PointerParam, label="Input ctf", allowsNull=True,
+                      pointerClass='SetOfCTFTomoSeries',
+                      help='Optional - Estimated CTF for the tilts series associates to the '
+                           'tomograms used to pick the input coordinates. Will be taken into '
+                           'account during the extraction if provided.')
         form.addParam('boxSize', params.FloatParam,
                       label='Box size',
                       help='The subtomograms are extracted as a cubic box of this size. '
@@ -125,12 +110,16 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         coords = self.inputCoordinates.get()
         tomos = coords.getPrecedents()
         tltSeries = recoverTSFromObj(coords, self)
-        self.files = setCoords3D2Jsons(tomos, coords, info_path)
-        _ = tltParams2Json(tomos, tltSeries, info_path, mode="a")
+        self.json_files, self.tomo_files = jsonFilesFromSet(tomos, info_path)
+        _ = setCoords3D2Jsons(self.json_files, coords)
+        _ = tltParams2Json(self.json_files, tltSeries, mode="a")
+
+        if self.inputCTF.get() is not None:
+            _ = ctf2Json(self.json_files, self.inputCTF.get(), mode='a')
 
     def extractParticles(self):
-        for pair in self.files:
-            args = os.path.abspath(pair[0])
+        for file in self.tomo_files:
+            args = os.path.abspath(file)
             args += " --rmbeadthr=%f --shrink=%f --tltkeep=%f --padtwod=1.0  " \
                     "--curves=-1 --curves_overlap=0.5 --compressbits=-1 --boxsz_unbin=%d  " \
                     "--threads=%d" \
@@ -175,9 +164,6 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         if self.getOutputsSize() >= 1:
             msg = ("A total of %s subtomograms of size %s were extracted"
                    % (str(self.inputCoordinates.get().getSize()), self.boxSize.get()))
-            if self._tomosOther():
-                msg += (" from another set of tomograms: %s"
-                        % self.getObjectTag('inputTomogram'))
             msg += " using coordinates %s" % self.getObjectTag('inputCoordinates')
             msg += self.methodsVar.get('')
             methodsMsgs.append(msg)
@@ -203,63 +189,15 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         return summary
 
     def _validate(self):
-        errors = []
-        if self.tomoSource.get() == SAME_AS_PICKING:
-            return errors
-        tomo_from_coords = self.inputCoordinates.get().getPrecedents()
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
-        if numberMatches == 0:
-            errors.append("Cannot relate Coordinate Tomograms and New Tomograms. In order to stablish a "
-                          "relation, the filename of the corresponding Coordinate Tomograms and New Tomogram "
-                          "files must be equal. For example, if a coordinate Coordinate Tomogram file is named Tomo_1.mrc, "
-                          "then the New Tomogram file to be associated to it should be named Tomo_1.ext "
-                          "(being 'ext' any valid extension - '.mrc', '.em'...).\n")
-        return errors
+        pass
 
     def _warnings(self):
-        warnings = []
-        if self.tomoSource.get() == SAME_AS_PICKING:
-            return warnings
-        tomo_from_coords = self.inputCoordinates.get().getPrecedents()
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
-        if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Couldn't find a correspondence between all tomogram files. "
-                            "Association is performed in terms of the file name of the Coordinate Tomograms and the New Tomograms "
-                            "(without the extension). For example, if a Coordinate Tomogram file is named Tomo_1.mrc, then the New Tomogram file "
-                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                            "- '.mrc', '.em'...).\n")
-            mismatches_coords = set(coordFiles).difference(tomoFiles)
-            if mismatches_coords:
-                warnings.append("The following Coordinate Tomogram files will not be associated to any New Tomogram "
-                                "(name without extension):")
-                for file in mismatches_coords:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
-            mismatches_tomos = set(tomoFiles).difference(coordFiles)
-            if mismatches_tomos:
-                warnings.append("The following New Tomogram files will not be associated to any Coordinate Tomogram "
-                                "(name without extension):")
-                for file in mismatches_tomos:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
-        return warnings
+        pass
 
     # --------------------------- UTILS functions ----------------------------------
-
-    def _tomosOther(self):
-        """ Return True if other tomograms are used for extract. """
-        return self.tomoSource == OTHER
-
     def getInputTomograms(self):
         """ Return the tomogram associated to the 'SetOfCoordinates3D' or 'Other' tomograms. """
-        if self.tomoSource.get() == SAME_AS_PICKING:
-            return self.inputCoordinates.get().getPrecedents()
-        else:
-            return self.inputTomograms.get()
+        return self.inputCoordinates.get().getPrecedents()
 
     def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet):
         if "__" in tomoFile:

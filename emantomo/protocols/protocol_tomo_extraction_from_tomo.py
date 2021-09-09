@@ -50,7 +50,7 @@ OTHER = 1
 
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
-    _label = 'extraction from Tomo'
+    _label = 'extraction from tomogram'
     _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfSubtomogram'
 
@@ -167,8 +167,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 args += ' --normproc %s' % self.getEnumText('normproc')
             args += ' --cshrink %d' % (samplingRateCoord / samplingRateTomo)
 
-            # Uncomment once migrated to new tomo extraction (e2spt_extract.py)
-            # args += ' --threads=% d' % self.numberOfThreads.get()
             program = emantomo.Plugin.getProgram('e2spt_boxer_old.py')
             self.runJob(program, args, cwd=self._getExtraPath(),
                         numberOfMpi=1, numberOfThreads=1)

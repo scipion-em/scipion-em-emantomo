@@ -55,12 +55,12 @@ class EmanDialog(ToolbarListDialog):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
-            outFile = '*%s_info.json' % pwutils.removeBaseExt(self.tomo.getFileName().split("__")[0])
-            pattern = os.path.join(self.path, "info", outFile)
-            files = glob.glob(pattern)
+            # outFile = '*%s_info.json' % pwutils.removeBaseExt(self.tomo.getFileName().split("__")[0])
+            # pattern = os.path.join(self.path, "info", outFile)
+            # files = glob.glob(pattern)
 
-            moveFile((files[0]), os.path.join(self.path, os.path.basename(files[0])))
-            cleanPath(os.path.join(self.path, "info"))
+            # moveFile((files[0]), os.path.join(self.path, os.path.basename(files[0])))
+            # cleanPath(os.path.join(self.path, "info"))
             self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
@@ -70,7 +70,7 @@ class EmanDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui)
 
     def lanchEmanForTomogram(self, tomo):
-        self._moveCoordsToInfo(tomo)
+        # self._moveCoordsToInfo(tomo)
 
         program = emantomo.Plugin.getProgram("e2spt_boxer.py")
         arguments = "%s" % os.path.abspath(tomo.getFileName())

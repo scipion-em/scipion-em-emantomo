@@ -36,7 +36,7 @@ import tomo.objects
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 from tomo.protocols.protocol_import_coordinates import ProtImportCoordinates3D
 
-from ..convert import setCoords3D2Jsons, jsons2SetCoords3D
+from ..convert import setCoords3D2Jsons, jsons2SetCoords3D, jsonFilesFromSet
 from .views_tkinter_tree import EmanDialog
 
 
@@ -65,23 +65,25 @@ class EmanDataViewer(pwviewer.Viewer):
 
         if issubclass(cls, tomo.objects.SetOfCoordinates3D):
             outputCoords = obj
+            tomos = outputCoords.getPrecedents()
+            tomoList = [item.clone() for item in tomos.iterItems()]
 
-            tomoList = [item.clone() for item in outputCoords.getPrecedents().iterItems()]
+            path = self.protocol._getExtraPath()
+            info_path = self.protocol._getExtraPath('info')
 
-            path = os.path.join(self.protocol._getExtraPath(), '..')
+            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json',)
 
-            tomoProvider = TomogramsTreeProvider(tomoList, path, 'json',)
-
-            setCoords3D2Jsons(outputCoords.getPrecedents(), outputCoords, path)
+            if not os.path.exists(info_path):
+                pwutils.makePath(info_path)
+            json_files, _ = jsonFilesFromSet(tomos, info_path)
+            _ = setCoords3D2Jsons(json_files, outputCoords)
 
             setView = EmanDialog(self._tkRoot, path, provider=tomoProvider)
 
             import tkinter as tk
             frame = tk.Frame()
             if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                jsons2SetCoords3D(self.protocol, outputCoords.getPrecedents(), path)
-
-            pwutils.cleanPattern(os.path.join(path, '*json'))
+                jsons2SetCoords3D(self.protocol, outputCoords.getPrecedents(), info_path)
 
         elif issubclass(cls, ProtImportCoordinates3D):
             if obj.getOutputsSize() >= 1:

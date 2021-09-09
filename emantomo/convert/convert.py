@@ -42,7 +42,7 @@ from pwem.emlib.image import ImageHandler
 import pwem.emlib.metadata as md
 
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries
+from tomo.objects import SetOfTiltSeries, SetOfTomograms
 
 from .. import Plugin
 
@@ -593,12 +593,38 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
                                       itemDataIterator=itertools.count(0))
 
 
-def setCoords3D2Jsons(setTomograms, setCoords, path, mode="w"):
+def jsonFilesFromSet(setScipion, path):
+    json_files = []
+    if isinstance(setScipion, SetOfTomograms):
+        tomo_files = []
+        for file in setScipion.getFiles():
+            fileBasename = pwutils.removeBaseExt(file)
+            if "__" in fileBasename:
+                fnInputCoor = '%s_info.json' % fileBasename.split("__")[0]
+            else:
+                parentFolder = pwutils.removeBaseExt(os.path.dirname(file))
+                fnInputCoor = '%s-%s_info.json' % (parentFolder, fileBasename)
+            pathInputCoor = pwutils.join(path, fnInputCoor)
+            json_files.append(pathInputCoor)
+            tomo_files.append(file)
+        return json_files, tomo_files
+    elif isinstance(setScipion, SetOfTiltSeries):
+        tlt_files = []
+        for tilt_serie in setScipion.iterItems(iterate=False):
+            json_file = os.path.join(path,
+                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
+                                     '-' + tilt_serie.getTsId() + '_info.json')
+            json_files.append(json_file)
+            tlt_files.append(tilt_serie.getFirstItem().getFileName())
+        return json_files, tlt_files
+
+
+def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
-    for tomo in setTomograms.getFiles():
+    for idj, json_file in enumerate(json_files):
         coords = []
         for coor in setCoords.iterCoordinates():
-            if pwutils.removeBaseExt(tomo) == pwutils.removeBaseExt(coor.getVolName()):
+            if idj + 1 == coor.getVolId():
                 coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
                                coor.getY(const.BOTTOM_LEFT_CORNER),
                                coor.getZ(const.BOTTOM_LEFT_CORNER),
@@ -608,25 +634,19 @@ def setCoords3D2Jsons(setTomograms, setCoords, path, mode="w"):
             coordDict = {"boxes_3d": coords,
                          "class_list": {"0": {"boxsize": setCoords.getBoxSize(), "name": "particles_00"}}
                          }
-            tomoBasename = pwutils.removeBaseExt(tomo)
-            if "__" in tomoBasename:
-                fnInputCoor = '%s_info.json' % tomoBasename.split("__")[0]
-            else:
-                parentFolder = pwutils.removeBaseExt(os.path.dirname(tomo))
-                fnInputCoor = '%s-%s_info.json' % (parentFolder, tomoBasename)
-            pathInputCoor = pwutils.join(path, fnInputCoor)
             if mode == "w":
-                writeJson(coordDict, pathInputCoor)
-                paths.append((tomo, pathInputCoor))
+                writeJson(coordDict, json_file)
+                paths.append(json_file)
             elif mode == "a":
-                appendJson(coordDict, pathInputCoor)
-                paths.append((tomo, pathInputCoor))
+                appendJson(coordDict, json_file)
+                paths.append(json_file)
     return paths
 
 
-def jsons2SetCoords3D(protocol, pointer, outPath):
+def jsons2SetCoords3D(protocol, setTomograms, outPath):
     from tomo.objects import SetOfCoordinates3D
-    setTomograms = pointer.get()
+    if isinstance(setTomograms, Pointer):
+        setTomograms = setTomograms.get()
     coord3DSetDict = {}
     suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
     coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
@@ -654,25 +674,23 @@ def jsons2SetCoords3D(protocol, pointer, outPath):
 
         # Populate Set of 3D Coordinates with 3D Coordinates
         readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone())
-        pwutils.cleanPath(jsonFnbase)
 
     name = protocol.OUTPUT_PREFIX + suffix
     args = {}
     args[name] = coord3DSet
     protocol._defineOutputs(**args)
-    protocol._defineSourceRelation(pointer, coord3DSet)
+    protocol._defineSourceRelation(setTomograms, coord3DSet)
 
     # Update Outputs
     for index, coord3DSet in coord3DSetDict.items():
         protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
 
 
-def tltParams2Json(setTomograms, tltSeries, path, mode="w"):
+def tltParams2Json(json_files, tltSeries, mode="w"):
     paths = []
-    sr = setTomograms.getSamplingRate()
-    for tomo_obj in setTomograms.iterItems():
-        tomo = tomo_obj.getFileName()
-        tilt_serie = tltSeries[tomo_obj.getObjId()]
+    sr = tltSeries.getSamplingRate()
+    for idj, json_file in enumerate(json_files):
+        tilt_serie = tltSeries[idj + 1]
         tlt_params = []
         for idx, tiltImage in enumerate(tilt_serie.iterItems()):
             paths.append(os.path.abspath(tiltImage.getFileName()))
@@ -688,21 +706,68 @@ def tltParams2Json(setTomograms, tltSeries, path, mode="w"):
                         "tlt_file": tlt_files,
                         "tlt_params": tlt_params
                         }
-            tomoBasename = pwutils.removeBaseExt(tomo)
-            if "__" in tomoBasename:
-                fnInputCoor = '%s_info.json' % tomoBasename.split("__")[0]
-            else:
-                parentFolder = pwutils.removeBaseExt(os.path.dirname(tomo))
-                fnInputCoor = '%s-%s_info.json' % (parentFolder, tomoBasename)
-            pathInputCoor = pwutils.join(path, fnInputCoor)
-
             if mode == "w":
-                writeJson(tlt_dict, pathInputCoor)
-                paths.append((tomo, pathInputCoor))
+                writeJson(tlt_dict, json_file)
+                paths.append(json_file)
             elif mode == "a":
-                appendJson(tlt_dict, pathInputCoor)
-                paths.append((tomo, pathInputCoor))
+                appendJson(tlt_dict, json_file)
+                paths.append(json_file)
+    return paths
 
+
+def ctf2Json(json_files, ctfSeries, mode='w'):
+    paths = []
+    aquisition = ctfSeries.getSetOfTiltSeries().getAcquisition()
+    cs = aquisition.getSphericalAberration()
+    voltage = aquisition.getVoltage()
+    for idj, json_file in enumerate(json_files):
+        ctf_serie = ctfSeries[idj + 1]
+        defocus = []
+        phase = []
+        for idx, ctfTomo in enumerate(ctf_serie.iterItems()):
+            defocus_eman = (ctfTomo.getDefocusU() + ctfTomo.getDefocusV()) / 20000.0
+            phase.append(ctfTomo.getPhaseShift())
+            defocus.append(defocus_eman)
+        if defocus and phase:
+            ctf_dict = {"cs": cs,
+                        "voltage": voltage,
+                        "defocus": defocus,
+                        "phase": phase
+                        }
+            if mode == "w":
+                writeJson(ctf_dict, json_file)
+                paths.append(json_file)
+            elif mode == "a":
+                appendJson(ctf_dict, json_file)
+                paths.append(json_file)
+    return paths
+
+def refinement2Json(protocol, subTomos, mode='w'):
+    lst_file = protocol._getExtraPath(os.path.join('spt_00', 'input_ptcls.lst'))
+    json_name = protocol._getExtraPath(os.path.join('spt_00', 'particle_parms_01.json'))
+    sr = subTomos.getSamplingRate()
+    parms_dict = {}
+    for subTomo in subTomos.iterItems():
+        key = "('%s', %d)" % (os.path.abspath(lst_file), subTomo.getObjId() - 1)
+        coverage = subTomo.coverage if hasattr(subTomo, 'coverage') else 0.0
+        score = subTomo.score if hasattr(subTomo, 'score') else -0.0
+        matrix_st = subTomo.getTransform().getMatrix()
+        matrix_c = subTomo.getCoordinate3D().getMatrix()
+        am_st, am_c = [0] * 12, [0] * 12
+        am_st[0:3], am_st[4:7], am_st[8:11] = matrix_st[0, :3], matrix_st[1, :3], matrix_st[2, :3]
+        am_c[0:3], am_c[4:7], am_c[8:11] = matrix_c[0, :3], matrix_c[1, :3], matrix_c[2, :3]
+        am_st[3], am_st[7], am_st[11] = matrix_st[0, 3] / sr, matrix_st[1, 3] / sr, matrix_st[2, 3] / sr
+        am_c[3], am_c[7], am_c[11] = matrix_c[0, 3] / sr, matrix_c[1, 3] / sr, matrix_c[2, 3] / sr
+        parms_dict[key] = {"coverage": coverage, "score": score,
+                           "xform.align3d": {"__class__": "Transform",
+                                             "matrix": am_st},
+                           "xform.start": {"__class__": "Transform",
+                                             "matrix": am_c},
+                           }
+    if mode == "w":
+        writeJson(parms_dict, json_name)
+    elif mode == "a":
+        appendJson(parms_dict, json_name)
 
 def recoverTSFromObj(child_obj, protocol):
     p = protocol.getProject()
@@ -721,3 +786,4 @@ def recoverTSFromObj(child_obj, protocol):
         if pp.getUniqueId() in connection:
             if isinstance(pObj, SetOfTiltSeries) and pObj.getFirstItem().getFirstItem().hasTransform():
                 return pObj
+    raise ValueError('Could not find any SetOfTiltSeries associated to %s.' % type(child_obj))

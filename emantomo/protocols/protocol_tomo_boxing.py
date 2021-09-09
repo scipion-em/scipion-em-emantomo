@@ -26,10 +26,11 @@
 
 from pyworkflow import BETA
 from pyworkflow.utils.properties import Message
+from pyworkflow import utils as pwutils
 from pyworkflow.gui.dialog import askYesNo
 from pyworkflow.protocol.params import BooleanParam, PointerParam, EnumParam
 
-from emantomo.convert import setCoords3D2Jsons, jsons2SetCoords3D
+from emantomo.convert import setCoords3D2Jsons, jsons2SetCoords3D, jsonFilesFromSet
 from emantomo.viewers.views_tkinter_tree import EmanDialog
 
 from tomo.protocols import ProtTomoPicking
@@ -66,21 +67,27 @@ class EmanProtTomoBoxing(ProtTomoPicking):
         self._insertFunctionStep('launchBoxingGUIStep', interactive=True)
 
     def _createOutput(self):
-        jsons2SetCoords3D(self, self.inputTomograms, self._getExtraPath())
+        jsons2SetCoords3D(self, self.inputTomograms, self.info_path)
 
     # --------------------------- STEPS functions -----------------------------
     def copyInputCoords(self):
-        setCoords3D2Jsons(self.inputTomograms.get(), self.inputCoordinates.get(), self._getExtraPath())
+        self.info_path = self._getExtraPath('info')
+        pwutils.makePath(self.info_path)
+        self.json_files, self.tomo_files = jsonFilesFromSet(self.inputTomograms.get(), self.info_path)
+        _ = setCoords3D2Jsons(self.json_files, self.inputCoordinates.get())
 
     def launchBoxingGUIStep(self):
 
         if self.getOutputsSize() >= 1:
+            self.info_path = self._getExtraPath('info')
+            pwutils.makePath(self.info_path)
+            self.json_files, self.tomo_files = jsonFilesFromSet(self.inputTomograms.get(), self.info_path)
             lastOutput = [output for _, output in self.iterOutputAttributes()][-1]
-            setCoords3D2Jsons(self.inputTomograms.get(), lastOutput, self._getExtraPath())
+            _ = setCoords3D2Jsons(self.json_files, lastOutput)
 
         tomoList = [tomo.clone() for tomo in self.inputTomograms.get().iterItems()]
 
-        tomoProvider = TomogramsTreeProvider(tomoList, self._getExtraPath(), "json")
+        tomoProvider = TomogramsTreeProvider(tomoList, self.info_path, "json")
 
         self.dlg = EmanDialog(None, self._getExtraPath(), provider=tomoProvider,)
 

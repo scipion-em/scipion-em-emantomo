@@ -33,7 +33,7 @@ from pwem.wizards.wizard import EmWizard
 # from . import Plugin
 # from .convert import writeSetOfMicrographs
 # from .protocols import SparxGaussianProtPicking, EmanProtTomoExtraction, EmanProtTomoTempMatch
-from .protocols import EmanProtTomoExtraction, EmanProtTomoTempMatch
+from .protocols import EmanProtTomoExtraction, EmanProtTSExtraction, EmanProtTomoTempMatch
 
 
 # class SparxGaussianPickerWizard(EmWizard):
@@ -116,7 +116,7 @@ from .protocols import EmanProtTomoExtraction, EmanProtTomoTempMatch
 
 
 class EmanTomoExtractionWizard(EmWizard):
-    _targets = [(EmanProtTomoExtraction, ['boxSize'])]
+    _targets = [(EmanProtTomoExtraction, ['boxSize']), (EmanProtTSExtraction, ['boxSize'])]
 
     def show(self, form):
         tomoExtractProt = form.protocol
@@ -130,7 +130,7 @@ class EmanTomoExtractionWizard(EmWizard):
             print('These coordinates do not have box size. Please, enter box size manually.')
             return
 
-        if tomoExtractProt.downFactor.get() != 1:
+        if tomoExtractProt.downFactor.get() != 1 and isinstance(tomoExtractProt, EmanProtTomoExtraction):
             boxSize = float(boxSize/tomoExtractProt.downFactor.get())
 
         form.setVar('boxSize', boxSize)
