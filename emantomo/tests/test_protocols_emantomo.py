@@ -629,7 +629,9 @@ class TestEmanTomoReconstruction(TestEmanTomoBase):
             amplitudeContrast=0.1,
             samplingRate=1.35,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.3,
+            tiltAxisAngle=87.1
+        )
 
     def _getProtAlignTs(self, protImportTs):
         return self.newProtocol(
