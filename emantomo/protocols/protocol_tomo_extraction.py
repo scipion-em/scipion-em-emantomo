@@ -263,9 +263,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         warnings = []
         if self.tomoSource.get() != SAME_AS_PICKING:
             precedentsSet = self.inputCoordinates.get().getPrecedents()
-            if getattr(precedentsSet, '_tsId', None) and getattr(self.inputTomograms.get(), '_tsId', None):
+            if getattr(precedentsSet.getFirstItem(), '_tsId', None) and \
+                    getattr(self.inputTomograms.get().getFirstItem(), '_tsId', None):
                 # Match by id (tomoId, tsId)
-                tomoIds = [[tomo.getTsId() for tomo in self.inputTomograms.get()]]
+                tomoIds = [tomo.getTsId() for tomo in self.inputTomograms.get()]
                 coordPrecedentsIds = [tomo.getTsId() for tomo in precedentsSet]
                 numberMatches = len(set(tomoIds) & set(coordPrecedentsIds))  # Length of the intersection of both lists
                 maxNumberFound = max(len(tomoIds), len(coordPrecedentsIds))
