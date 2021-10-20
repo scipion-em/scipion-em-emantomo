@@ -29,9 +29,7 @@ from pyworkflow.tests import (BaseTest, setupTestProject, DataSet)
 from pwem.protocols import (ProtImportMicrographs, ProtImportParticles, ProtImportVolumes,
                             ProtImportAverages)
 import pyworkflow.utils as pwutils
-
-import emantomo
-
+from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
 from ..protocols import *
 import tomo.protocols
 
@@ -151,7 +149,7 @@ class TestEmanTomoExtraction(TestEmanTomoBase):
         self.launchProtocol(protImportTomogram)
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto=IMPORT_FROM_EMAN,
                                                    filesPath=self.coords3D,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,
@@ -266,7 +264,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
         # else:
         #     boxSize = 32
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto=IMPORT_FROM_EMAN,
                                                    filesPath=self.coords3D,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=boxSize,
@@ -411,7 +409,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
         coords = protImportTomogram._getExtraPath(coords + '.txt')
         pwutils.createAbsLink(self.coords3D_Large, coords)
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto=IMPORT_FROM_EMAN,
                                                    filesPath=coords,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,

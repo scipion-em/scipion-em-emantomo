@@ -53,9 +53,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     _label = 'tomo extraction'
     _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfSubtomogram'
-
-    def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+    tomoFiles = []
+    lines = []
+    coordsFileName = None
+    samplingRateTomo = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -118,16 +119,14 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('writeSetOfCoordinates3D')
-        self._insertFunctionStep('extractParticles')
-        self._insertFunctionStep('convertOutput')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.writeSetOfCoordinates3D)
+        self._insertFunctionStep(self.extractParticles)
+        self._insertFunctionStep(self.convertOutput)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
 
     def writeSetOfCoordinates3D(self):
-        self.lines = []
-        self.tomoFiles = []
         tomoList = []
         for tomo in self.getInputTomograms():
             tomoList.append(tomo.clone())
@@ -185,20 +184,21 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             cleanPattern(hdfFile)
 
     def createOutputStep(self):
-        self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        self.outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
-        self.outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
+        outputSet = None
+        outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
+        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
+        outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         acquisition = TomoAcquisition()
         acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
         acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
         acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
-        self.outputSubTomogramsSet.setAcquisition(acquisition)
+        outputSubTomogramsSet.setAcquisition(acquisition)
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
                 if os.path.basename(tomoFile) == os.path.basename(item.getFileName()):
                     coordSet = self.lines[ind]
                     outputSet = self.readSetOfSubTomograms(tomoFile,
-                                                           self.outputSubTomogramsSet,
+                                                           outputSubTomogramsSet,
                                                            coordSet,
                                                            item.getObjId())
 
@@ -261,32 +261,52 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def _warnings(self):
         warnings = []
-        if self.tomoSource.get() == SAME_AS_PICKING:
-            return warnings
-        tomo_from_coords = self.inputCoordinates.get().getPrecedents()
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
-        if numberMatches < max(len(tomoFiles), len(coordFiles)):
-            warnings.append("Couldn't find a correspondence between all tomogram files. "
-                            "Association is performed in terms of the file name of the Coordinate Tomograms and the New Tomograms "
-                            "(without the extension). For example, if a Coordinate Tomogram file is named Tomo_1.mrc, then the New Tomogram file "
-                            "file to be associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                            "- '.mrc', '.em'...).\n")
-            mismatches_coords = set(coordFiles).difference(tomoFiles)
-            if mismatches_coords:
-                warnings.append("The following Coordinate Tomogram files will not be associated to any New Tomogram "
-                                "(name without extension):")
-                for file in mismatches_coords:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
-            mismatches_tomos = set(tomoFiles).difference(coordFiles)
-            if mismatches_tomos:
-                warnings.append("The following New Tomogram files will not be associated to any Coordinate Tomogram "
-                                "(name without extension):")
-                for file in mismatches_tomos:
-                    warnings.append("\t%s" % file)
-                warnings.append("\n")
+        if self.tomoSource.get() != SAME_AS_PICKING:
+            precedentsSet = self.inputCoordinates.get().getPrecedents()
+            if getattr(precedentsSet, '_tsId', None) and getattr(self.inputTomograms.get(), '_tsId', None):
+                # Match by id (tomoId, tsId)
+                tomoIds = [[tomo.getTsId() for tomo in self.inputTomograms.get()]]
+                coordPrecedentsIds = [tomo.getTsId() for tomo in precedentsSet]
+                numberMatches = len(set(tomoIds) & set(coordPrecedentsIds))  # Length of the intersection of both lists
+                maxNumberFound = max(len(tomoIds), len(coordPrecedentsIds))
+                if numberMatches < maxNumberFound:
+                    warnings.append("Couldn't find a correspondence between coordinates precedents and the introduced "
+                                    "tomograms in which the extraction is desired to be performed. These means that "
+                                    "the tsId label is different in both sets of tomograms, at least for some of them.")
+                    mismatchesIds = set(coordPrecedentsIds).difference(tomoIds)
+                    if mismatchesIds:
+                        warnings.append("The following tsIds will not be associated to any New Tomogram (tsIds):")
+                        for id in mismatchesIds:
+                            warnings.append("\t%s" % id)
+                        warnings.append("\n")
+            else:
+                # Match by filename
+                tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
+                coordFiles = [pwutils.removeBaseExt(file) for file in precedentsSet.getFiles()]
+                numberMatches = len(set(tomoFiles) & set(coordFiles))
+                maxNumberFound = max(len(tomoFiles), len(coordFiles))
+
+                if numberMatches < maxNumberFound:
+                    warnings.append("Couldn't find a correspondence between all tomogram files. "
+                                    "Association is performed in terms of the file name of the Coordinate Tomograms "
+                                    "and the New Tomograms (without the extension). For example, if a Coordinate "
+                                    "Tomogram file is named Tomo_1.mrc, then the New Tomogram file file to be "
+                                    "associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
+                                    "- '.mrc', '.em'...).\n")
+                    mismatches_coords = set(coordFiles).difference(tomoFiles)
+                    if mismatches_coords:
+                        warnings.append("The following Coordinate Tomogram files will not be associated to any New "
+                                        "Tomogram (name without extension):")
+                        for file in mismatches_coords:
+                            warnings.append("\t%s" % file)
+                        warnings.append("\n")
+                    mismatches_tomos = set(tomoFiles).difference(coordFiles)
+                    if mismatches_tomos:
+                        warnings.append("The following New Tomogram files will not be associated to any Coordinate Tomogram "
+                                        "(name without extension):")
+                        for file in mismatches_tomos:
+                            warnings.append("\t%s" % file)
+                        warnings.append("\n")
         return warnings
 
     # --------------------------- UTILS functions ----------------------------------
