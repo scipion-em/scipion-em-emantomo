@@ -33,7 +33,7 @@ from pwem.wizards.wizard import EmWizard
 # from . import Plugin
 # from .convert import writeSetOfMicrographs
 # from .protocols import SparxGaussianProtPicking, EmanProtTomoExtraction, EmanProtTomoTempMatch
-from .protocols import EmanProtTomoExtraction, EmanProtTSExtraction, EmanProtTomoTempMatch
+from .protocols import EmanProtTomoExtraction, EmanProtTSExtraction, EmanProtTomoTempMatch, EmanProtTomoResize
 
 
 # class SparxGaussianPickerWizard(EmWizard):
@@ -149,3 +149,19 @@ class EmanTomoTempMatchWizard(EmWizard):
         boxSize = inputReference.getDim()[0]
 
         form.setVar('boxSize', boxSize)
+
+class EmanTomoResizeWizard(EmWizard):
+    _targets = [(EmanProtTomoResize, ['xDim', 'yDim', 'zDim'])]
+
+    def show(self, form):
+        tomoResizeProt = form.protocol
+        inputTomos = tomoResizeProt.inputTomograms.get()
+        if not inputTomos:
+            print('You must specify input tomograms first')
+            return
+
+        dim = inputTomos.getFirstItem().getDim()
+
+        form.setVar('xDim', dim[0])
+        form.setVar('yDim', dim[1])
+        form.setVar('zDim', dim[2])
