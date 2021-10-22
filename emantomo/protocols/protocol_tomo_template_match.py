@@ -95,6 +95,9 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
                       label='Point-group symmetry')
         form.addParam('boxSize', FloatParam, important=True, label='Box size',
                       help="The wizard selects same box size as reference size")
+        form.addParam('groupId', IntParam, label="GroupId", default=1,
+                      help="Select a group ID that will be given to the particles. This value is useful to indentify "
+                           "different structures in a SetOfCoordinates3D when different sets are joint.")
 
     # --------------------------- INSERT steps functions ----------------------
 
@@ -200,7 +203,8 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
                 args = dict()
                 args[name] = coord3DSet
                 # Populate Set of 3D Coordinates with 3D Coordinates
-                readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, self.correctOffset)
+                readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, self.correctOffset,
+                                       groupId=self.groupId.get())
 
         self._defineOutputs(**args)
         self._defineSourceRelation(self.inputSet.get(), coord3DSet)
