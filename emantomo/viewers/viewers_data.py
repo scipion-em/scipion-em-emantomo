@@ -66,7 +66,15 @@ class EmanDataViewer(pwviewer.Viewer):
         if issubclass(cls, tomo.objects.SetOfCoordinates3D):
             outputCoords = obj
             tomos = outputCoords.getPrecedents()
-            tomoList = [item.clone() for item in tomos.iterItems()]
+
+            volIds = outputCoords.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
+            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
+
+            tomoList = []
+            for objId in volIds:
+                tomogram = tomos[objId[0]].clone()
+                tomogram.count = objId[1]
+                tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
             info_path = self.protocol._getExtraPath('info')

@@ -37,3 +37,4 @@ from .protocol_align_ts import EmanProtAlignTs
 from .protocol_estimate_ctf import EmanProtEstimateCTF
 from .protocol_tomo_fill_mw import EmanProtTomoFillMW
 from .protocol_tomo_tilt_refine import EmanProtRefineTS
+from .protocol_resize_tomograms import EmanProtTomoResize

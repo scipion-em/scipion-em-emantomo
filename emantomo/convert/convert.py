@@ -149,7 +149,7 @@ def jsonToCtfModel(ctfJsonFn, ctfModel):
 
 
 def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None,
-                           origin=const.BOTTOM_LEFT_CORNER, scale=1):
+                           origin=const.BOTTOM_LEFT_CORNER, scale=1, groupId=None):
     if "boxes_3d" in jsonBoxDict.keys():
         boxes = jsonBoxDict["boxes_3d"]
 
@@ -159,6 +159,10 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
             coord3DSet.enableAppend()
 
             newCoord = readCoordinate3D(box, inputTomo, origin=origin, scale=scale)
+            if groupId is None:
+                newCoord.setGroupId(classKey)
+            else:
+                newCoord.setGroupId(groupId)
 
             # Execute Callback
             if updateItem:
@@ -621,19 +625,25 @@ def jsonFilesFromSet(setScipion, path):
 
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
-    for idj, json_file in enumerate(json_files):
+    for json_file in json_files:
         coords = []
+        groupIds = set()
         for coor in setCoords.iterCoordinates():
-            if idj + 1 == coor.getVolId():
+            tomoName = pwutils.removeBaseExt(coor.getVolume().getFileName()) + '_info'
+            if tomoName in json_file:
                 coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
                                coor.getY(const.BOTTOM_LEFT_CORNER),
                                coor.getZ(const.BOTTOM_LEFT_CORNER),
-                               "manual", 0.0, 0])
+                               "manual", 0.0, coor.getGroupId()])
+                groupIds.add(coor.getGroupId())
 
         if coords:
             coordDict = {"boxes_3d": coords,
-                         "class_list": {"0": {"boxsize": setCoords.getBoxSize(), "name": "particles_00"}}
+                         "class_list": {}
                          }
+            for groupId in groupIds:
+                coordDict["class_list"]["%s" % groupId] = {"boxsize": setCoords.getBoxSize(),
+                                                           "name": "particles_%02d" % groupId}
             if mode == "w":
                 writeJson(coordDict, json_file)
                 paths.append(json_file)
@@ -669,8 +679,8 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
             coord3DSet.setBoxSize(int(jsonBoxDict["class_list"]["0"]["boxsize"]))
             first = False
 
-        index = int((list(jsonBoxDict["class_list"].keys()))[0])
-        coord3DSetDict[index] = coord3DSet
+        for key in list(jsonBoxDict["class_list"].keys()):
+            coord3DSetDict[int(key)] = coord3DSet
 
         # Populate Set of 3D Coordinates with 3D Coordinates
         readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone())
