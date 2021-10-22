@@ -24,19 +24,24 @@
 # *
 # **************************************************************************
 
-# import os
+
 import glob
 from os.path import abspath
 
-from pwem.emlib.image import ImageHandler
+from pyworkflow import BETA
 from pyworkflow import utils as pwutils
-from pwem.protocols import EMProtocol
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
+
+from pwem.emlib.image import ImageHandler
+from pwem.protocols import EMProtocol
+
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
-# import emantomo
+
 from emantomo.constants import *
+
+import tomo.constants as const
 
 # Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
@@ -46,6 +51,7 @@ OTHER = 1
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'tomo extraction'
+    _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfSubtomogram'
 
     def __init__(self, **kwargs):
@@ -135,7 +141,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 coords = self.inputCoordinates.get()
                 for coord3D in coords.iterCoordinates(volume=tomo):
                     if os.path.basename(tomo.getFileName()) == os.path.basename(coord3D.getVolName()):
-                        out.write("%d\t%d\t%d\n" % (coord3D.getX(), coord3D.getY(), coord3D.getZ()))
+                        out.write("%d\t%d\t%d\n" % (coord3D.getX(const.BOTTOM_LEFT_CORNER),
+                                                    coord3D.getY(const.BOTTOM_LEFT_CORNER),
+                                                    coord3D.getZ(const.BOTTOM_LEFT_CORNER)))
                         newCoord = coord3D.clone()
                         newCoord.setVolume(coord3D.getVolume())
                         coordDict.append(newCoord)
@@ -150,14 +158,12 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         for tomo in self.tomoFiles:
             args = '%s ' % os.path.abspath(tomo)
-            args += "--coords % s --boxsize % d" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
+            args += "--coords %s --boxsize %i" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
             if self.doInvert:
                 args += ' --invert'
             if self.doNormalize:
                 args += ' --normproc %s' % self.getEnumText('normproc')
-            self.cshrink = float(samplingRateCoord / samplingRateTomo)
-            if self.cshrink > 1:
-                args += ' --cshrink %d' % self.cshrink
+            args += ' --cshrink %d' % (samplingRateCoord / samplingRateTomo)
 
             # Uncomment once migrated to new tomo extraction (e2spt_extract.py)
             # args += ' --threads=% d' % self.numberOfThreads.get()
@@ -234,9 +240,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
-            summary.append('*White over black.*')
-        else:
-            summary.append('*Black over white.*')
+            summary.append('*Contrast was inverted.*')
         return summary
 
     def _validate(self):
@@ -301,7 +305,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId):
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
-        ih = ImageHandler()
+        # ih = ImageHandler()
         for counter, subtomoFile in enumerate(subtomoFileList):
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()

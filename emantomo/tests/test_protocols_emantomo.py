@@ -725,22 +725,33 @@ class TestEmanTomoReconstruction(TestEmanTomoBase):
             amplitudeContrast=0.1,
             samplingRate=1.35,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.3,
+            tiltAxisAngle=87.1
+        )
 
-    def _getProtReconstruct(self, protImportTs):
+    def _getProtAlignTs(self, protImportTs):
         return self.newProtocol(
-            EmanProtTomoReconstruction,
+            EmanProtAlignTs,
             tiltSeries=protImportTs.outputTiltSeries,
             tiltStep=2.0,
             niter='1,1,1,1',
             bxsz=64)
+
+    def _getProtReconstruct(self, protAlignTs):
+        return self.newProtocol(
+            EmanProtTomoReconstruction,
+            tiltSeries=protAlignTs.alignedTiltSeries)
 
     def _runPreviousProtocols(self):
         protImportTs = self._getProtImportTs()
         self.launchProtocol(protImportTs)
         self.assertIsNotNone(protImportTs.outputTiltSeries, "Output tilt series not found")
 
-        protReconstruct = self._getProtReconstruct(protImportTs)
+        protAlignTs = self._getProtAlignTs(protImportTs)
+        self.launchProtocol(protAlignTs)
+        self.assertIsNotNone(protImportTs.outputTiltSeries, "Output aligned tilt series not found")
+
+        protReconstruct = self._getProtReconstruct(protAlignTs)
         self.launchProtocol(protReconstruct)
 
         return protReconstruct
@@ -750,8 +761,8 @@ class TestEmanTomoReconstruction(TestEmanTomoBase):
         # 1 tomogram per input file
         self.assertEqual(len(tomograms), 1)
         for tomogram in tomograms:
-            self.assertEqual(tomogram.getSamplingRate(), 1.35)
-            self.assertEqual(tomogram.getDimensions(), (1024, 1024, 256))
+            self.assertEqual(tomogram.getSamplingRate(), 5.4)
+            self.assertEqual(tomogram.getDimensions(), (1120, 1120, 256))
 
     def test_protocol(self):
         protTomoExtraction = self._runPreviousProtocols()

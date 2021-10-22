@@ -24,9 +24,11 @@
 # *
 # **************************************************************************
 
-import os
-import math
 
+import os
+# import math
+
+from pyworkflow import BETA
 from pyworkflow.utils.properties import Message
 from pyworkflow import utils as pwutils
 from pyworkflow.protocol.params import (PointerParam, IntParam,
@@ -51,6 +53,7 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
     """
 
     _label = 'template matching'
+    _devStatus = BETA
 
     def __init__(self, **args):
         ProtTomoPicking.__init__(self, **args)
@@ -105,7 +108,7 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
 
     def preprocess(self):
         program = emantomo.Plugin.getProgram("e2proc3d.py")
-        setDim = self.inputSet.get().getDim()
+        # setDim = self.inputSet.get().getDim()
         # if min(setDim) > 1000:
         #     sizeThreshold = max(self.inputSet.get().getDim())
         self.correctOffset = None
