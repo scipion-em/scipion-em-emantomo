@@ -581,16 +581,18 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
     def updateSubTomogram(subTomogram, index):
         particleParams = particlesParams.get(index)
         if not particleParams:
-            raise Exception("Could not get params for particle %d" % index)
-        setattr(subTomogram, 'coverage', Float(particleParams["coverage"]))
-        setattr(subTomogram, 'score', Float(particleParams["score"]))
-        # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
-        am = particleParams["alignMatrix"]
-        angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
-        samplingRate = outputSetOfSubTomograms.getSamplingRate()
-        shift = numpy.array([am[3] * samplingRate, am[7] * samplingRate, am[11] * samplingRate, 1])
-        matrix = numpy.column_stack((angles, shift.T))
-        subTomogram.setTransform(Transform(matrix))
+            print("Could not get params for particle %d" % index)
+            setattr(subTomogram, "_appendItem", False)
+        else:
+            setattr(subTomogram, 'coverage', Float(particleParams["coverage"]))
+            setattr(subTomogram, 'score', Float(particleParams["score"]))
+            # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
+            am = particleParams["alignMatrix"]
+            angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
+            samplingRate = outputSetOfSubTomograms.getSamplingRate()
+            shift = numpy.array([am[3] * samplingRate, am[7] * samplingRate, am[11] * samplingRate, 1])
+            matrix = numpy.column_stack((angles, shift.T))
+            subTomogram.setTransform(Transform(matrix))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
                                       updateItemCallback=updateSubTomogram,
