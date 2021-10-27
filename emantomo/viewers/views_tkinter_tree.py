@@ -34,6 +34,7 @@ from pyworkflow.utils.path import moveFile, cleanPath, copyFile
 from pyworkflow.utils.process import runJob
 
 import emantomo
+from emantomo.convert import loadJson
 
 
 class EmanDialog(ToolbarListDialog):
@@ -49,6 +50,7 @@ class EmanDialog(ToolbarListDialog):
                                    "Tomogram List",
                                    allowsEmptySelection=False,
                                    itemDoubleClick=self.doubleClickOnTomogram,
+                                   allowSelect=False,
                                    **kwargs)
 
     def refresh_gui(self):
@@ -56,11 +58,13 @@ class EmanDialog(ToolbarListDialog):
             self.after(1000, self.refresh_gui)
         else:
             outFile = '*%s_info.json' % pwutils.removeBaseExt(self.tomo.getFileName().split("__")[0])
-            pattern = os.path.join(self.path, "info", outFile)
-            files = glob.glob(pattern)
+            jsonPath = os.path.join(self.path, "info", outFile)
+            jsonPath = glob.glob(jsonPath)[0]
 
-            moveFile((files[0]), os.path.join(self.path, os.path.basename(files[0])))
-            cleanPath(os.path.join(self.path, "info"))
+            # moveFile((files[0]), os.path.join(self.path, os.path.basename(files[0])))
+            # cleanPath(os.path.join(self.path, "info"))
+            jsonDict = loadJson(jsonPath)
+            self.tomo.count = len(jsonDict["boxes_3d"])
             self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
@@ -70,7 +74,7 @@ class EmanDialog(ToolbarListDialog):
         self.after(1000, self.refresh_gui)
 
     def lanchEmanForTomogram(self, tomo):
-        self._moveCoordsToInfo(tomo)
+        # self._moveCoordsToInfo(tomo)
 
         program = emantomo.Plugin.getProgram("e2spt_boxer.py")
         arguments = "%s" % os.path.abspath(tomo.getFileName())

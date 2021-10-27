@@ -50,7 +50,7 @@ OTHER = 1
 
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
-    _label = 'tomo extraction'
+    _label = 'extraction from tomogram'
     _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfSubtomogram'
     tomoFiles = []
@@ -63,6 +63,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         form.addSection(label='Input')
         form.addParam('inputCoordinates', params.PointerParam, label="Input Coordinates", important=True,
                       pointerClass='SetOfCoordinates3D', help='Select the SetOfCoordinates3D.')
+
         form.addParam('tomoSource', params.EnumParam,
                       choices=['same as picking', 'other'],
                       default=0,
@@ -104,6 +105,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         form.addParam('doNormalize', params.BooleanParam, default=False,
                       label='Normalize subtomogram?',
                       help='Normalization processor applied to subtomograms before extraction.')
+
         form.addParam('normproc', params.EnumParam,
                       choices=['normalize', 'normalize.edgemean'],
                       label='Normalize method',
@@ -164,8 +166,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 args += ' --normproc %s' % self.getEnumText('normproc')
             args += ' --cshrink %d' % (samplingRateCoord / samplingRateTomo)
 
-            # Uncomment once migrated to new tomo extraction (e2spt_extract.py)
-            # args += ' --threads=% d' % self.numberOfThreads.get()
             program = emantomo.Plugin.getProgram('e2spt_boxer_old.py')
             self.runJob(program, args, cwd=self._getExtraPath(),
                         numberOfMpi=1, numberOfThreads=1)
