@@ -31,8 +31,11 @@
 import glob
 import itertools
 import json
+
+import emantomo
 import numpy
 import os
+from ast import literal_eval
 
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
@@ -563,6 +566,9 @@ def getLastParticlesParams(directory):
         coverage = values.get("coverage")
         score = values.get("score")
         alignMatrix = values.get("xform.align3d", {}).get("matrix")
+
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            alignMatrix = literal_eval(alignMatrix)
 
         if coverage and score and alignMatrix:
             customParticleParams = dict(
