@@ -166,3 +166,21 @@ class Plugin(pwem.Plugin):
                        commands=emanCB_commands,
                        tar=VOID_TGZ,
                        default=True)
+
+        if env.hasPackage('eman'):
+            SW_EM = env.getEmFolder()
+            shell = os.environ.get("SHELL", "bash")
+            urls = ['https://cryoem.bcm.edu/cryoem/static/software/release-2.9/eman2.9_sphire1.4_sparx.linux64.sh',
+                    'https://cryoem.bcm.edu/cryoem/static/software/release-2.91/eman2.91_sphire1.4_sparx.linux64.sh']
+            stable_versions = cls._supportedVersions.copy()
+            stable_versions.remove(emanConst.V_CB)
+
+            for ver, url in zip(stable_versions, urls):
+                install_cmd = 'cd %s && wget %s && ' % (SW_EM, url)
+                install_cmd += '%s ./%s -b -f -p "%s/eman-%s" || { cat %s; exit 1; }' \
+                               % (shell, url.split('/')[-1], SW_EM, ver, emanConst.MISDEPS)
+                eman_commands = [(install_cmd, '%s/eman-%s/bin/python' % (SW_EM, ver))]
+
+                env.addPackage('eman', version=ver,
+                               tar='void.tgz',
+                               commands=eman_commands, default=ver == emanConst.V2_91)
