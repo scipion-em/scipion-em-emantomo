@@ -33,6 +33,13 @@ EMANTOMO_HOME = 'EMANTOMO_HOME'
 # Supported versions
 V2_9 = '2.9'
 V2_91 = '2.91'
+V_CB = '2.91_211111'
+
+# Installation requirements for continuous build
+CONDA_VCB = os.path.join(emantomo.__path__[0], 'requirements', 'Conda_EmanCB.txt')
+
+# Installation commit for continuous build
+COMMIT = '1f1f27c'
 
 # Missing dependencies
 MISDEPS = os.path.join(emantomo.__path__[0], 'requirements', 'Missing_Dependencies')

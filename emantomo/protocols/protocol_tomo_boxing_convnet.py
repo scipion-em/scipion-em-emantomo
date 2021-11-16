@@ -186,7 +186,7 @@ class EmanProtTomoConvNet(ProtTomoPicking):
     def validate(self):
         errors = []
         dim = self.inputTomograms.get().getFirstItem().getDimensions()
-        if dim[0] != dim[1]:
+        if dim[0] != dim[1] and not emantomo.Plugin.isVersion(emantomo.constants.V_CB):
             errors.append("Error: input tomograms must be square. Please, use a resizing protocol or reconstruct "
                           "your tomograms so X and Y dimensions match.")
         return errors
