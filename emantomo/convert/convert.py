@@ -776,6 +776,7 @@ def refinement2Json(protocol, subTomos, mode='w'):
         am_c[0:3], am_c[4:7], am_c[8:11] = matrix_c[0, :3], matrix_c[1, :3], matrix_c[2, :3]
         am_st[3], am_st[7], am_st[11] = matrix_st[0, 3] / sr, matrix_st[1, 3] / sr, matrix_st[2, 3] / sr
         am_c[3], am_c[7], am_c[11] = matrix_c[0, 3] / sr, matrix_c[1, 3] / sr, matrix_c[2, 3] / sr
+        # TODO: Check if we need to convert am_c and am_st to string representation ("[1,2]") for the continuous build
         parms_dict[key] = {"coverage": coverage, "score": score,
                            "xform.align3d": {"__class__": "Transform",
                                              "matrix": am_st},
