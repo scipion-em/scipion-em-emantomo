@@ -69,7 +69,8 @@ class Plugin(pwem.Plugin):
         environ.update({
             'LD_LIBRARY_PATH': os.pathsep.join(pathList),
             'PYTHONPATH': os.pathsep.join(pathList),
-            'SCIPION_MPI_FLAGS': os.environ.get('EMANMPIOPTS', '')
+            'SCIPION_MPI_FLAGS': os.environ.get('EMANMPIOPTS', ''),
+            'TF_FORCE_GPU_ALLOW_GROWTH': "'true'"
         }, position=pwutils.Environ.REPLACE)
 
         return environ
@@ -100,6 +101,7 @@ class Plugin(pwem.Plugin):
         if cls.isVersion(emanConst.V_CB):
             cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEmanActivation())
             if python:
+                # TODO: Check if we need to get python with which or we can rely on the python inside Conda
                 python = subprocess.check_output(cmd + 'which python', shell=True).decode("utf-8")
                 return '%(python)s %(program)s ' % locals()
             else:
