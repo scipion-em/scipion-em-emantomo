@@ -633,29 +633,31 @@ def jsonFilesFromSet(setScipion, path):
 
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
+    groupIds = setCoords.aggregate(["MAX", "COUNT"], "_groupId", ["_groupId"])
+    groupIds = set([d['_groupId'] for d in groupIds])
+    emanIds = list(range(len(groupIds)))
+    dict_eman = dict(zip(groupIds, emanIds))
     for json_file in json_files:
         coords = []
-        groupIds = set()
         for coor in setCoords.iterCoordinates():
             tomoName = pwutils.removeBaseExt(coor.getVolume().getFileName())
             if "__" in tomoName:
                 tomoName = '%s_info' % tomoName.split("__")[0]
             else:
-                tomoName += "info"
+                tomoName += "_info"
             if tomoName in json_file:
                 coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
                                coor.getY(const.BOTTOM_LEFT_CORNER),
                                coor.getZ(const.BOTTOM_LEFT_CORNER),
-                               "manual", 0.0, coor.getGroupId()])
-                groupIds.add(coor.getGroupId())
+                               "manual", 0.0, dict_eman[coor.getGroupId()]])
 
         if coords:
             coordDict = {"boxes_3d": coords,
                          "class_list": {}
                          }
             for groupId in groupIds:
-                coordDict["class_list"]["%s" % groupId] = {"boxsize": setCoords.getBoxSize(),
-                                                           "name": "particles_%02d" % groupId}
+                coordDict["class_list"]["%s" % dict_eman[groupId]] = {"boxsize": setCoords.getBoxSize(),
+                                                                      "name": "particles_%02d" % dict_eman[groupId]}
             if mode == "w":
                 writeJson(coordDict, json_file)
                 paths.append(json_file)
