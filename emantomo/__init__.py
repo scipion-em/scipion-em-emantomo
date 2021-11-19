@@ -185,4 +185,4 @@ class Plugin(pwem.Plugin):
 
                 env.addPackage('eman', version=ver,
                                tar='void.tgz',
-                               commands=eman_commands, default=ver == emanConst.V2_91)
+                               commands=eman_commands)
