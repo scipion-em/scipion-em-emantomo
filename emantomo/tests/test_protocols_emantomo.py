@@ -33,6 +33,8 @@ from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
 from ..protocols import *
 import tomo.protocols
 
+import emantomo
+
 
 class TestEmanBase(BaseTest):
     @classmethod
@@ -589,18 +591,18 @@ class TestEmanTomoTempMatch(TestEmanTomoBase):
         protTomoTempMatch = self._runTomoTempMatch()
 
         outputCoordsBig = protTomoTempMatch[0].output3DCoordinates
-        # if emantomo.Plugin.isVersion(emantomo.V2_3):
-        #     self.assertEqual(outputCoordsBig.getSize(), 19)
-        # elif emantomo.Plugin.isVersion(emantomo.V2_39):
-        self.assertAlmostEqual(outputCoordsBig.getSize(), 500, delta=1)
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            self.assertAlmostEqual(outputCoordsBig.getSize(), 154, delta=1)
+        else:
+            self.assertAlmostEqual(outputCoordsBig.getSize(), 500, delta=1)
         self.assertEqual(outputCoordsBig.getBoxSize(), 128)
         self.assertEqual(outputCoordsBig.getSamplingRate(), 5)
 
         outputCoordsSmall = protTomoTempMatch[1].output3DCoordinates
-        # if emantomo.Plugin.isVersion(emantomo.V2_3):
-        #     self.assertEqual(outputCoordsSmall.getSize(), 2)
-        # elif emantomo.Plugin.isVersion(emantomo.V2_39):
-        self.assertAlmostEqual(outputCoordsSmall.getSize(), 145, delta=1)
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            self.assertAlmostEqual(outputCoordsBig.getSize(), 154, delta=1)
+        else:
+            self.assertAlmostEqual(outputCoordsSmall.getSize(), 145, delta=1)
         self.assertEqual(outputCoordsSmall.getBoxSize(), 128)
         self.assertEqual(outputCoordsSmall.getSamplingRate(), 5)
 
