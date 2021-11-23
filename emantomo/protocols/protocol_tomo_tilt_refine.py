@@ -138,9 +138,11 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
                    (os.path.join(project_path, 'threed_01_even.hdf'),
                     os.path.join(project_path, 'fsc_masked_01.txt'),
                     os.path.join(project_path, 'threed_01_odd.hdf'))
-        self.runJob('e2proc3d.py', args_fsc)
-        self.runJob('e2proclst.py', '%s --create %s' % (particles_2d_file,
-                                                        os.path.abspath(os.path.join(project_path, 'input_ptcls.lst'))),
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        self.runJob(program, args_fsc)
+        program = emantomo.Plugin.getProgram('e2proclst.py')
+        self.runJob(program, '%s --create %s' % (particles_2d_file,
+                                                 os.path.abspath(os.path.join(project_path, 'input_ptcls.lst'))),
                     cwd=self._getExtraPath())
 
 

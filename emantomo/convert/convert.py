@@ -31,8 +31,11 @@
 import glob
 import itertools
 import json
+
+import emantomo
 import numpy
 import os
+from ast import literal_eval
 
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
@@ -564,6 +567,9 @@ def getLastParticlesParams(directory):
         score = values.get("score")
         alignMatrix = values.get("xform.align3d", {}).get("matrix")
 
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            alignMatrix = literal_eval(alignMatrix)
+
         if coverage and score and alignMatrix:
             customParticleParams = dict(
                 coverage=coverage,
@@ -627,25 +633,31 @@ def jsonFilesFromSet(setScipion, path):
 
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
+    groupIds = setCoords.aggregate(["MAX", "COUNT"], "_groupId", ["_groupId"])
+    groupIds = set([d['_groupId'] for d in groupIds])
+    emanIds = list(range(len(groupIds)))
+    dict_eman = dict(zip(groupIds, emanIds))
     for json_file in json_files:
         coords = []
-        groupIds = set()
         for coor in setCoords.iterCoordinates():
-            tomoName = pwutils.removeBaseExt(coor.getVolume().getFileName()) + '_info'
+            tomoName = pwutils.removeBaseExt(coor.getVolume().getFileName())
+            if "__" in tomoName:
+                tomoName = '%s_info' % tomoName.split("__")[0]
+            else:
+                tomoName += "_info"
             if tomoName in json_file:
                 coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
                                coor.getY(const.BOTTOM_LEFT_CORNER),
                                coor.getZ(const.BOTTOM_LEFT_CORNER),
-                               "manual", 0.0, coor.getGroupId()])
-                groupIds.add(coor.getGroupId())
+                               "manual", 0.0, dict_eman[coor.getGroupId()]])
 
         if coords:
             coordDict = {"boxes_3d": coords,
                          "class_list": {}
                          }
             for groupId in groupIds:
-                coordDict["class_list"]["%s" % groupId] = {"boxsize": setCoords.getBoxSize(),
-                                                           "name": "particles_%02d" % groupId}
+                coordDict["class_list"]["%s" % dict_eman[groupId]] = {"boxsize": setCoords.getBoxSize(),
+                                                                      "name": "particles_%02d" % dict_eman[groupId]}
             if mode == "w":
                 writeJson(coordDict, json_file)
                 paths.append(json_file)
@@ -770,6 +782,11 @@ def refinement2Json(protocol, subTomos, mode='w'):
         am_c[0:3], am_c[4:7], am_c[8:11] = matrix_c[0, :3], matrix_c[1, :3], matrix_c[2, :3]
         am_st[3], am_st[7], am_st[11] = matrix_st[0, 3] / sr, matrix_st[1, 3] / sr, matrix_st[2, 3] / sr
         am_c[3], am_c[7], am_c[11] = matrix_c[0, 3] / sr, matrix_c[1, 3] / sr, matrix_c[2, 3] / sr
+
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            am_c = "[" + ",".join(str(a) for a in am_c) + "]"
+            am_st = "[" + ",".join(str(a) for a in am_st) + "]"
+
         parms_dict[key] = {"coverage": coverage, "score": score,
                            "xform.align3d": {"__class__": "Transform",
                                              "matrix": am_st},

@@ -30,6 +30,7 @@ import subprocess
 
 import pwem
 import pyworkflow.utils as pwutils
+from scipion.install.funcs import VOID_TGZ
 
 import emantomo.constants as emanConst
 
@@ -45,18 +46,32 @@ SCRATCHDIR = pwutils.getEnvVariable('EMANTOMOSCRATCHDIR', default='/tmp/')
 class Plugin(pwem.Plugin):
     _homeVar = emanConst.EMANTOMO_HOME
     _pathVars = [emanConst.EMANTOMO_HOME]
-    _supportedVersions = [emanConst.V2_9, emanConst.V2_91]
+    _supportedVersions = [emanConst.V2_9, emanConst.V2_91, emanConst.V_CB]
 
     @classmethod
-    def _defineVariables(cls, version=emanConst.V2_91):
+    def _defineVariables(cls, version=emanConst.V_CB):
         cls._defineEmVar(emanConst.EMANTOMO_HOME, 'eman-' + version)
 
     @classmethod
     def getEnviron(cls):
         """ Setup the environment variables needed to launch Eman. """
         environ = pwutils.Environ(os.environ)
+        pathList = [cls.getHome(d) for d in ['lib', 'bin']]
+
+        # This environment variable is used to setup OpenGL (Mesa)
+        # library in remote desktops
+        if 'REMOTE_MESA_LIB' in os.environ:
+            pathList.append(os.environ['REMOTE_MESA_LIB'])
+
         environ.update({'PATH': cls.getHome('bin')},
                        position=pwutils.Environ.BEGIN)
+
+        environ.update({
+            'LD_LIBRARY_PATH': os.pathsep.join(pathList),
+            'PYTHONPATH': os.pathsep.join(pathList),
+            'SCIPION_MPI_FLAGS': os.environ.get('EMANMPIOPTS', ''),
+            'TF_FORCE_GPU_ALLOW_GROWTH': "'true'"
+        }, position=pwutils.Environ.REPLACE)
 
         return environ
 
@@ -73,19 +88,31 @@ class Plugin(pwem.Plugin):
         return ''
 
     @classmethod
-    def isVersion(cls, version=emanConst.V2_91):
+    def isVersion(cls, version=emanConst.V_CB):
         return cls.getActiveVersion() == version
+
+    @classmethod
+    def getEmanActivation(cls, version=emanConst.V_CB):
+        return "conda activate emantomo-" + version
 
     @classmethod
     def getProgram(cls, program, python=False):
         """ Return the program binary that will be used. """
-        program = os.path.join(cls.getHome('bin'), program)
-
-        if python:
-            python = cls.getHome('bin/python')
-            return '%(python)s %(program)s ' % locals()
+        if cls.isVersion(emanConst.V_CB):
+            cmd = '%s %s && ' % (cls.getCondaActivationCmd(), cls.getEmanActivation())
+            if python:
+                # TODO: Check if we need to get python with which or we can rely on the python inside Conda
+                python = subprocess.check_output(cmd + 'which python', shell=True).decode("utf-8")
+                return '%(python)s %(program)s ' % locals()
+            else:
+                return cmd + '%(program)s ' % locals()
         else:
-            return '%(program)s ' % locals()
+            program = os.path.join(cls.getHome('bin'), program)
+            if python:
+                python = cls.getHome('bin/python')
+                return '%(python)s %(program)s ' % locals()
+            else:
+                return '%(program)s ' % locals()
 
     @classmethod
     def getEmanCommand(cls, program, args, python=False):
@@ -116,17 +143,46 @@ class Plugin(pwem.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        SW_EM = env.getEmFolder()
-        shell = os.environ.get("SHELL", "bash")
-        urls = ['https://cryoem.bcm.edu/cryoem/static/software/release-2.9/eman2.9_sphire1.4_sparx.linux64.sh',
-                'https://cryoem.bcm.edu/cryoem/static/software/release-2.91/eman2.91_sphire1.4_sparx.linux64.sh']
+        def getCondaInstallation(version=emanConst.V_CB):
+            installationCmd = cls.getCondaActivationCmd()
+            installationCmd += 'conda create -y -n emantomo-' + version + ' --file ' + emanConst.CONDA_VCB + ' && '
+            installationCmd += 'conda activate emantomo-' + version + ' && '
+            installationCmd += 'cd eman-build && '
+            installationCmd += 'cmake ../eman-source/ -DENABLE_OPTIMIZE_MACHINE=ON || { cat %s; exit 1; } && ' \
+                               % emanConst.MISDEPS
+            installationCmd += 'make -j %d && make install' % env.getProcessors()
+            return installationCmd
 
-        for ver, url in zip(cls._supportedVersions, urls):
-            install_cmd = 'cd %s && wget %s && ' % (SW_EM, url)
-            install_cmd += '%s ./%s -b -f -p "%s/eman-%s" || { cat %s; exit 1; }' \
-                           % (shell, url.split('/')[-1], SW_EM, ver, emanConst.MISDEPS)
-            eman_commands = [(install_cmd, '%s/eman-%s/bin/python' % (SW_EM, ver))]
+        # For Eman-CB
+        emanCB_commands = []
+        emanCB_commands.append(('wget -c https://github.com/cryoem/eman2/archive/%s.tar.gz' % emanConst.COMMIT,
+                                "%s.tar.gz" % emanConst.COMMIT))
+        emanCB_commands.append(("tar -xvf %s.tar.gz" % emanConst.COMMIT, []))
+        emanCB_commands.append(("mv eman2*/ eman-source", "eman-source"))
+        emanCB_commands.append(('mkdir eman-build', 'eman-build'))
+        installationCmd_CB = getCondaInstallation(emanConst.V_CB)
+        emanCB_commands.append((installationCmd_CB,
+                                 "eman-build/libpyEM/CMakeFiles/pyPolarData2.dir/libpyPolarData2.cpp.o"))
 
-            env.addPackage('eman', version=ver,
-                           tar='void.tgz',
-                           commands=eman_commands, default=ver == emanConst.V2_91)
+        env.addPackage('eman', version=emanConst.V_CB,
+                       commands=emanCB_commands,
+                       tar=VOID_TGZ,
+                       default=True)
+
+        if env.hasPackage('eman'):
+            SW_EM = env.getEmFolder()
+            shell = os.environ.get("SHELL", "bash")
+            urls = ['https://cryoem.bcm.edu/cryoem/static/software/release-2.9/eman2.9_sphire1.4_sparx.linux64.sh',
+                    'https://cryoem.bcm.edu/cryoem/static/software/release-2.91/eman2.91_sphire1.4_sparx.linux64.sh']
+            stable_versions = cls._supportedVersions.copy()
+            stable_versions.remove(emanConst.V_CB)
+
+            for ver, url in zip(stable_versions, urls):
+                install_cmd = 'cd %s && wget %s && ' % (SW_EM, url)
+                install_cmd += '%s ./%s -b -f -p "%s/eman-%s" || { cat %s; exit 1; }' \
+                               % (shell, url.split('/')[-1], SW_EM, ver, emanConst.MISDEPS)
+                eman_commands = [(install_cmd, '%s/eman-%s/bin/python' % (SW_EM, ver))]
+
+                env.addPackage('eman', version=ver,
+                               tar='void.tgz',
+                               commands=eman_commands)
