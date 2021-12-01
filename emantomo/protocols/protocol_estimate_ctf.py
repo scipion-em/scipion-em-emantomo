@@ -61,14 +61,21 @@ class EmanProtEstimateCTF(EMProtocol, ProtTomoBase):
                       label="Tilt Series", important=True,
                       help='Select the set of tilt series from which the CTF will be '
                            'estimated')
-        form.addParam('dfrange', params.NumericListParam, label='Defocus range',
-                      default='2.0 7.0 0.02',
-                      help='Search range of defocus (start, end, step). D'
-                           'efault is [2.0, 7.0, 0.02].')
-        form.addParam('psrange', params.NumericListParam, label='Phase shift range',
-                      default='10.0 15.0 5.0',
-                      help='Phase shift range (start, end, step). '
-                           'Default is [10.0, 15.0, 5.0].')
+        lineDefocus = form.addLine('Defocus Range (um)',
+                             help="Search range of defocus (start, end, step). Note that "
+                                  "they must be introduced in microns.")
+
+        lineDefocus.addParam('minDefocus', params.FloatParam, default=2.0, label='min')
+        lineDefocus.addParam('maxDefocus', params.FloatParam, default=7.0, label='max')
+        lineDefocus.addParam('stepDefocus', params.FloatParam, default=0.02, label='Step')
+
+        linePhaseShift = form.addLine('Phase shift Range (degrees)',
+                                   help="Search range of the phase shift (start, end, step). To avoid"
+                                        "the phase shift search use min 0.0, max 1.0, and step 1.0.")
+        linePhaseShift.addParam('minPhaseShift', params.FloatParam, default=10.0, label='min')
+        linePhaseShift.addParam('maxPhaseShift', params.FloatParam, default=15.0, label='max')
+        linePhaseShift.addParam('stepPhaseShift', params.FloatParam, default=5.0, label='Step')
+
         form.addParam('tilesize', params.IntParam, label='Tile size',
                       default=256,
                       help='Size of tile to calculate FFT. Default is 256.')
@@ -100,12 +107,12 @@ class EmanProtEstimateCTF(EMProtocol, ProtTomoBase):
         aquisition = self.tiltSeries.get().getAcquisition()
         cs = aquisition.getSphericalAberration()
         voltage = aquisition.getVoltage()
-        dfrange = pwutils.getFloatListFromValues(self.dfrange.get())
-        psrange = pwutils.getFloatListFromValues(self.psrange.get())
+
         args = " ".join(self.tlt_files)
         args += " --dfrange=%f,%f,%f --psrange=%f,%f,%f --tilesize=%d --voltage=%d" \
                 " --cs=%f --nref=%d --stepx=%d --stepy=%d --threads=%d" \
-                %(dfrange[0], dfrange[1], dfrange[2], psrange[0], psrange[1], psrange[2],
+                % (self.minDefocus.get(), self.maxDefocus.get(), self.stepDefocus.get(),
+                  self.minPhaseShift.get(), self.maxPhaseShift.get(), self.stepPhaseShift.get(),
                   self.tilesize.get(), voltage, cs, self.nref.get(),
                   self.stepx.get(), self.stepy.get(), self.numberOfThreads.get())
 
