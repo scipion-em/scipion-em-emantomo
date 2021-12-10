@@ -89,7 +89,7 @@ class EmanProtEstimateCTF(EMProtocol, ProtTomoBase):
         form.addParam('stepy', params.IntParam, label='Step in Y direction',
                       default=40,
                       help='Number of tiles to generate on y-axis (same defocus)')
-        form.addParallelSection(threads=4, mpi=0)
+        # form.addParallelSection(threads=4, mpi=0)
 
         # --------------------------- INSERT steps functions ----------------------
 
