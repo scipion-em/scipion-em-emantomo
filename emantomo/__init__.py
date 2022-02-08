@@ -70,7 +70,7 @@ class Plugin(pwem.Plugin):
             'LD_LIBRARY_PATH': os.pathsep.join(pathList),
             'PYTHONPATH': os.pathsep.join(pathList),
             'SCIPION_MPI_FLAGS': os.environ.get('EMANMPIOPTS', ''),
-            'TF_FORCE_GPU_ALLOW_GROWTH': "'true'"
+            'TF_FORCE_GPU_ALLOW_GROWTH': 'true'
         }, position=pwutils.Environ.REPLACE)
 
         return environ

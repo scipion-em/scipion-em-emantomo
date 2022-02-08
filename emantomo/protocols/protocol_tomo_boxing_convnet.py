@@ -33,7 +33,7 @@ from pwem.emlib.image import ImageHandler
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
 from pyworkflow.utils.properties import Message
-from pyworkflow.protocol.params import IntParam
+from pyworkflow.protocol.params import IntParam, BooleanParam, StringParam, USE_GPU, GPU_LIST, LEVEL_ADVANCED
 
 from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D
@@ -56,7 +56,14 @@ class EmanProtTomoConvNet(ProtTomoPicking):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         ProtTomoPicking._defineParams(self, form)
-
+        form.addHidden(USE_GPU, BooleanParam, default=True,
+                       label="Use GPU for execution",
+                       help="This protocol has both CPU and GPU implementation.\
+                           Select the one you want to use.")
+        form.addHidden(GPU_LIST, StringParam, default='0',
+                       expertLevel=LEVEL_ADVANCED,
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
         form.addParam('boxSize', IntParam, label="Box Size",
                       default=96,
                       help='Final box size for the coordinates')
@@ -97,6 +104,8 @@ class EmanProtTomoConvNet(ProtTomoPicking):
     def launchBoxingGUIStep(self):
         program = emantomo.Plugin.getProgram("e2spt_boxer_convnet.py")
         args = "--label particles_00"
+        if self.useGpu.get():
+            args += " --gpuid %s" % self.getGpuList()[0]
         pwutils.runJob(None, program, args, env=emantomo.Plugin.getEnviron(), cwd=self._getExtraPath())
         self._createOutput()
 
