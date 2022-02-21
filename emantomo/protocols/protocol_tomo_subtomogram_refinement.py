@@ -82,7 +82,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       help='Select the set of subtomograms to perform the reconstruction.')
         form.addParam('inputRef', params.PointerParam,
                       pointerClass='Volume', allowsNull=True,
-                      default=None, label='Input Ref Tomogram',
+                      default=None, label='Input Ref SubTomogram',
                       help='3D reference for initial model generation.'
                            'No reference is used by default.')
 
@@ -172,6 +172,13 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
         self._log.info('Launching: ' + program + ' ' + args)
+        self.runJob(program, args)
+
+        # Fix the sampling rate as it might be set wrong
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        lastImage = self.getLastFromOutputPath("threed_\d+.hdf")
+        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
+                                    lastImage, lastImage)
         self.runJob(program, args)
 
     def getLastFromOutputPath(self, pattern):

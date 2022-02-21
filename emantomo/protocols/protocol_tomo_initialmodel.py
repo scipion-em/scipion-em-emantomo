@@ -115,6 +115,15 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
                       label='Apply Symmetry',
                       help='Apply Symmetry')
 
+        form.addSection(label='Output')
+        form.addParam('returnSubtomos', params.BooleanParam, default=True,
+                      label="Return aligned subtomograms?",
+                      help="Depending on the number of iterations, batch size and number "
+                           "of batches chosen, it might be possible that some subtomograms "
+                           "will not contribute to the initial model. By default, algined "
+                           "subtomograms will be returned, even if the output set might have a "
+                           "lower number of items.")
+
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._insertFunctionStep('convertImagesStep')
@@ -178,18 +187,19 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
         setOfAverageSubTomograms.copyInfo(particles)
         setOfAverageSubTomograms.setSamplingRate(particles.getSamplingRate() * self.shrink.get())
         setOfAverageSubTomograms.append(averageSubTomogram)
+        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms)
+        self._defineSourceRelation(self.particles, setOfAverageSubTomograms)
 
         # Output 2: setOfSubTomograms
-        particleParams = getLastParticlesParams(self.getOutputPath())
-        outputSetOfSubTomograms = self._createSet(SetOfSubTomograms, 'subtomograms%s.sqlite', "particles")
-        outputSetOfSubTomograms.setCoordinates3D(particles.getCoordinates3D())
-        outputSetOfSubTomograms.copyInfo(particles)
-        outputSetOfSubTomograms.setSamplingRate(particles.getSamplingRate() * self.shrink.get())
-        updateSetOfSubTomograms(particles, outputSetOfSubTomograms, particleParams)
-
-        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms, outputParticles=outputSetOfSubTomograms)
-        self._defineSourceRelation(self.particles, setOfAverageSubTomograms)
-        self._defineSourceRelation(self.particles, outputSetOfSubTomograms)
+        if self.returnSubtomos.get():
+            particleParams = getLastParticlesParams(self.getOutputPath())
+            outputSetOfSubTomograms = self._createSet(SetOfSubTomograms, 'subtomograms%s.sqlite', "particles")
+            outputSetOfSubTomograms.setCoordinates3D(particles.getCoordinates3D())
+            outputSetOfSubTomograms.copyInfo(particles)
+            outputSetOfSubTomograms.setSamplingRate(particles.getSamplingRate() * self.shrink.get())
+            updateSetOfSubTomograms(particles, outputSetOfSubTomograms, particleParams)
+            self._defineOutputs(outputParticles=outputSetOfSubTomograms)
+            self._defineSourceRelation(self.particles, outputSetOfSubTomograms)
 
     def getOutputPath(self, *args):
         return self._getExtraPath(self.OUTPUT_DIR, *args)

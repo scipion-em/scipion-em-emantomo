@@ -28,7 +28,6 @@
 
 import os
 import glob
-import math
 import numpy as np
 
 import emantomo
@@ -38,12 +37,11 @@ from pyworkflow.protocol import params
 import pyworkflow.utils as pwutils
 
 from pwem.protocols import EMProtocol
-from pwem.convert.transformations import euler_from_matrix
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import Tomogram, SetOfTomograms
 
-from emantomo.convert import writeJson
+from emantomo.convert import writeJson, jsonFilesFromSet, tltParams2Json
 
 
 class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
@@ -162,9 +160,10 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
             args += ' --extrapad'
 
         args += ' --threads=%(threads)d'
-
-        for path in self._processInput():
-            args_file = path + " " + args
+        
+        self._processInput()
+        for path in self.tlt_files:
+            args_file = os.path.abspath(path) + " " + args
 
             program = emantomo.Plugin.getProgram("e2tomogram.py")
             self._log.info('Launching: ' + program + ' ' + args_file % command_params)
@@ -198,28 +197,10 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
     def _processInput(self):
         tilt_series = self.tiltSeries.get()
-        paths = []
         info_path = self._getExtraPath('info')
         pwutils.makePath(info_path)
-        for tilt_serie in tilt_series.iterItems(iterate=False):
-            tlt_params = []
-            json_file = os.path.join(info_path,
-                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
-                                     '-' + tilt_serie.getTsId() + '_info.json')
-            tlt_dict = {"ali_loss": [0] * tilt_serie.getSize(),
-                        "apix_unbin": tilt_serie.getSamplingRate(),
-                        "tlt_file": os.path.abspath(tilt_serie[1].getFileName()),
-                        "tlt_params": []
-                        }
-            for idx, tiltImage in enumerate(tilt_serie.iterItems()):
-                paths.append(os.path.abspath(tiltImage.getFileName()))
-                tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else np.eye(4)
-                a1, a2, a3 = euler_from_matrix(tr_matrix, 'szyx')
-                s1, s2 = tr_matrix[0, 3], tr_matrix[1, 3]
-                tlt_params.append([s1, s2, math.degrees(a1), math.degrees(a2), math.degrees(a3)])
-            tlt_dict["tlt_params"] = tlt_params
-            writeJson(tlt_dict, json_file)
-        return list(set(paths))
+        self.json_files, self.tlt_files = jsonFilesFromSet(tilt_series, info_path)
+        _ = tltParams2Json(self.json_files, tilt_series, mode="w")
 
     def _getRawTiltAngles(self):
         tilt_series = self.tiltSeries.get()

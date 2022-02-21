@@ -84,18 +84,20 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
                       help='Maximum number of particles per tomogram')
         form.addParam('dthr', FloatParam, default=-1,
                       label='Distance threshold',
-                      help='', expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('vthr', FloatParam, default=2.0,
                       label='Value threshold',
-                      help='', expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('delta', FloatParam, default=30.0,
                       label='Delta angle',
-                      help='', expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('sym', StringParam, default='c1',
-                      label='Point-group symmetry',
-                      help='')
+                      label='Point-group symmetry')
         form.addParam('boxSize', FloatParam, important=True, label='Box size',
                       help="The wizard selects same box size as reference size")
+        form.addParam('groupId', IntParam, label="GroupId", default=1,
+                      help="Select a group ID that will be given to the particles. This value is useful to indentify "
+                           "different structures in a SetOfCoordinates3D when different sets are joint.")
 
     # --------------------------- INSERT steps functions ----------------------
 
@@ -201,7 +203,8 @@ class EmanProtTomoTempMatch(ProtTomoPicking):
                 args = dict()
                 args[name] = coord3DSet
                 # Populate Set of 3D Coordinates with 3D Coordinates
-                readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, self.correctOffset)
+                readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, self.correctOffset,
+                                       groupId=self.groupId.get())
 
         self._defineOutputs(**args)
         self._defineSourceRelation(self.inputSet.get(), coord3DSet)

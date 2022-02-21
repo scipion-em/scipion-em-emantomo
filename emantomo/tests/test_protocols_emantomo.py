@@ -29,11 +29,11 @@ from pyworkflow.tests import (BaseTest, setupTestProject, DataSet)
 from pwem.protocols import (ProtImportMicrographs, ProtImportParticles, ProtImportVolumes,
                             ProtImportAverages)
 import pyworkflow.utils as pwutils
-
-import emantomo
-
+from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
 from ..protocols import *
 import tomo.protocols
+
+import emantomo
 
 
 class TestEmanBase(BaseTest):
@@ -151,7 +151,7 @@ class TestEmanTomoExtraction(TestEmanTomoBase):
         self.launchProtocol(protImportTomogram)
 
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto=IMPORT_FROM_EMAN,
                                                    filesPath=self.coords3D,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,
@@ -266,7 +266,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
         # else:
         #     boxSize = 32
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto=IMPORT_FROM_EMAN,
                                                    filesPath=self.coords3D,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=boxSize,
@@ -411,7 +411,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
         coords = protImportTomogram._getExtraPath(coords + '.txt')
         pwutils.createAbsLink(self.coords3D_Large, coords)
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto=IMPORT_FROM_EMAN,
                                                    filesPath=coords,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,
@@ -591,18 +591,18 @@ class TestEmanTomoTempMatch(TestEmanTomoBase):
         protTomoTempMatch = self._runTomoTempMatch()
 
         outputCoordsBig = protTomoTempMatch[0].output3DCoordinates
-        # if emantomo.Plugin.isVersion(emantomo.V2_3):
-        #     self.assertEqual(outputCoordsBig.getSize(), 19)
-        # elif emantomo.Plugin.isVersion(emantomo.V2_39):
-        self.assertAlmostEqual(outputCoordsBig.getSize(), 500, delta=1)
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            self.assertAlmostEqual(outputCoordsBig.getSize(), 154, delta=1)
+        else:
+            self.assertAlmostEqual(outputCoordsBig.getSize(), 500, delta=1)
         self.assertEqual(outputCoordsBig.getBoxSize(), 128)
         self.assertEqual(outputCoordsBig.getSamplingRate(), 5)
 
         outputCoordsSmall = protTomoTempMatch[1].output3DCoordinates
-        # if emantomo.Plugin.isVersion(emantomo.V2_3):
-        #     self.assertEqual(outputCoordsSmall.getSize(), 2)
-        # elif emantomo.Plugin.isVersion(emantomo.V2_39):
-        self.assertAlmostEqual(outputCoordsSmall.getSize(), 145, delta=1)
+        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+            self.assertAlmostEqual(outputCoordsBig.getSize(), 154, delta=1)
+        else:
+            self.assertAlmostEqual(outputCoordsSmall.getSize(), 145, delta=1)
         self.assertEqual(outputCoordsSmall.getBoxSize(), 128)
         self.assertEqual(outputCoordsSmall.getSamplingRate(), 5)
 
@@ -629,7 +629,9 @@ class TestEmanTomoReconstruction(TestEmanTomoBase):
             amplitudeContrast=0.1,
             samplingRate=1.35,
             doseInitial=0,
-            dosePerFrame=0.3)
+            dosePerFrame=0.3,
+            tiltAxisAngle=87.1
+        )
 
     def _getProtAlignTs(self, protImportTs):
         return self.newProtocol(
