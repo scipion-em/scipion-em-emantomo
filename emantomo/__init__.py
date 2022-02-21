@@ -34,7 +34,7 @@ from scipion.install.funcs import VOID_TGZ
 
 import emantomo.constants as emanConst
 
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 _logo = "eman2_logo.png"
 _references = ['Tang2007']
 _url = "https://github.com/scipion-em/scipion-em-emantomo"
