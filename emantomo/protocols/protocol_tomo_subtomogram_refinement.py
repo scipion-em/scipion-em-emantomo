@@ -41,6 +41,7 @@ from pwem.protocols import EMProtocol
 
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
 import emantomo
+import pwem.constants as emcts
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
@@ -126,6 +127,9 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       help='Explicitly zeroes data beyond specified tilt angle.'
                            'Assumes tilt axis exactly on Y and zero tilt in X-Y'
                            'plane. Default 90 (no limit).')
+        form.addParam('useAlign', params.BooleanParam, default=True,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label='Use previous alignments?')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -142,7 +146,11 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     def convertInputStep(self):
         storePath = self._getExtraPath("subtomograms")
         pwutils.makePath(storePath)
-        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath)
+        if self.useAlign.get():
+            alignType = emcts.ALIGN_3D
+        else:
+            alignType = emcts.ALIGN_NONE
+        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=alignType)
         self.newFn = glob(os.path.join(storePath, '*.hdf'))[0]
 
     def refinementSubtomogram(self):
