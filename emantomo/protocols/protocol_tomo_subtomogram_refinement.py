@@ -130,6 +130,11 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         form.addParam('useAlign', params.BooleanParam, default=True,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Use previous alignments?')
+        form.addParam('extraParams', params.StringParam,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Extra params",
+                      help='Here you can add any extra parameters to run Eman subtomogram refinement. '
+                           'Parameters should be written in Eman command line format (--param=val)')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -147,10 +152,10 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         storePath = self._getExtraPath("subtomograms")
         pwutils.makePath(storePath)
         if self.useAlign.get():
-            alignType = emcts.ALIGN_3D
+            self.alignType = emcts.ALIGN_3D
         else:
-            alignType = emcts.ALIGN_NONE
-        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=alignType)
+            self.alignType = emcts.ALIGN_NONE
+        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=self.alignType)
         self.newFn = glob(os.path.join(storePath, '*.hdf'))[0]
 
     def refinementSubtomogram(self):
@@ -176,6 +181,10 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             args += ' --parallel=mpi:%d:%s' % (self.numberOfMpi.get(), SCRATCHDIR)
         else:
             args += ' --parallel=thread:%d' % self.numberOfThreads.get()
+        if self.alignType != emcts.ALIGN_NONE:
+            args += ' --refine'
+        if self.extraParams.get():
+            args += ' ' + self.extraParams.get()
         args += ' --threads=%d' % self.numberOfThreads.get()
 
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
