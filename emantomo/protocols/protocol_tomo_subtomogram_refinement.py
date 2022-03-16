@@ -132,6 +132,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       label='Use previous alignments?')
         form.addParam('maxAng', params.FloatParam, default=1,
                       condition='useAlign==True',
+                      expertLevel=params.LEVEL_ADVANCED,
                       label='Maximum angular change',
                       help='Maximum anglular difference in refine mode')
         form.addParam('extraParams', params.StringParam,
