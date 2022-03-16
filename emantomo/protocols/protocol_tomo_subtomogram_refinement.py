@@ -130,6 +130,10 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         form.addParam('useAlign', params.BooleanParam, default=True,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Use previous alignments?')
+        form.addParam('maxAng', params.FloatParam, default=1,
+                      condition='useAlign==True',
+                      label='Maximum angular change',
+                      help='Maximum anglular difference in refine mode')
         form.addParam('extraParams', params.StringParam,
                       expertLevel=params.LEVEL_ADVANCED,
                       label="Extra params",
@@ -182,7 +186,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         else:
             args += ' --parallel=thread:%d' % self.numberOfThreads.get()
         if self.alignType != emcts.ALIGN_NONE:
-            args += ' --refine'
+            args += ' --refine --maxang=%f' % self.maxAng.get()
         if self.extraParams.get():
             args += ' ' + self.extraParams.get()
         args += ' --threads=%d' % self.numberOfThreads.get()
