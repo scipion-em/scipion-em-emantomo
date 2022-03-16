@@ -180,6 +180,8 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             args += ' --niter=%d' % self.niter
         if self.goldcontinue:
             args += ' --goldcontinue '
+        if self.maskFile.get():
+            args += ' --mask=%s' % self.maskFile.get()
         if self.localfilter:
             args += ' --localfilter '
         if self.numberOfMpi > 1:
