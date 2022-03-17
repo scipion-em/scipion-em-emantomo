@@ -181,7 +181,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         if self.goldcontinue:
             args += ' --goldcontinue '
         if self.maskFile.get():
-            args += ' --mask=%s' % self.maskFile.get()
+            args += ' --mask=%s' % self.maskFile.get().getFileName()
         if self.localfilter:
             args += ' --localfilter '
         if self.numberOfMpi > 1:
