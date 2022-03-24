@@ -32,6 +32,8 @@ import glob
 import itertools
 import json
 
+import numpy as np
+
 import emantomo
 import numpy
 import os
@@ -39,6 +41,8 @@ from ast import literal_eval
 
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
+from dynamo.convert import eulerAngles2matrix
+from pwem.convert import transformations
 from pwem.objects.data import Coordinate, Particle, Transform
 from pyworkflow.object import Float, RELATION_SOURCE, RELATION_PARENTS, OBJECT_PARENT_ID, Pointer
 from pwem.emlib.image import ImageHandler
@@ -596,9 +600,34 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             am = particleParams["alignMatrix"]
             angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
             samplingRate = outputSetOfSubTomograms.getSamplingRate()
-            shift = numpy.array([am[3] * samplingRate, am[7] * samplingRate, am[11] * samplingRate, 1])
-            matrix = numpy.column_stack((angles, shift.T))
-            subTomogram.setTransform(Transform(matrix))
+            # shift = numpy.array([am[3] * samplingRate, am[7] * samplingRate, am[11] * samplingRate, 1])
+            shift = numpy.array([am[3], am[7], am[11], 1])  # It must be in pixels, according to Scipion metadata model
+            matrixZXZ = numpy.column_stack((angles, shift.T))
+            # Emantomo convention is ZXZ, not standard
+            # (https://github.com/azazellochg/3DEM-conventions/blob/master/eman2.rst)
+            # Thus, the data has to be transformed into Scipion convention before storing the metadata
+            # matrix = np.linalg.inv(matrix)
+            shifts = transformations.translation_from_matrix(matrixZXZ)
+            rot, tilt, psi = -np.deg2rad(transformations.euler_from_matrix(matrixZXZ, axes='szxz'))  # Radians
+
+            ########
+            matrixZYZ = eulerAngles2matrix(rot, tilt, psi, shifts[0], shifts[1], shifts[2])
+            ########
+
+            # # Generate the matrix in Scipion convention
+            # matrixZYZ = transformations.euler_matrix(rot, tilt, psi, 'szyz')
+            # invert = False
+            # if invert:
+            #     matrixZYZ[0, 3] = -shifts[0]
+            #     matrixZYZ[1, 3] = -shifts[1]
+            #     matrixZYZ[2, 3] = -shifts[2]
+            #     matrixZYZ = np.linalg.inv(matrixZYZ)
+            # else:
+            #     matrixZYZ[0, 3] = shifts[0]
+            #     matrixZYZ[1, 3] = shifts[1]
+            #     matrixZYZ[2, 3] = shifts[2]
+
+            subTomogram.setTransform(Transform(matrixZYZ))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
                                       updateItemCallback=updateSubTomogram,
