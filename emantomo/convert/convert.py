@@ -41,12 +41,8 @@ from ast import literal_eval
 
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
-from dynamo.convert import eulerAngles2matrix
-from pwem.convert import transformations
-from pwem.objects.data import Coordinate, Particle, Transform
-from pyworkflow.object import Float, RELATION_SOURCE, RELATION_PARENTS, OBJECT_PARENT_ID, Pointer
-from pwem.emlib.image import ImageHandler
-import pwem.emlib.metadata as md
+from pwem.objects.data import Transform
+from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms
