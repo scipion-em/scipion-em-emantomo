@@ -207,7 +207,8 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         This function should be called from a current dir where
         the images in the set are available.
         """
-    ext = pwutils.getExt(subtomogramSet.getFirstItem().getFileName())[1:]
+    firstItem = subtomogramSet.getFirstItem()
+    ext = pwutils.getExt(firstItem.getFileName())[1:]
     if ext == 'hdf':
         # create links if input has hdf format
         for fn in subtomogramSet.getFiles():
@@ -216,10 +217,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
             pwutils.createLink(fn, newFn)
             print("   %s -> %s" % (fn, newFn))
     else:
-        firstCoord = subtomogramSet.getFirstItem().getCoordinate3D() or None
-        hasVolName = False
-        if firstCoord:
-            hasVolName = subtomogramSet.getFirstItem().getVolName() or False
+        hasVolName = firstItem.getVolName() or False
 
         fileName = ""
         a = 0

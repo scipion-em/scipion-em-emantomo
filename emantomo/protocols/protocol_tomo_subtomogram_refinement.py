@@ -147,10 +147,10 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     def _insertAllSteps(self):
         # TODO: Get the basename.hdf from the inputSetOfSubTomogram
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('refinementSubtomogram')
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.refinementSubtomogram)
         # TODO: Set and show the output
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
     def convertInputStep(self):
@@ -165,7 +165,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     def refinementSubtomogram(self):
         """ Run the Subtomogram refinement. """
-        args = ' %s' % self.newFn
+        args = ' %s' % os.path.abspath(self.newFn)
         if self.inputRef.get() is not None:
             reference = self.inputRef.get().getFileName()
             reference = reference.split(":")[0]
@@ -175,7 +175,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         args += ' --pkeep=%f ' % self.pkeep
         args += ' --sym=%s ' % self.sym
         args += ' --maxtilt=%s ' % self.maxtilt
-        args += ' --path=%s ' % self.getOutputPath()
+        args += ' --path=%s ' % os.path.abspath(self.getOutputPath())
         if self.niter > 1:
             args += ' --niter=%d' % self.niter
         if self.goldcontinue:
@@ -195,7 +195,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         args += ' --threads=%d' % self.numberOfThreads.get()
 
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
-        self._log.info('Launching: ' + program + ' ' + args)
+        self._log.info('Launching: ' + program + ' ' + args + " from " + os.getcwd())
         self.runJob(program, args)
 
         # Fix the sampling rate as it might be set wrong
