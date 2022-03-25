@@ -147,7 +147,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
             'learningRate': self.learningRate.get(),
             'numberOfIterations': self.numberOfIterations.get(),
             'numberOfBatches': self.numberOfBatches.get(),
-            'mask': self.mask.get(),
+            'mask': self.mask.get().getFileName(),
             'shrink': self.shrink.get(),
             'reference': self.reference.get().getFileName() if self.reference.get() else None,
             'outputPath': self.getOutputPath(),

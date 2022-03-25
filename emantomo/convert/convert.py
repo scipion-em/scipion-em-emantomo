@@ -414,7 +414,8 @@ def iterLstFile(filename):
                 yield index, filename
 
 
-def geometryFromMatrix(matrix, inverseTransform):
+def geometryFromMatrix(matrix, inverseTransform, axes='szyz'):
+    """ Convert the transformation matrix to shifts and angles."""
     from pwem.convert.transformations import translation_from_matrix, euler_from_matrix
     if inverseTransform:
         from numpy.linalg import inv
@@ -422,14 +423,13 @@ def geometryFromMatrix(matrix, inverseTransform):
         shifts = -translation_from_matrix(matrix)
     else:
         shifts = translation_from_matrix(matrix)
-    angles = -numpy.rad2deg(euler_from_matrix(matrix, axes='szyz'))
+    angles = -numpy.rad2deg(euler_from_matrix(matrix, axes=axes))
     return shifts, angles
 
 
 def matrixFromGeometry(shifts, angles, inverseTransform):
-    """ Create the transformation matrix from a given
-    2D shifts in X and Y...and the 3 euler angles.
-    """
+    """ Create the transformation matrix from given
+    2D shifts in X and Y and the 3 euler angles."""
     from pwem.convert.transformations import euler_matrix
     from numpy import deg2rad
     radAngles = -deg2rad(angles)
@@ -606,27 +606,10 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             # Emantomo convention is ZXZ, not standard
             # (https://github.com/azazellochg/3DEM-conventions/blob/master/eman2.rst)
             # Thus, the data has to be transformed into Scipion convention before storing the metadata
-            # matrix = np.linalg.inv(matrix)
-            shifts = transformations.translation_from_matrix(matrixZXZ)
-            rot, tilt, psi = -np.deg2rad(transformations.euler_from_matrix(matrixZXZ, axes='szxz'))  # Radians
-
-            ########
-            matrixZYZ = eulerAngles2matrix(rot, tilt, psi, shifts[0], shifts[1], shifts[2])
-            ########
-
-            # # Generate the matrix in Scipion convention
-            # matrixZYZ = transformations.euler_matrix(rot, tilt, psi, 'szyz')
-            # invert = False
-            # if invert:
-            #     matrixZYZ[0, 3] = -shifts[0]
-            #     matrixZYZ[1, 3] = -shifts[1]
-            #     matrixZYZ[2, 3] = -shifts[2]
-            #     matrixZYZ = np.linalg.inv(matrixZYZ)
-            # else:
-            #     matrixZYZ[0, 3] = shifts[0]
-            #     matrixZYZ[1, 3] = shifts[1]
-            #     matrixZYZ[2, 3] = shifts[2]
-
+            shifts, angles = geometryFromMatrix(matrixZXZ, True)
+            shifts = shift / samplingRate  # Scipion data model stores the shifts in pixels
+            matrixZYZ = matrixFromGeometry(shifts, angles, True)
+            # matrixZYZ = eulerAngles2matrix(angles[0], angles[1], angles[2], shifts[0], shifts[1], shifts[2])
             subTomogram.setTransform(Transform(matrixZYZ))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
