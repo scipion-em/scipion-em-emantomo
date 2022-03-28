@@ -597,16 +597,11 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
             samplingRate = outputSetOfSubTomograms.getSamplingRate()
             # shift = numpy.array([am[3] * samplingRate, am[7] * samplingRate, am[11] * samplingRate, 1])
-            shift = numpy.array([am[3], am[7], am[11], 1])  # It must be in pixels, according to Scipion metadata model
-            matrixZXZ = numpy.column_stack((angles, shift.T))
-            # Emantomo convention is ZXZ, not standard
-            # (https://github.com/azazellochg/3DEM-conventions/blob/master/eman2.rst)
-            # Thus, the data has to be transformed into Scipion convention before storing the metadata
-            shifts, angles = geometryFromMatrix(matrixZXZ, True)
-            shifts = shift / samplingRate  # Scipion data model stores the shifts in pixels
-            matrixZYZ = matrixFromGeometry(shifts, angles, True)
-            # matrixZYZ = eulerAngles2matrix(angles[0], angles[1], angles[2], shifts[0], shifts[1], shifts[2])
-            subTomogram.setTransform(Transform(matrixZYZ))
+            # shift = numpy.array([am[3], am[7], am[11], 1])  # It must be in pixels, according to Scipion metadata model
+            shift = numpy.array([am[3]/samplingRate, am[7]/samplingRate, am[11]/samplingRate, 1])  # It must be in pixels, according to Scipion metadata model
+            matrix = numpy.column_stack((angles, shift.T))
+            # TODO: check for the sampling rate
+            subTomogram.setTransform(Transform(matrix))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
                                       updateItemCallback=updateSubTomogram,
