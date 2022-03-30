@@ -32,6 +32,8 @@ import glob
 import itertools
 import json
 
+import numpy as np
+
 import emantomo
 import numpy
 import os
@@ -39,10 +41,8 @@ from ast import literal_eval
 
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
-from pwem.objects.data import Coordinate, Particle, Transform
-from pyworkflow.object import Float, RELATION_SOURCE, RELATION_PARENTS, OBJECT_PARENT_ID, Pointer
-from pwem.emlib.image import ImageHandler
-import pwem.emlib.metadata as md
+from pwem.objects.data import Transform
+from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms
@@ -408,7 +408,8 @@ def iterLstFile(filename):
                 yield index, filename
 
 
-def geometryFromMatrix(matrix, inverseTransform):
+def geometryFromMatrix(matrix, inverseTransform, axes='szyz'):
+    """ Convert the transformation matrix to shifts and angles."""
     from pwem.convert.transformations import translation_from_matrix, euler_from_matrix
     if inverseTransform:
         from numpy.linalg import inv
@@ -416,14 +417,13 @@ def geometryFromMatrix(matrix, inverseTransform):
         shifts = -translation_from_matrix(matrix)
     else:
         shifts = translation_from_matrix(matrix)
-    angles = -numpy.rad2deg(euler_from_matrix(matrix, axes='szyz'))
+    angles = -numpy.rad2deg(euler_from_matrix(matrix, axes=axes))
     return shifts, angles
 
 
 def matrixFromGeometry(shifts, angles, inverseTransform):
-    """ Create the transformation matrix from a given
-    2D shifts in X and Y...and the 3 euler angles.
-    """
+    """ Create the transformation matrix from given
+    2D shifts in X and Y and the 3 euler angles."""
     from pwem.convert.transformations import euler_matrix
     from numpy import deg2rad
     radAngles = -deg2rad(angles)
@@ -594,8 +594,10 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             am = particleParams["alignMatrix"]
             angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
             samplingRate = outputSetOfSubTomograms.getSamplingRate()
-            shift = numpy.array([am[3] * samplingRate, am[7] * samplingRate, am[11] * samplingRate, 1])
+            # The shifts must be in pixels, according to Scipion metadata model
+            shift = numpy.array([am[3]/samplingRate, am[7]/samplingRate, am[11]/samplingRate, 1])
             matrix = numpy.column_stack((angles, shift.T))
+
             subTomogram.setTransform(Transform(matrix))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
