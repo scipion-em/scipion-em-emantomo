@@ -594,9 +594,11 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             setattr(subTomogram, 'score', Float(particleParams["score"]))
             # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
             am = particleParams["alignMatrix"]
-            angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
-            shift = numpy.array([am[3], am[7], am[11], 1])
-            matrix = numpy.column_stack((angles, shift.T))
+            # angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
+            # shift = numpy.array([am[3], am[7], am[11], 1])
+            # matrix = numpy.column_stack((angles, shift.T))
+            shift = numpy.array([0, 0, 0, 1])
+            matrix = numpy.row_stack((am.reshape(3, 4), shift))
             subTomogram.setTransform(Transform(matrix))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
