@@ -31,7 +31,7 @@ from glob import glob
 import os
 import re
 
-from pyworkflow import utils as pwutils
+from pyworkflow import utils as pwutils, BETA
 import pyworkflow.protocol.params as params
 import pwem
 from pwem.protocols import EMProtocol
@@ -58,6 +58,7 @@ class EmanProtTomoMultiReferenceRefinement(EMProtocol, ProtTomoBase):
     _label = 'multi-reference refinement'
     OUTPUT_PREFIX = 'outputSetOf3DClassesSubTomograms'
     OUTPUT_DIR = "spt_00"
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
