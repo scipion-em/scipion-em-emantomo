@@ -32,6 +32,7 @@ from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
 from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
 from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
+from .protocol_tomo_multi_reference_refinement import EmanProtTomoMultiReferenceRefinement
 from .protocol_tomo_reconstruction import EmanProtTomoReconstruction
 from .protocol_align_ts import EmanProtAlignTs
 from .protocol_estimate_ctf import EmanProtEstimateCTF
