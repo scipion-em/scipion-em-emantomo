@@ -146,7 +146,7 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
                     cwd=self._getExtraPath())
 
         if self.inputRef.get() is None:
-            args = " --path=%s" % project_path
+            args = " --path=%s --keep=1.0" % project_path
             program = emantomo.Plugin.getProgram('e2spt_average.py')
             self._log.info('Launching: ' + program + ' ' + args)
             self.runJob(program, args)
