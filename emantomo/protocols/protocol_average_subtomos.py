@@ -92,7 +92,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                     cwd=self._getExtraPath())
 
     def computeAverage(self):
-        args = " --path=%s" % self.project_path
+        args = " --path=%s --keep 1 --skippostp" % self.project_path
         program = emantomo.Plugin.getProgram('e2spt_average.py')
         self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args)

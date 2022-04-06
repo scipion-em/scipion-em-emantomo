@@ -32,6 +32,8 @@ import glob
 import itertools
 import json
 
+import numpy as np
+
 import emantomo
 import numpy
 import os
@@ -39,10 +41,8 @@ from ast import literal_eval
 
 import pwem.constants as emcts
 import pyworkflow.utils as pwutils
-from pwem.objects.data import Coordinate, Particle, Transform
-from pyworkflow.object import Float, RELATION_SOURCE, RELATION_PARENTS, OBJECT_PARENT_ID, Pointer
-from pwem.emlib.image import ImageHandler
-import pwem.emlib.metadata as md
+from pwem.objects.data import Transform
+from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms
@@ -58,19 +58,19 @@ def loadJson(jsonFn):
     return jsonDict
 
 
-def writeJson(jsonDict, jsonFn):
+def writeJson(jsonDict, jsonFn, indent=None):
     """ This function write a Json dictionary """
     with open(jsonFn, 'w') as outfile:
-        json.dump(jsonDict, outfile)
+        json.dump(jsonDict, outfile, indent=indent)
 
 
-def appendJson(jsonDict, jsonFn):
+def appendJson(jsonDict, jsonFn, indent=None):
     """ Append a new dictionary to a already existing Json file"""
     with open(jsonFn, 'r+') as outfile:
         data = json.load(outfile)
         data.update(jsonDict)
         outfile.seek(0)
-        json.dump(data, outfile)
+        json.dump(data, outfile, indent=indent)
 
 
 def readCTFModel(ctfModel, filename):
@@ -207,7 +207,8 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         This function should be called from a current dir where
         the images in the set are available.
         """
-    ext = pwutils.getExt(subtomogramSet.getFirstItem().getFileName())[1:]
+    firstItem = subtomogramSet.getFirstItem()
+    ext = pwutils.getExt(firstItem.getFileName())[1:]
     if ext == 'hdf':
         # create links if input has hdf format
         for fn in subtomogramSet.getFiles():
@@ -216,10 +217,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
             pwutils.createLink(fn, newFn)
             print("   %s -> %s" % (fn, newFn))
     else:
-        firstCoord = subtomogramSet.getFirstItem().getCoordinate3D() or None
-        hasVolName = False
-        if firstCoord:
-            hasVolName = subtomogramSet.getFirstItem().getVolName() or False
+        hasVolName = firstItem.getVolName() or False
 
         fileName = ""
         a = 0
@@ -410,7 +408,8 @@ def iterLstFile(filename):
                 yield index, filename
 
 
-def geometryFromMatrix(matrix, inverseTransform):
+def geometryFromMatrix(matrix, inverseTransform, axes='szyz'):
+    """ Convert the transformation matrix to shifts and angles."""
     from pwem.convert.transformations import translation_from_matrix, euler_from_matrix
     if inverseTransform:
         from numpy.linalg import inv
@@ -418,14 +417,13 @@ def geometryFromMatrix(matrix, inverseTransform):
         shifts = -translation_from_matrix(matrix)
     else:
         shifts = translation_from_matrix(matrix)
-    angles = -numpy.rad2deg(euler_from_matrix(matrix, axes='szyz'))
+    angles = -numpy.rad2deg(euler_from_matrix(matrix, axes=axes))
     return shifts, angles
 
 
 def matrixFromGeometry(shifts, angles, inverseTransform):
-    """ Create the transformation matrix from a given
-    2D shifts in X and Y...and the 3 euler angles.
-    """
+    """ Create the transformation matrix from given
+    2D shifts in X and Y and the 3 euler angles."""
     from pwem.convert.transformations import euler_matrix
     from numpy import deg2rad
     radAngles = -deg2rad(angles)
@@ -590,8 +588,8 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             print("Could not get params for particle %d" % index)
             setattr(subTomogram, "_appendItem", False)
         else:
-            setattr(subTomogram, 'coverage', Float(particleParams["coverage"]))
-            setattr(subTomogram, 'score', Float(particleParams["score"]))
+            setattr(subTomogram, 'eman_coverage', Float(particleParams["coverage"]))
+            setattr(subTomogram, 'eman_score', Float(particleParams["score"]))
             # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
             am = numpy.array(particleParams["alignMatrix"])
             samplingRate = outputSetOfSubTomograms.getSamplingRate()
@@ -778,7 +776,13 @@ def refinement2Json(protocol, subTomos, mode='w'):
         coverage = subTomo.coverage if hasattr(subTomo, 'coverage') else 0.0
         score = subTomo.score if hasattr(subTomo, 'score') else -0.0
         matrix_st = subTomo.getTransform().getMatrix()
-        matrix_c = subTomo.getCoordinate3D().getMatrix()
+
+
+        if subTomo.hasCoordinate3D():
+            matrix_c = subTomo.getCoordinate3D().getMatrix()
+        else:
+            matrix_c = np.eye(4)
+
         am_st, am_c = [0] * 12, [0] * 12
         am_st[0:3], am_st[4:7], am_st[8:11] = matrix_st[0, :3], matrix_st[1, :3], matrix_st[2, :3]
         am_c[0:3], am_c[4:7], am_c[8:11] = matrix_c[0, :3], matrix_c[1, :3], matrix_c[2, :3]
@@ -796,9 +800,9 @@ def refinement2Json(protocol, subTomos, mode='w'):
                                              "matrix": am_c},
                            }
     if mode == "w":
-        writeJson(parms_dict, json_name)
+        writeJson(parms_dict, json_name, indent=1)
     elif mode == "a":
-        appendJson(parms_dict, json_name)
+        appendJson(parms_dict, json_name, indent=1)
 
 def recoverTSFromObj(child_obj, protocol):
     p = protocol.getProject()
