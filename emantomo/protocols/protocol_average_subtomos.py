@@ -26,13 +26,11 @@
 # **************************************************************************
 
 
-from glob import glob
 import os
-import re
 
 from pyworkflow import utils as pwutils, BETA
 import pyworkflow.protocol.params as params
-import pwem
+
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import STEPS_PARALLEL
 
