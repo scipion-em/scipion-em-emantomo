@@ -58,19 +58,19 @@ def loadJson(jsonFn):
     return jsonDict
 
 
-def writeJson(jsonDict, jsonFn):
+def writeJson(jsonDict, jsonFn, indent=None):
     """ This function write a Json dictionary """
     with open(jsonFn, 'w') as outfile:
-        json.dump(jsonDict, outfile)
+        json.dump(jsonDict, outfile, indent=indent)
 
 
-def appendJson(jsonDict, jsonFn):
+def appendJson(jsonDict, jsonFn, indent=None):
     """ Append a new dictionary to a already existing Json file"""
     with open(jsonFn, 'r+') as outfile:
         data = json.load(outfile)
         data.update(jsonDict)
         outfile.seek(0)
-        json.dump(data, outfile)
+        json.dump(data, outfile, indent=indent)
 
 
 def readCTFModel(ctfModel, filename):
@@ -591,13 +591,13 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             setattr(subTomogram, 'eman_coverage', Float(particleParams["coverage"]))
             setattr(subTomogram, 'eman_score', Float(particleParams["score"]))
             # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
-            am = particleParams["alignMatrix"]
+            am = numpy.array(particleParams["alignMatrix"])
+            samplingRate = outputSetOfSubTomograms.getSamplingRate()
             angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
-
-            # The shifts must be in pixels, according to Scipion metadata model
-            shift = numpy.array([-am[3], -am[7], -am[11], 1])
+            shift = numpy.array([am[3], am[7], am[11], 1])
             matrix = numpy.column_stack((angles, shift.T))
-
+            # homogeneous = numpy.array([0, 0, 0, 1])
+            # matrix = numpy.row_stack((am.reshape(3, 4), homogeneous))
             subTomogram.setTransform(Transform(matrix))
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
@@ -776,7 +776,13 @@ def refinement2Json(protocol, subTomos, mode='w'):
         coverage = subTomo.coverage if hasattr(subTomo, 'coverage') else 0.0
         score = subTomo.score if hasattr(subTomo, 'score') else -0.0
         matrix_st = subTomo.getTransform().getMatrix()
-        matrix_c = subTomo.getCoordinate3D().getMatrix()
+
+
+        if subTomo.hasCoordinate3D():
+            matrix_c = subTomo.getCoordinate3D().getMatrix()
+        else:
+            matrix_c = np.eye(4)
+
         am_st, am_c = [0] * 12, [0] * 12
         am_st[0:3], am_st[4:7], am_st[8:11] = matrix_st[0, :3], matrix_st[1, :3], matrix_st[2, :3]
         am_c[0:3], am_c[4:7], am_c[8:11] = matrix_c[0, :3], matrix_c[1, :3], matrix_c[2, :3]
@@ -794,9 +800,9 @@ def refinement2Json(protocol, subTomos, mode='w'):
                                              "matrix": am_c},
                            }
     if mode == "w":
-        writeJson(parms_dict, json_name)
+        writeJson(parms_dict, json_name, indent=1)
     elif mode == "a":
-        appendJson(parms_dict, json_name)
+        appendJson(parms_dict, json_name, indent=1)
 
 def recoverTSFromObj(child_obj, protocol):
     p = protocol.getProject()

@@ -165,13 +165,24 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=self.alignType)
         self.newFn = glob(os.path.join(storePath, '*.hdf'))[0]
 
+        # Fix the sampling rate as it might be set wrong
+        sampling_rate = self.inputSetOfSubTomogram.get().getSamplingRate()
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        args = "--apix %f %s %s" % (sampling_rate, self.newFn, self.newFn)
+        self.runJob(program, args)
+        if self.inputRef.get() is not None:
+            refFileIn = self.inputRef.get().getFileName()
+            self.refFileOut = self._getExtraPath("reference.mrc")
+            args = "--apix %f %s %s" % (sampling_rate, refFileIn, self.refFileOut)
+            self.runJob(program, args)
+
     def refinementSubtomogram(self):
         """ Run the Subtomogram refinement. """
         args = ' %s' % os.path.abspath(self.newFn)
         if self.inputRef.get() is not None:
-            reference = self.inputRef.get().getFileName()
-            reference = reference.split(":")[0]
-            args += (' --reference=%s ' % reference)
+            # reference = self.inputRef.get().getFileName()
+            # reference = reference.split(":")[0]
+            args += (' --reference=%s ' % self.refFileOut)
         args += (' --mass=%f' % self.mass)
         args += ' --goldstandard=%d ' % self.goldstandard
         args += ' --pkeep=%f ' % self.pkeep
