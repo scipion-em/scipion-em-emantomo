@@ -26,8 +26,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+import enum
 from glob import glob
 import os
 import re
@@ -35,7 +34,6 @@ import re
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
-# from pyworkflow.protocol import STEPS_PARALLEL
 
 from pwem.protocols import EMProtocol
 
@@ -49,6 +47,10 @@ from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubT
 from .. import SCRATCHDIR
 
 SAME_AS_PICKING = 0
+
+class EmanTomoRefinementOutputs(enum.Enum):
+    outputSubtomograms = SetOfSubTomograms
+    averageSubTomogram = AverageSubTomogram
 
 
 class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
@@ -69,6 +71,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfClassesSubTomograms'
     OUTPUT_DIR = "spt_00"
+    _possibleOutputs = EmanTomoRefinementOutputs
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -91,9 +94,9 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         form.addParam('niter', params.IntParam, default=5,
                       label='Number of iterations',
                       help='The number of iterations to perform.')
-        form.addParam('mass', params.FloatParam, default=500.0,
+        form.addParam('mass', params.FloatParam, default=-1,
                       label='Mass:',
-                      help='Default=500.0')
+                      help='Mass normalization. Default=-1 Ignores mass')
         form.addParam('pkeep', params.FloatParam, default=0.8,
                       label='Particle keep:',
                       help='Fraction of particles to keep')
@@ -114,9 +117,8 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       pointerClass='VolumeMask', label='Structure factor',
                       help='Select the structure factor')
         form.addParam('sym', params.StringParam, default='c1',
-                      expertLevel=params.LEVEL_ADVANCED,
                       label='Symmetry',
-                      help='Symmetry (Default: c1')
+                      help='Symmetry (Default: c1). See https://blake.bcm.edu/emanwiki/EMAN2/Symmetry for more.')
         form.addParam('localfilter', params.BooleanParam, default=False,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Local filter',
@@ -220,9 +222,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         # Output 1: AverageSubTomogram
         averageSubTomogram = AverageSubTomogram()
         averageSubTomogram.setFileName(lastImage)
-        setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
-        setOfAverageSubTomograms.copyInfo(inputSetOfSubTomograms)
-        setOfAverageSubTomograms.append(averageSubTomogram)
+        averageSubTomogram.setSamplingRate(inputSetOfSubTomograms.getSamplingRate())
 
         # Output 2: setOfSubTomograms
         particleParams = getLastParticlesParams(self.getOutputPath())
@@ -231,8 +231,11 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         outputSetOfSubTomograms.setCoordinates3D(inputSetOfSubTomograms.getCoordinates3D())
         updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, particleParams)
 
-        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms, outputParticles=outputSetOfSubTomograms)
-        self._defineSourceRelation(self.inputSetOfSubTomogram, setOfAverageSubTomograms)
+        outputs = {EmanTomoRefinementOutputs.averageSubTomogram.name: averageSubTomogram,
+                   EmanTomoRefinementOutputs.outputSubtomograms.name: outputSetOfSubTomograms}
+
+        self._defineOutputs(**outputs)
+        self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)
         self._defineSourceRelation(self.inputSetOfSubTomogram, outputSetOfSubTomograms)
 
     def getOutputPath(self, *args):

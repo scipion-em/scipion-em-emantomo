@@ -588,14 +588,14 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             print("Could not get params for particle %d" % index)
             setattr(subTomogram, "_appendItem", False)
         else:
-            setattr(subTomogram, 'coverage', Float(particleParams["coverage"]))
-            setattr(subTomogram, 'score', Float(particleParams["score"]))
+            setattr(subTomogram, 'eman_coverage', Float(particleParams["coverage"]))
+            setattr(subTomogram, 'eman_score', Float(particleParams["score"]))
             # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
             am = particleParams["alignMatrix"]
             angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
-            samplingRate = outputSetOfSubTomograms.getSamplingRate()
+
             # The shifts must be in pixels, according to Scipion metadata model
-            shift = numpy.array([am[3]/samplingRate, am[7]/samplingRate, am[11]/samplingRate, 1])
+            shift = numpy.array([-am[3], -am[7], -am[11], 1])
             matrix = numpy.column_stack((angles, shift.T))
 
             subTomogram.setTransform(Transform(matrix))
