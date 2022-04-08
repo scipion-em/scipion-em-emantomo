@@ -39,7 +39,7 @@ import pyworkflow.utils as pwutils
 from pwem.protocols import EMProtocol
 
 from tomo.protocols import ProtTomoBase
-from tomo.objects import Tomogram, SetOfTomograms
+from tomo.objects import Tomogram, SetOfTomograms, TomoAcquisition
 
 from emantomo.convert import writeJson, jsonFilesFromSet, tltParams2Json
 
@@ -127,7 +127,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
         form.addParallelSection(threads=4, mpi=0)
 
-        # --------------------------- INSERT steps functions ----------------------
+    # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
         self._insertFunctionStep('createCommandStep')
@@ -180,7 +180,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
 
         # Output 1: Main tomograms
         tomograms_paths = self._getOutputTomograms()
-        tomograms = self._createSet(SetOfTomograms, 'tomograms%s.sqlite', "")
+        tomograms = self._createSetOfTomograms('tomograms%s.sqlite')
         tomograms.copyInfo(tilt_series)
         tomograms.setSamplingRate(sampling_rate)
 
@@ -188,12 +188,34 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
             self._log.info('Main tomogram: ' + tomogram_path)
             tomogram = Tomogram()
             tomogram.setFileName(tomogram_path)
-            tomogram.copyInfo(tilt_series)
-            tomogram.setSamplingRate(sampling_rate)
+            for ts in tilt_series:
+               if ts.getTsId() in tomogram_path:
+                    tomogram.setSamplingRate(ts.getSamplingRate())
+                    tomogram.setTsId(ts.getTsId())
+                    # Set tomogram acquisition
+                    acquisition = TomoAcquisition()
+                    acquisition.setAngleMin(ts.getFirstItem().getTiltAngle())
+                    acquisition.setAngleMax(ts[ts.getSize()].getTiltAngle())
+                    acquisition.setStep(self.getAngleStepFromSeries(ts))
+                    tomogram.setAcquisition(acquisition)
+            # Set default tomogram origin
+            tomogram.setOrigin(newOrigin=False)
             tomograms.append(tomogram)
 
         self._defineOutputs(tomograms=tomograms)
         self._defineSourceRelation(self.tiltSeries, tomograms)
+
+    # --------------------------- UTILS functions ----------------------------
+    @staticmethod
+    def getAngleStepFromSeries(ts):
+        """ This method return the average angles step from a series. """
+        angleStepAverage = 0
+        for i in range(1, ts.getSize()):
+            angleStepAverage += abs(ts[i].getTiltAngle()-ts[i+1].getTiltAngle())
+
+        angleStepAverage /= ts.getSize()-1
+
+        return angleStepAverage
 
     def _processInput(self):
         tilt_series = self.tiltSeries.get()
@@ -217,6 +239,7 @@ class EmanProtTomoReconstruction(EMProtocol, ProtTomoBase):
         assert files, "Output tomogram file not found"
         return [os.path.abspath(path) for path in sorted(files)]
 
+    # --------------------------- INFO functions ----------------------------
     def _methods(self):
         return [
             "From an aligned tilt series: generated a tomogram using e2tomogram.py",

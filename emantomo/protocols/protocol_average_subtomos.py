@@ -62,6 +62,12 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                       pointerClass='SetOfSubTomograms',
                       important=True, label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
+        form.addParam('msWedge', params.FloatParam, default=3,
+                      label="Missing wedge threshold",
+                      help="Threshold for identifying missing data in Fourier"
+                           " space in terms of standard deviation of each Fourier"
+                           " shell. Default 3.0. If set to 0.0, missing wedge correction"
+                           " will be skipped")
 
     #--------------- INSERT steps functions ----------------
 
@@ -92,7 +98,8 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                     cwd=self._getExtraPath())
 
     def computeAverage(self):
-        args = " --path=%s --keep 1 --skippostp" % self.project_path
+        args = " --path=%s --keep 1 --skippostp --wedgesigma=%f" % \
+               (self.project_path, self.msWedge.get())
         program = emantomo.Plugin.getProgram('e2spt_average.py')
         self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args)
