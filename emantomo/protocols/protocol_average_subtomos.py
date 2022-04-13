@@ -62,6 +62,12 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                       pointerClass='SetOfSubTomograms',
                       important=True, label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
+        form.addParam('msWedge', params.FloatParam, default=3,
+                      label="Missing wedge threshold",
+                      help="Threshold for identifying missing data in Fourier"
+                           " space in terms of standard deviation of each Fourier"
+                           " shell. Default 3.0. If set to 0.0, missing wedge correction"
+                           " will be skipped")
 
     #--------------- INSERT steps functions ----------------
 
@@ -92,17 +98,26 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                     cwd=self._getExtraPath())
 
     def computeAverage(self):
-        args = " --path=%s --keep 1 --skippostp" % self.project_path
+        args = " --path=%s --keep 1 --skippostp --wedgesigma=%f" % \
+               (self.project_path, self.msWedge.get())
         program = emantomo.Plugin.getProgram('e2spt_average.py')
         self._log.info('Launching: ' + program + ' ' + args)
+        self.runJob(program, args)
+
+        # Fix the sampling rate as it might be set wrong
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.hdf"))
+        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
+                                    volumeFile, pwutils.replaceExt(volumeFile, "mrc"))
         self.runJob(program, args)
 
     def createOutputStep(self):
         imgSet = self.inputSetOfSubTomogram.get()
         volume = AverageSubTomogram()
-        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.hdf"))
+        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.mrc"))
         volume.setFileName(volumeFile)
         volume.setSamplingRate(imgSet.getSamplingRate())
+        volume.fixMRCVolume()
 
         self._defineOutputs(averageSubTomos=volume)
         self._defineSourceRelation(self.inputSetOfSubTomogram, volume)

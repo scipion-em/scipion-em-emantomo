@@ -46,6 +46,7 @@ from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms
+from tomo.constants import TR_EMAN
 
 from .. import Plugin
 
@@ -244,7 +245,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
             alignType = kwargs.get('alignType')
 
             if alignType != emcts.ALIGN_NONE:
-                shift, angles = alignmentToRow(subtomo.getTransform(), alignType)
+                shift, angles = alignmentToRow(subtomo.getTransform(convention=TR_EMAN), alignType)
                 # json cannot encode arrays so I convert them to lists
                 # json fail if has -0 as value
                 objDict['_shifts'] = shift.tolist()
@@ -592,13 +593,12 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             setattr(subTomogram, 'eman_score', Float(particleParams["score"]))
             # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
             am = numpy.array(particleParams["alignMatrix"])
-            samplingRate = outputSetOfSubTomograms.getSamplingRate()
-            angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
-            shift = numpy.array([am[3], am[7], am[11], 1])
-            matrix = numpy.column_stack((angles, shift.T))
-            # homogeneous = numpy.array([0, 0, 0, 1])
-            # matrix = numpy.row_stack((am.reshape(3, 4), homogeneous))
-            subTomogram.setTransform(Transform(matrix))
+            # angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
+            # shift = numpy.array([am[3], am[7], am[11], 1])
+            # matrix = numpy.column_stack((angles, shift.T))
+            homogeneous = numpy.array([0, 0, 0, 1])
+            matrix = numpy.row_stack((am.reshape(3, 4), homogeneous))
+            subTomogram.setTransform(Transform(matrix), convention=TR_EMAN)
 
     outputSetOfSubTomograms.copyItems(inputSetOfSubTomograms,
                                       updateItemCallback=updateSubTomogram,
@@ -775,19 +775,19 @@ def refinement2Json(protocol, subTomos, mode='w'):
         key = "('%s', %d)" % (os.path.abspath(lst_file), subTomo.getObjId() - 1)
         coverage = subTomo.coverage if hasattr(subTomo, 'coverage') else 0.0
         score = subTomo.score if hasattr(subTomo, 'score') else -0.0
-        matrix_st = subTomo.getTransform().getMatrix()
+        matrix_st = subTomo.getTransform(convention=TR_EMAN).getMatrix()
 
 
         if subTomo.hasCoordinate3D():
-            matrix_c = subTomo.getCoordinate3D().getMatrix()
+            matrix_c = subTomo.getCoordinate3D().getMatrix(convention=TR_EMAN)
         else:
             matrix_c = np.eye(4)
 
         am_st, am_c = [0] * 12, [0] * 12
         am_st[0:3], am_st[4:7], am_st[8:11] = matrix_st[0, :3], matrix_st[1, :3], matrix_st[2, :3]
         am_c[0:3], am_c[4:7], am_c[8:11] = matrix_c[0, :3], matrix_c[1, :3], matrix_c[2, :3]
-        am_st[3], am_st[7], am_st[11] = matrix_st[0, 3] / sr, matrix_st[1, 3] / sr, matrix_st[2, 3] / sr
-        am_c[3], am_c[7], am_c[11] = matrix_c[0, 3] / sr, matrix_c[1, 3] / sr, matrix_c[2, 3] / sr
+        am_st[3], am_st[7], am_st[11] = matrix_st[0, 3], matrix_st[1, 3], matrix_st[2, 3]
+        am_c[3], am_c[7], am_c[11] = matrix_c[0, 3], matrix_c[1, 3], matrix_c[2, 3]
 
         if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
             am_c = "[" + ",".join(str(a) for a in am_c) + "]"
@@ -819,6 +819,6 @@ def recoverTSFromObj(child_obj, protocol):
         pExt = rel['object_parent_extended']
         pp = Pointer(pObj, extended=pExt)
         if pp.getUniqueId() in connection:
-            if isinstance(pObj, SetOfTiltSeries) and pObj.getFirstItem().getFirstItem().hasTransform():
-                return pObj
+            if isinstance(pp.get(), SetOfTiltSeries) and pp.get().getFirstItem().getFirstItem().hasTransform():
+                return pp.get()
     raise ValueError('Could not find any SetOfTiltSeries associated to %s.' % type(child_obj))

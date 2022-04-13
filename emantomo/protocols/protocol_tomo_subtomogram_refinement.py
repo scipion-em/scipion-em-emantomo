@@ -189,8 +189,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         args += ' --sym=%s ' % self.sym
         args += ' --maxtilt=%s ' % self.maxtilt
         args += ' --path=%s ' % os.path.abspath(self.getOutputPath())
-        if self.niter > 1:
-            args += ' --niter=%d' % self.niter
+        args += ' --niter=%d' % self.niter
         if self.goldcontinue:
             args += ' --goldcontinue '
         if self.maskFile.get():

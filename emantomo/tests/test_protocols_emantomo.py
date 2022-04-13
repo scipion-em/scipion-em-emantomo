@@ -32,6 +32,7 @@ import pyworkflow.utils as pwutils
 from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
 from ..protocols import *
 import tomo.protocols
+from tomo.constants import TR_EMAN
 
 import emantomo
 
@@ -303,7 +304,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
             self.assertEqual(subTomogram.getSamplingRate(), 20)
             self.assertTrue(hasattr(subTomogram, "coverage"))
             self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
         summary = protInitialModel.summary()
@@ -455,7 +456,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
             self.assertEqual(subTomogram.getSamplingRate(), 5)
             self.assertTrue(hasattr(subTomogram, "coverage"))
             self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
     def _runTomoSubtomogramRefinementWithSubtomo(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
@@ -608,8 +609,8 @@ class TestEmanTomoTempMatch(TestEmanTomoBase):
 
         return protTomoTempMatch
 
-class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
-    """This class check if the protocol Multi-particle refinement works properly.
+class TestEmanTomoClassifySubtomos(TestEmanTomoBase):
+    """This class check if the protocol classify subtomos works properly.
     """
 
     @classmethod
@@ -622,8 +623,7 @@ class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
         cls.coords3D_Large = cls.dataset.getFile('overview_wbp_large.txt')
         cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
 
-    def _runTomoMultiReferenceRefinement(self, niter=2, mass=500.0, threads=1, tarres=20.0,
-                                         sym="c1", localfilter=False):
+    def _runTomoClassifySubtomos(self):
         from tomo.protocols import ProtImportCoordinates3D, ProtImportTomograms
         protImportTomogram = self.newProtocol(ProtImportTomograms,
                                               filesPath=self.tomogram,
@@ -635,7 +635,7 @@ class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
         coords = protImportTomogram._getExtraPath(coords + '.txt')
         pwutils.createAbsLink(self.coords3D_Large, coords)
         protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=tomo.protocols.ProtImportCoordinates3D.IMPORT_FROM_EMAN,
+                                                   auto='eman',
                                                    filesPath=coords,
                                                    importTomograms=protImportTomogram.outputTomograms,
                                                    filesPattern='', boxSize=32,
@@ -667,42 +667,23 @@ class TestEmanTomoMultiReferenceRefinement(TestEmanTomoBase):
                                               samplingRate=5)
         self.launchProtocol(protImportTomogram)
 
-        protMultiReferenceRefinement = self.newProtocol(EmanProtTomoMultiReferenceRefinement,
-                                                        inputSetOfSubTomogram=protTomoExtraction.outputSetOfSubtomogram,
-                                                        inputRef=protTomoExtraction,
-                                                        niter=niter,
-                                                        tarres=tarres,
-                                                        mass=mass,
-                                                        threads=threads,
-                                                        sym=sym,
-                                                        localfilter=localfilter)
-        protMultiReferenceRefinement.inputRef.setExtended("outputSetOfSubtomogram.1")
+        protClassifySubtomos = self.newProtocol(EmanProtTomoClassifySubtomos,
+                                                inputSetOfSubTomogram=protTomoExtraction.outputSetOfSubtomogram)
 
-        self.launchProtocol(protMultiReferenceRefinement)
-        self.assertIsNotNone(protMultiReferenceRefinement.outputSubTomogram,
-                             "There was a problem with subTomogram output")
-        self.assertIsNotNone(protMultiReferenceRefinement.outputSetOfSubTomograms,
-                             "There was a problem with SetOfSubTomograms output")
-        return protMultiReferenceRefinement
+        self.launchProtocol(protClassifySubtomos)
+        self.assertEqual(protClassifySubtomos.outputVolumes.getSize(), 2,
+                         "Wrong number of volumes registered")
+        self.assertEqual(protClassifySubtomos.outputClasses.getSize(), 2,
+                         "Wrong number of classes registered")
+        self.assertEqual(protClassifySubtomos.outputClasses[1].getSize(), 12,
+                         "Wrong number of particles in first class")
+        self.assertEqual(protClassifySubtomos.outputClasses[2].getSize(), 3,
+                         "Wrong number of particles in second class")
+        return protClassifySubtomos
 
-    def test_defaultTomoMultiReferenceRefinement(self):
-        protTomoMultiReferenceRefinement = self._runTomoMultiReferenceRefinement()
-        outputSetOfSubTomograms = protTomoMultiReferenceRefinement.outputSetOfSubTomograms
-        outputSubTomogram = protTomoMultiReferenceRefinement.outputSubTomogram
-        '''
-        self.assertEqual(outputSetOfSubTomograms.getDimensions(), (32, 32, 32))
-        self.assertEqual(outputSetOfSubTomograms.getSize(), 5)
-        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getObjValue().getSize(), 5)
-        for subTomogram in outputSetOfSubTomograms:
-            self.assertEqual(subTomogram.getSamplingRate(), 5)
-            self.assertTrue(hasattr(subTomogram, "coverage"))
-            self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
-            self.assertEqual(matrix.shape, (4, 4))
-        self.assertTrue("threed" in outputSubTomogram.getFileName())
-        self.assertEqual(outputSubTomogram.getSamplingRate(), 5)
-        '''
-        return protTomoMultiReferenceRefinement
+    def test_classify_subtomos(self):
+        protClassifySubtomos = self._runTomoClassifySubtomos()
+        return protClassifySubtomos
 
 
 class TestEmanTomoReconstruction(TestEmanTomoBase):
