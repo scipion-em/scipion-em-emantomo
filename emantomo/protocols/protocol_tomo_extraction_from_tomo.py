@@ -346,7 +346,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             transformation.setShifts(factor * shift_x,
                                      factor * shift_y,
                                      factor * shift_z)
-            subtomogram.setTransform(transformation)
+            subtomogram.setTransform(transformation, convention=const.TR_EMAN)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
         return outputSubTomogramsSet

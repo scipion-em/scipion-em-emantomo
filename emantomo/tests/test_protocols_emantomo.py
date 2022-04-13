@@ -32,6 +32,7 @@ import pyworkflow.utils as pwutils
 from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
 from ..protocols import *
 import tomo.protocols
+from tomo.constants import TR_EMAN
 
 import emantomo
 
@@ -303,7 +304,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
             self.assertEqual(subTomogram.getSamplingRate(), 20)
             self.assertTrue(hasattr(subTomogram, "coverage"))
             self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
         summary = protInitialModel.summary()
@@ -455,7 +456,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
             self.assertEqual(subTomogram.getSamplingRate(), 5)
             self.assertTrue(hasattr(subTomogram, "coverage"))
             self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
     def _runTomoSubtomogramRefinementWithSubtomo(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
