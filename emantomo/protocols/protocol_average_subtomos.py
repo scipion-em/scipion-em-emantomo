@@ -104,12 +104,20 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
         self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args)
 
+        # Fix the sampling rate as it might be set wrong
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.hdf"))
+        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
+                                    volumeFile, pwutils.replaceExt(volumeFile, "mrc"))
+        self.runJob(program, args)
+
     def createOutputStep(self):
         imgSet = self.inputSetOfSubTomogram.get()
         volume = AverageSubTomogram()
-        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.hdf"))
+        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.mrc"))
         volume.setFileName(volumeFile)
         volume.setSamplingRate(imgSet.getSamplingRate())
+        volume.fixMRCVolume()
 
         self._defineOutputs(averageSubTomos=volume)
         self._defineSourceRelation(self.inputSetOfSubTomogram, volume)
