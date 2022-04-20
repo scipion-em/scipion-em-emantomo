@@ -24,8 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+import enum
 import os
 
 from pyworkflow import utils as pwutils, BETA
@@ -40,6 +39,8 @@ import emantomo
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram
 
+class OutputAverage(enum.Enum):
+    averageSubTomos = AverageSubTomogram
 
 class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
     """
@@ -49,6 +50,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
 
     _label = 'average subtomo'
     _devStatus = BETA
+    _possibleOutputs = OutputAverage
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -73,9 +75,9 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
 
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('computeAverage')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.computeAverage)
+        self._insertFunctionStep(self.createOutputStep)
 
     #--------------- STEPS functions -----------------------
     def convertInputStep(self):
@@ -119,7 +121,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
         volume.setSamplingRate(imgSet.getSamplingRate())
         volume.fixMRCVolume()
 
-        self._defineOutputs(averageSubTomos=volume)
+        self._defineOutputs(**{OutputAverage.averageSubTomos.name:volume})
         self._defineSourceRelation(self.inputSetOfSubTomogram, volume)
 
     #--------------- INFO functions -------------------------

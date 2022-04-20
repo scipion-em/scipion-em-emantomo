@@ -189,10 +189,17 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
         outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         acquisition = TomoAcquisition()
-        acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
-        acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
-        acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
+
+        firstTomo = self.getInputTomograms().getFirstItem()
+        acquisition.setAngleMin(firstTomo.getAcquisition().getAngleMin())
+        acquisition.setAngleMax(firstTomo.getAcquisition().getAngleMax())
+        acquisition.setStep(firstTomo.getAcquisition().getStep())
         outputSubTomogramsSet.setAcquisition(acquisition)
+
+        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
+        samplingRateTomo = firstTomo.getSamplingRate()
+        factor = samplingRateCoord / samplingRateTomo
+
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
                 if os.path.basename(tomoFile) == os.path.basename(item.getFileName()):
@@ -200,7 +207,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                     outputSet = self.readSetOfSubTomograms(tomoFile,
                                                            outputSubTomogramsSet,
                                                            coordSet,
-                                                           item.getObjId())
+                                                           item.getObjId(), factor)
 
         self._defineOutputs(outputSetOfSubtomogram=outputSet)
         self._defineSourceRelation(self.inputCoordinates, outputSet)
@@ -323,14 +330,18 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return self.inputTomograms.get()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId):
+    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId, factor):
+
+        self.info("Registering subtomograms for %s" % tomoFile)
+
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
-        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
-        samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
-        factor = samplingRateCoord / samplingRateTomo
+
         # ih = ImageHandler()
         for counter, subtomoFile in enumerate(subtomoFileList):
+
+            self.debug("Registering subtomogram %s - %s" % (counter, subtomoFile))
+
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subtomoFile)
