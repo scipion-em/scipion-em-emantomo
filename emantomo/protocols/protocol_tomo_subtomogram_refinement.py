@@ -26,8 +26,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+import enum
 from glob import glob
 import os
 import re
@@ -35,12 +34,12 @@ import re
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
-# from pyworkflow.protocol import STEPS_PARALLEL
 
 from pwem.protocols import EMProtocol
 
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
 import emantomo
+import pwem.constants as emcts
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
@@ -48,6 +47,10 @@ from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubT
 from .. import SCRATCHDIR
 
 SAME_AS_PICKING = 0
+
+class EmanTomoRefinementOutputs(enum.Enum):
+    outputSubtomograms = SetOfSubTomograms
+    averageSubTomogram = AverageSubTomogram
 
 
 class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
@@ -68,6 +71,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     _devStatus = BETA
     OUTPUT_PREFIX = 'outputSetOfClassesSubTomograms'
     OUTPUT_DIR = "spt_00"
+    _possibleOutputs = EmanTomoRefinementOutputs
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -90,9 +94,9 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         form.addParam('niter', params.IntParam, default=5,
                       label='Number of iterations',
                       help='The number of iterations to perform.')
-        form.addParam('mass', params.FloatParam, default=500.0,
+        form.addParam('mass', params.FloatParam, default=-1,
                       label='Mass:',
-                      help='Default=500.0')
+                      help='Mass normalization. Default=-1 Ignores mass')
         form.addParam('pkeep', params.FloatParam, default=0.8,
                       label='Particle keep:',
                       help='Fraction of particles to keep')
@@ -113,9 +117,8 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       pointerClass='VolumeMask', label='Structure factor',
                       help='Select the structure factor')
         form.addParam('sym', params.StringParam, default='c1',
-                      expertLevel=params.LEVEL_ADVANCED,
                       label='Symmetry',
-                      help='Symmetry (Default: c1')
+                      help='Symmetry (Default: c1). See https://blake.bcm.edu/emanwiki/EMAN2/Symmetry for more.')
         form.addParam('localfilter', params.BooleanParam, default=False,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Local filter',
@@ -126,6 +129,19 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       help='Explicitly zeroes data beyond specified tilt angle.'
                            'Assumes tilt axis exactly on Y and zero tilt in X-Y'
                            'plane. Default 90 (no limit).')
+        form.addParam('useAlign', params.BooleanParam, default=True,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label='Use previous alignments?')
+        form.addParam('maxAng', params.FloatParam, default=25,
+                      condition='useAlign==True',
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label='Maximum angular change',
+                      help='Maximum anglular difference in refine mode (in degrees)')
+        form.addParam('extraParams', params.StringParam,
+                      expertLevel=params.LEVEL_ADVANCED,
+                      label="Extra params",
+                      help='Here you can add any extra parameters to run Eman subtomogram refinement. '
+                           'Parameters should be written in Eman command line format (--param=val)')
 
         form.addParallelSection(threads=4, mpi=1)
 
@@ -133,45 +149,65 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     def _insertAllSteps(self):
         # TODO: Get the basename.hdf from the inputSetOfSubTomogram
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('refinementSubtomogram')
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.refinementSubtomogram)
         # TODO: Set and show the output
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
     def convertInputStep(self):
         storePath = self._getExtraPath("subtomograms")
         pwutils.makePath(storePath)
-        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath)
+        if self.useAlign.get():
+            self.alignType = emcts.ALIGN_3D
+        else:
+            self.alignType = emcts.ALIGN_NONE
+        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=self.alignType)
         self.newFn = glob(os.path.join(storePath, '*.hdf'))[0]
+
+        # Fix the sampling rate as it might be set wrong
+        sampling_rate = self.inputSetOfSubTomogram.get().getSamplingRate()
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        args = "--apix %f %s %s" % (sampling_rate, self.newFn, self.newFn)
+        self.runJob(program, args)
+        if self.inputRef.get() is not None:
+            refFileIn = self.inputRef.get().getFileName()
+            self.refFileOut = self._getExtraPath("reference.mrc")
+            args = "--apix %f %s %s" % (sampling_rate, refFileIn, self.refFileOut)
+            self.runJob(program, args)
 
     def refinementSubtomogram(self):
         """ Run the Subtomogram refinement. """
-        args = ' %s' % self.newFn
+        args = ' %s' % os.path.abspath(self.newFn)
         if self.inputRef.get() is not None:
-            reference = self.inputRef.get().getFileName()
-            reference = reference.split(":")[0]
-            args += (' --reference=%s ' % reference)
+            # reference = self.inputRef.get().getFileName()
+            # reference = reference.split(":")[0]
+            args += (' --reference=%s ' % self.refFileOut)
         args += (' --mass=%f' % self.mass)
         args += ' --goldstandard=%d ' % self.goldstandard
         args += ' --pkeep=%f ' % self.pkeep
         args += ' --sym=%s ' % self.sym
         args += ' --maxtilt=%s ' % self.maxtilt
-        args += ' --path=%s ' % self.getOutputPath()
-        if self.niter > 1:
-            args += ' --niter=%d' % self.niter
+        args += ' --path=%s ' % os.path.abspath(self.getOutputPath())
+        args += ' --niter=%d' % self.niter
         if self.goldcontinue:
             args += ' --goldcontinue '
+        if self.maskFile.get():
+            args += ' --mask=%s' % self.maskFile.get().getFileName()
         if self.localfilter:
             args += ' --localfilter '
         if self.numberOfMpi > 1:
             args += ' --parallel=mpi:%d:%s' % (self.numberOfMpi.get(), SCRATCHDIR)
         else:
             args += ' --parallel=thread:%d' % self.numberOfThreads.get()
+        if self.alignType != emcts.ALIGN_NONE:
+            args += ' --refine --maxang=%f' % self.maxAng.get()
+        if self.extraParams.get():
+            args += ' ' + self.extraParams.get()
         args += ' --threads=%d' % self.numberOfThreads.get()
 
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
-        self._log.info('Launching: ' + program + ' ' + args)
+        self._log.info('Launching: ' + program + ' ' + args + " from " + os.getcwd())
         self.runJob(program, args)
 
         # Fix the sampling rate as it might be set wrong
@@ -196,9 +232,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         # Output 1: AverageSubTomogram
         averageSubTomogram = AverageSubTomogram()
         averageSubTomogram.setFileName(lastImage)
-        setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
-        setOfAverageSubTomograms.copyInfo(inputSetOfSubTomograms)
-        setOfAverageSubTomograms.append(averageSubTomogram)
+        averageSubTomogram.setSamplingRate(inputSetOfSubTomograms.getSamplingRate())
 
         # Output 2: setOfSubTomograms
         particleParams = getLastParticlesParams(self.getOutputPath())
@@ -207,8 +241,11 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         outputSetOfSubTomograms.setCoordinates3D(inputSetOfSubTomograms.getCoordinates3D())
         updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, particleParams)
 
-        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms, outputParticles=outputSetOfSubTomograms)
-        self._defineSourceRelation(self.inputSetOfSubTomogram, setOfAverageSubTomograms)
+        outputs = {EmanTomoRefinementOutputs.averageSubTomogram.name: averageSubTomogram,
+                   EmanTomoRefinementOutputs.outputSubtomograms.name: outputSetOfSubTomograms}
+
+        self._defineOutputs(**outputs)
+        self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)
         self._defineSourceRelation(self.inputSetOfSubTomogram, outputSetOfSubTomograms)
 
     def getOutputPath(self, *args):

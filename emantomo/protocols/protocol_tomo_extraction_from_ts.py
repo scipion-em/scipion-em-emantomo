@@ -212,7 +212,7 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
             subtomogram.cleanObjId()
             subtomogram.setLocation(subtomoFile)
             subtomogram.setCoordinate3D(coordSet[counter])
-            subtomogram.setTransform(coordSet[counter]._eulerMatrix)
+            subtomogram.setTransform(coordSet[counter]._eulerMatrix, convention=const.TR_EMAN)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
         return outputSubTomogramsSet

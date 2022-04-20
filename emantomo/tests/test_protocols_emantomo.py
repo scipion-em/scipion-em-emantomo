@@ -32,6 +32,7 @@ import pyworkflow.utils as pwutils
 from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
 from ..protocols import *
 import tomo.protocols
+from tomo.constants import TR_EMAN
 
 import emantomo
 
@@ -303,7 +304,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
             self.assertEqual(subTomogram.getSamplingRate(), 20)
             self.assertTrue(hasattr(subTomogram, "coverage"))
             self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
         summary = protInitialModel.summary()
@@ -455,7 +456,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
             self.assertEqual(subTomogram.getSamplingRate(), 5)
             self.assertTrue(hasattr(subTomogram, "coverage"))
             self.assertTrue(hasattr(subTomogram, "score"))
-            matrix = subTomogram.getTransform().getMatrix()
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
     def _runTomoSubtomogramRefinementWithSubtomo(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
@@ -607,6 +608,82 @@ class TestEmanTomoTempMatch(TestEmanTomoBase):
         self.assertEqual(outputCoordsSmall.getSamplingRate(), 5)
 
         return protTomoTempMatch
+
+class TestEmanTomoClassifySubtomos(TestEmanTomoBase):
+    """This class check if the protocol classify subtomos works properly.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from tomo.tests import DataSet
+        setupTestProject(cls)
+        cls.dataset = DataSet.getDataSet('tomo-em')
+        cls.tomogram = cls.dataset.getFile('tomo1')
+        cls.inputSetOfSubTomogram = cls.dataset.getFile('subtomo')
+        cls.coords3D_Large = cls.dataset.getFile('overview_wbp_large.txt')
+        cls.coords3D = cls.dataset.getFile('overview_wbp.txt')
+
+    def _runTomoClassifySubtomos(self):
+        from tomo.protocols import ProtImportCoordinates3D, ProtImportTomograms
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+
+        self.launchProtocol(protImportTomogram)
+
+        coords = pwutils.removeBaseExt(self.coords3D)
+        coords = protImportTomogram._getExtraPath(coords + '.txt')
+        pwutils.createAbsLink(self.coords3D_Large, coords)
+        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
+                                                   auto='eman',
+                                                   filesPath=coords,
+                                                   importTomograms=protImportTomogram.outputTomograms,
+                                                   filesPattern='', boxSize=32,
+                                                   samplingRate=5)
+
+        self.launchProtocol(protImportCoordinates3d)
+        self.assertIsNotNone(protImportTomogram.outputTomograms,
+                             "There was a problem with tomogram output")
+        self.assertIsNotNone(protImportCoordinates3d.outputCoordinates,
+                             "There was a problem with coordinates 3d output")
+
+        doInvert = False
+        doNormalize = False
+        boxSize = 32
+        protTomoExtraction = self.newProtocol(EmanProtTomoExtraction,
+                                              inputTomograms=protImportTomogram.outputTomograms,
+                                              inputCoordinates=protImportCoordinates3d.outputCoordinates,
+                                              downsampleType=0,
+                                              doInvert=doInvert,
+                                              doNormalize=doNormalize,
+                                              boxSize=boxSize)
+
+        self.launchProtocol(protTomoExtraction)
+        self.assertIsNotNone(protTomoExtraction.outputSetOfSubtomogram,
+                             "There was a problem with SetOfSubtomogram output")
+
+        protImportTomogram = self.newProtocol(ProtImportTomograms,
+                                              filesPath=self.tomogram,
+                                              samplingRate=5)
+        self.launchProtocol(protImportTomogram)
+
+        protClassifySubtomos = self.newProtocol(EmanProtTomoClassifySubtomos,
+                                                inputSetOfSubTomogram=protTomoExtraction.outputSetOfSubtomogram)
+
+        self.launchProtocol(protClassifySubtomos)
+        self.assertEqual(protClassifySubtomos.outputVolumes.getSize(), 2,
+                         "Wrong number of volumes registered")
+        self.assertEqual(protClassifySubtomos.outputClasses.getSize(), 2,
+                         "Wrong number of classes registered")
+        self.assertEqual(protClassifySubtomos.outputClasses[1].getSize(), 12,
+                         "Wrong number of particles in first class")
+        self.assertEqual(protClassifySubtomos.outputClasses[2].getSize(), 3,
+                         "Wrong number of particles in second class")
+        return protClassifySubtomos
+
+    def test_classify_subtomos(self):
+        protClassifySubtomos = self._runTomoClassifySubtomos()
+        return protClassifySubtomos
 
 
 class TestEmanTomoReconstruction(TestEmanTomoBase):
