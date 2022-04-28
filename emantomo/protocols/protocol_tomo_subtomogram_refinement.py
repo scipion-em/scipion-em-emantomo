@@ -49,7 +49,7 @@ from .. import SCRATCHDIR
 SAME_AS_PICKING = 0
 
 class EmanTomoRefinementOutputs(enum.Enum):
-    outputSubtomograms = SetOfSubTomograms
+    subtomograms = SetOfSubTomograms
     averageSubTomogram = AverageSubTomogram
 
 
@@ -242,7 +242,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, particleParams)
 
         outputs = {EmanTomoRefinementOutputs.averageSubTomogram.name: averageSubTomogram,
-                   EmanTomoRefinementOutputs.outputSubtomograms.name: outputSetOfSubTomograms}
+                   EmanTomoRefinementOutputs.subtomograms.name: outputSetOfSubTomograms}
 
         self._defineOutputs(**outputs)
         self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)

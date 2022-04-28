@@ -23,8 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+import enum
 import glob
 from os.path import abspath
 
@@ -47,12 +46,15 @@ import tomo.constants as const
 SAME_AS_PICKING = 0
 OTHER = 1
 
+class OutputExtraction(enum.Enum):
+    subtomograms = SetOfSubTomograms
 
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'extraction from tomogram'
     _devStatus = BETA
-    OUTPUT_PREFIX = 'outputSetOfSubtomogram'
+    _possibleOutputs = OutputExtraction
+    OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
     tomoFiles = []
     lines = []
     coordsFileName = None
@@ -209,7 +211,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                                                            coordSet,
                                                            item.getObjId(), factor)
 
-        self._defineOutputs(outputSetOfSubtomogram=outputSet)
+        self._defineOutputs(**{self._possibleOutputs.subtomograms.name:outputSet})
         self._defineSourceRelation(self.inputCoordinates, outputSet)
 
     # --------------------------- INFO functions --------------------------------
