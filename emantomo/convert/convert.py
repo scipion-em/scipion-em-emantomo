@@ -778,8 +778,8 @@ def refinement2Json(protocol, subTomos, mode='w'):
     for subTomo in subTomos.iterSubtomos():
         key = "('%s', %d)" % (os.path.abspath(lst_file), count)
         count += 1
-        coverage = getattr(subTomo, EMAN_COVERAGE, 0.0)
-        score = getattr(subTomo, EMAN_SCORE,-0.0)
+        coverage = getattr(subTomo, EMAN_COVERAGE, Float(0.0)).get()
+        score = getattr(subTomo, EMAN_SCORE,Float(-0.0)).get()
         matrix_st = subTomo.getTransform(convention=TR_EMAN).getMatrix()
 
 
