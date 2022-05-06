@@ -30,7 +30,7 @@ from pwem.protocols import (ProtImportMicrographs, ProtImportParticles, ProtImpo
                             ProtImportAverages)
 import pyworkflow.utils as pwutils
 from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
-from ..convert import EMAN_COVERAGE, EMAN_SCORE
+from ..constants import EMAN_COVERAGE, EMAN_SCORE
 from ..protocols import *
 import tomo.protocols
 from tomo.constants import TR_EMAN

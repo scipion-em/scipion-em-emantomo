@@ -49,10 +49,8 @@ from tomo.objects import SetOfTiltSeries, SetOfTomograms
 from tomo.constants import TR_EMAN
 
 from .. import Plugin
+from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE
 
-EMAN_SCORE = 'eman_score'
-
-EMAN_COVERAGE = 'eman_coverage'
 
 
 def loadJson(jsonFn):
@@ -780,8 +778,8 @@ def refinement2Json(protocol, subTomos, mode='w'):
     for subTomo in subTomos.iterSubtomos():
         key = "('%s', %d)" % (os.path.abspath(lst_file), count)
         count += 1
-        coverage = subTomo.coverage if hasattr(subTomo, EMAN_COVERAGE) else 0.0
-        score = subTomo.score if hasattr(subTomo, EMAN_SCORE) else -0.0
+        coverage = getattr(subTomo, EMAN_COVERAGE, 0.0)
+        score = getattr(subTomo, EMAN_SCORE,-0.0)
         matrix_st = subTomo.getTransform(convention=TR_EMAN).getMatrix()
 
 

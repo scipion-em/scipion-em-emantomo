@@ -231,3 +231,7 @@ OBJCMD_INITVOL = 'Show initial random volume'
 # SGD input types
 SGD_INPUT_AVG = 0
 SGD_INPUT_PTCLS = 1
+
+# Extra attributes for refinement
+EMAN_SCORE = 'eman_score'
+EMAN_COVERAGE = 'eman_coverage'
