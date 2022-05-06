@@ -50,6 +50,10 @@ from tomo.constants import TR_EMAN
 
 from .. import Plugin
 
+EMAN_SCORE = 'eman_score'
+
+EMAN_COVERAGE = 'eman_coverage'
+
 
 def loadJson(jsonFn):
     """ This function loads the Json dictionary into memory """
@@ -589,8 +593,8 @@ def updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, par
             print("Could not get params for particle %d" % index)
             setattr(subTomogram, "_appendItem", False)
         else:
-            setattr(subTomogram, 'eman_coverage', Float(particleParams["coverage"]))
-            setattr(subTomogram, 'eman_score', Float(particleParams["score"]))
+            setattr(subTomogram, EMAN_COVERAGE, Float(particleParams["coverage"]))
+            setattr(subTomogram, EMAN_SCORE, Float(particleParams["score"]))
             # Create 4x4 matrix from 4x3 e2spt_sgd align matrix and append row [0,0,0,1]
             am = numpy.array(particleParams["alignMatrix"])
             # angles = numpy.array([am[0:3], am[4:7], am[8:11], [0, 0, 0]])
@@ -771,10 +775,13 @@ def refinement2Json(protocol, subTomos, mode='w'):
     json_name = protocol._getExtraPath(os.path.join('spt_00', 'particle_parms_01.json'))
     sr = subTomos.getSamplingRate()
     parms_dict = {}
-    for subTomo in subTomos.iterItems():
-        key = "('%s', %d)" % (os.path.abspath(lst_file), subTomo.getObjId() - 1)
-        coverage = subTomo.coverage if hasattr(subTomo, 'coverage') else 0.0
-        score = subTomo.score if hasattr(subTomo, 'score') else -0.0
+
+    count = 0
+    for subTomo in subTomos.iterSubtomos():
+        key = "('%s', %d)" % (os.path.abspath(lst_file), count)
+        count += 1
+        coverage = subTomo.coverage if hasattr(subTomo, EMAN_COVERAGE) else 0.0
+        score = subTomo.score if hasattr(subTomo, EMAN_SCORE) else -0.0
         matrix_st = subTomo.getTransform(convention=TR_EMAN).getMatrix()
 
 
