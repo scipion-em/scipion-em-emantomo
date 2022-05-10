@@ -30,6 +30,7 @@ from pwem.protocols import (ProtImportMicrographs, ProtImportParticles, ProtImpo
                             ProtImportAverages)
 import pyworkflow.utils as pwutils
 from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
+from ..constants import EMAN_COVERAGE, EMAN_SCORE
 from ..protocols import *
 import tomo.protocols
 from tomo.constants import TR_EMAN
@@ -451,12 +452,12 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
 
         self.assertEqual(outputSetOfSubTomograms.getDimensions(), (32, 32, 32))
         self.assertEqual(outputSetOfSubTomograms.getSize(), 15)
-        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getObjValue().getSize(), 15)
+        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getSize(), 15)
 
         for subTomogram in outputSetOfSubTomograms:
             self.assertEqual(subTomogram.getSamplingRate(), 5)
-            self.assertTrue(hasattr(subTomogram, "eman_coverage"))
-            self.assertTrue(hasattr(subTomogram, "eman_score"))
+            self.assertTrue(hasattr(subTomogram, EMAN_COVERAGE))
+            self.assertTrue(hasattr(subTomogram, EMAN_SCORE))
             matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
