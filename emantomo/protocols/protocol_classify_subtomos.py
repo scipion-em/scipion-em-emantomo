@@ -210,16 +210,22 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
             keys_class = list(loadJson(self._getExtraPath(os.path.join("sptcls_00", "particle_parms_%02d.json" % (classID + 1)))).keys())
             partID = [int(item.split(", ")[1][:-1]) for item in keys_class]
             self.particle_class[classID] = partID
+
+        # Initialization of variables used during clasiffy, specially in the callbacks: _updateParticle and _updateCLass
+        self.particleCounter = 0 # Particle counter that should match the value in particles list input
+        self.key_list = list(self.particle_class.keys())
+        self.val_list = list(self.particle_class.values())
+
         clsSet.classifyItems(updateItemCallback=self._updateParticle,
                              updateClassCallback=self._updateClass,
                              itemDataIterator=itertools.count(0))
 
     def _updateParticle(self, item, row):
-        key_list = list(self.particle_class.keys())
-        val_list = list(self.particle_class.values())
-        idx = item.getObjId() - 1
-        position = [i for i, sublist in enumerate(val_list) if idx in sublist][0]
-        item.setClassId(key_list[position] + 1)
+
+        idx = self.particleCounter
+        position = [i for i, sublist in enumerate(self.val_list) if idx in sublist][0]
+        item.setClassId(self.key_list[position] + 1)
+        self.particleCounter += 1
 
     def _updateClass(self, item):
         classId = item.getObjId()
