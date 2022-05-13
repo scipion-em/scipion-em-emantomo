@@ -76,7 +76,7 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
                       important=True, label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
         form.addParam('inputRef', params.PointerParam,
-                      pointerClass='AverageSubTomogram', allowsNull=True,
+                      pointerClass='AverageSubTomogram',
                       default=None, label='Reference average',
                       help='If not provided, a reference will be created from the input subtomograms.')
 
@@ -145,15 +145,10 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
                                                   os.path.abspath(self.newFn)),
                     cwd=self._getExtraPath())
 
-        if self.inputRef.get() is None:
-            args = " --path=%s --keep=1.0" % project_path
-            program = emantomo.Plugin.getProgram('e2spt_average.py')
-            self._log.info('Launching: ' + program + ' ' + args)
-            self.runJob(program, args)
-        else:
-            program = emantomo.Plugin.getProgram('e2proc3d.py')
-            args = "%s %s" % (self.inputRef.get().getFileName(), self._getExtraPath(os.path.join('spt_00', 'threed_01.hdf')))
-            self.runJob(program, args)
+
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        args = "%s %s" % (self.inputRef.get().getFileName(), self._getExtraPath(os.path.join('spt_00', 'threed_01.hdf')))
+        self.runJob(program, args)
 
     def pcaClassification(self):
         """ Run the pca classification. """
