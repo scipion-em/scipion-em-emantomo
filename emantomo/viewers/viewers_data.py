@@ -23,8 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import datetime
 import os
+from os.path import getmtime
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import askYesNo
@@ -86,12 +87,16 @@ class EmanDataViewer(pwviewer.Viewer):
             json_files, _ = jsonFilesFromSet(tomos, info_path)
             _ = setCoords3D2Jsons(json_files, outputCoords)
 
-            setView = EmanDialog(self._tkRoot, path, provider=tomoProvider)
+            time = datetime.datetime.now()
 
-            import tkinter as tk
-            frame = tk.Frame()
-            if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
-                jsons2SetCoords3D(self.protocol, outputCoords.getPrecedents(), info_path)
+            EmanDialog(self._tkRoot, path, provider=tomoProvider)
+
+            if hasAnyFileChanged(json_files, time):
+
+                import tkinter as tk
+                frame = tk.Frame()
+                if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
+                    jsons2SetCoords3D(self.protocol, outputCoords.getPrecedents(), info_path)
 
         elif issubclass(cls, ProtImportCoordinates3D):
             if obj.getOutputsSize() >= 1:
@@ -100,3 +105,17 @@ class EmanDataViewer(pwviewer.Viewer):
             self._visualize(lastOutput)
 
         return views
+
+def hasAnyFileChanged(files, time):
+    """ Returns true if any of the files in files list has been changed after 'time'"""
+    for file in files:
+        if hasFileChangedSince(file, time):
+            return True
+
+    return False
+
+def hasFileChangedSince(file, time):
+    """ Returns true if the file has changed after 'time'"""
+    modTime = datetime.datetime.fromtimestamp(getmtime(file))
+    return time < modTime
+

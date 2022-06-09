@@ -76,7 +76,7 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
                       important=True, label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
         form.addParam('inputRef', params.PointerParam,
-                      pointerClass='AverageSubTomogram', allowsNull=True,
+                      pointerClass='AverageSubTomogram',
                       default=None, label='Reference average',
                       help='If not provided, a reference will be created from the input subtomograms.')
 
@@ -145,15 +145,10 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
                                                   os.path.abspath(self.newFn)),
                     cwd=self._getExtraPath())
 
-        if self.inputRef.get() is None:
-            args = " --path=%s --keep=1.0" % project_path
-            program = emantomo.Plugin.getProgram('e2spt_average.py')
-            self._log.info('Launching: ' + program + ' ' + args)
-            self.runJob(program, args)
-        else:
-            program = emantomo.Plugin.getProgram('e2proc3d.py')
-            args = "%s %s" % (self.inputRef.get().getFileName(), self._getExtraPath(os.path.join('spt_00', 'threed_01.hdf')))
-            self.runJob(program, args)
+
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        args = "%s %s" % (self.inputRef.get().getFileName(), self._getExtraPath(os.path.join('spt_00', 'threed_01.hdf')))
+        self.runJob(program, args)
 
     def pcaClassification(self):
         """ Run the pca classification. """
@@ -210,16 +205,22 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
             keys_class = list(loadJson(self._getExtraPath(os.path.join("sptcls_00", "particle_parms_%02d.json" % (classID + 1)))).keys())
             partID = [int(item.split(", ")[1][:-1]) for item in keys_class]
             self.particle_class[classID] = partID
+
+        # Initialization of variables used during clasiffy, specially in the callbacks: _updateParticle and _updateCLass
+        self.particleCounter = 0 # Particle counter that should match the value in particles list input
+        self.key_list = list(self.particle_class.keys())
+        self.val_list = list(self.particle_class.values())
+
         clsSet.classifyItems(updateItemCallback=self._updateParticle,
                              updateClassCallback=self._updateClass,
                              itemDataIterator=itertools.count(0))
 
     def _updateParticle(self, item, row):
-        key_list = list(self.particle_class.keys())
-        val_list = list(self.particle_class.values())
-        idx = item.getObjId() - 1
-        position = [i for i, sublist in enumerate(val_list) if idx in sublist][0]
-        item.setClassId(key_list[position] + 1)
+
+        idx = self.particleCounter
+        position = [i for i, sublist in enumerate(self.val_list) if idx in sublist][0]
+        item.setClassId(self.key_list[position] + 1)
+        self.particleCounter += 1
 
     def _updateClass(self, item):
         classId = item.getObjId()

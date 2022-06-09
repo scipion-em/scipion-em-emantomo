@@ -674,9 +674,20 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
     if isinstance(setTomograms, Pointer):
         setTomograms = setTomograms.get()
     coord3DSetDict = {}
-    suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
-    coord3DSet = protocol._createSetOfCoordinates3D(setTomograms, suffix)
-    coord3DSet.setName("tomoCoord")
+
+    # Subsets do not have this
+    if hasattr(protocol, "_getOutputSuffix"):
+        suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
+        outputname = protocol.OUTPUT_PREFIX + suffix
+    else:
+        for count in range(100):
+            outputname = "coordinates%s" % count
+            if not hasattr(protocol, outputname):
+                suffix = "user%s" % count
+                break
+
+    coord3DSet = SetOfCoordinates3D.create(protocol._getPath(),
+                                           prefix=outputname)
     coord3DSet.setPrecedents(setTomograms)
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     first = True
@@ -701,15 +712,12 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
         # Populate Set of 3D Coordinates with 3D Coordinates
         readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone())
 
-    name = protocol.OUTPUT_PREFIX + suffix
-    args = {}
-    args[name] = coord3DSet
-    protocol._defineOutputs(**args)
+    protocol._defineOutputs(**{outputname:coord3DSet})
     protocol._defineSourceRelation(setTomograms, coord3DSet)
 
-    # Update Outputs
-    for index, coord3DSet in coord3DSetDict.items():
-        protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
+    # # Update Outputs
+    # for index, coord3DSet in coord3DSetDict.items():
+    #     protocol._updateOutputSet(name, coord3DSet, state=coord3DSet.STREAM_CLOSED)
 
 
 def tltParams2Json(json_files, tltSeries, mode="w"):
