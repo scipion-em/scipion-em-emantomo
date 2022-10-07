@@ -293,7 +293,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
         return protTomoExtraction
 
     def _performFinalValidation(self, protInitialModel):
-        averageSubTomogram = protInitialModel.averageSubTomogram
+        averageSubTomogram = protInitialModel.subtomogramAverage
         self.assertEqual(os.path.basename(averageSubTomogram.getFirstItem().getFileName()), "output.hdf")
         self.assertEqual(averageSubTomogram.getFirstItem().getSamplingRate(), 20.0)
         self.assertEqual(averageSubTomogram.getSamplingRate(), 20.0)
@@ -338,7 +338,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
 
         self.launchProtocol(protInitialModel)
 
-        self.assertIsNotNone(protInitialModel.averageSubTomogram,
+        self.assertIsNotNone(protInitialModel.subtomogramAverage,
                              "There was a problem with subTomograms output")
         self.assertIsNotNone(protInitialModel.outputParticles,
                              "There was a problem with particles output")
@@ -373,7 +373,7 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
 
         self.launchProtocol(protInitialModel)
 
-        self.assertIsNotNone(protInitialModel.averageSubTomogram,
+        self.assertIsNotNone(protInitialModel.subtomogramAverage,
                              "There was a problem with subTomograms output")
         self.assertIsNotNone(protInitialModel.outputParticles,
                              "There was a problem with particles output")
@@ -445,9 +445,13 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
 
     def _performFinalValidation(self, protTomoSubtomogramRefinement):
         outputSetOfSubTomograms = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.subtomograms.name)
-        averageSubTomogram = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.averageSubTomogram.name)
+        averageSubTomogram = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.subtomogramAverage.name)
 
-        self.assertTrue("threed" in averageSubTomogram.getFileName())
+        self.assertTrue(os.path.exists(averageSubTomogram.getFileName()))
+
+        # Check average is a mrc file
+        self.assertTrue(averageSubTomogram.getFileName().endswith(".mrc") )
+
         self.assertEqual(averageSubTomogram.getSamplingRate(), 5.0)
 
         self.assertEqual(outputSetOfSubTomograms.getDimensions(), (32, 32, 32))
@@ -480,7 +484,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
 
         self.launchProtocol(protTomoRefinement)
 
-        self.assertIsNotNone(getattr(protTomoRefinement, EmanTomoRefinementOutputs.averageSubTomogram.name),
+        self.assertIsNotNone(getattr(protTomoRefinement, EmanTomoRefinementOutputs.subtomogramAverage.name),
                              "There was a problem with subTomograms output")
         self.assertSetSize(getattr(protTomoRefinement, EmanTomoRefinementOutputs.subtomograms.name), None,
                              "There was a problem with particles output")
@@ -515,8 +519,16 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
 
         self.launchProtocol(protTomoRefinement)
 
-        self.assertIsNotNone(getattr(protTomoRefinement, EmanTomoRefinementOutputs.averageSubTomogram.name),
-                             "There was a problem with subTomograms output")
+        average = getattr(protTomoRefinement, EmanTomoRefinementOutputs.subtomogramAverage.name)
+        self.assertIsNotNone(average,  "There was a problem with average output")
+        self.assertTrue(os.path.exists(average.getFileName()), "Average %s does not exists" % average.getFileName())
+
+        self.assertTrue(average.hasHalfMaps(), "Halves not registered")
+
+        half1, half2 = average.getHalfMaps().split(',')
+        self.assertTrue(os.path.exists(half1), msg="Average 1st half %s does not exists" % half1)
+        self.assertTrue(os.path.exists(half2), msg="Average 2nd half %s does not exists" % half2)
+
         self.assertSetSize(getattr(protTomoRefinement, EmanTomoRefinementOutputs.subtomograms.name), None,
                              "There was a problem with particles output")
 

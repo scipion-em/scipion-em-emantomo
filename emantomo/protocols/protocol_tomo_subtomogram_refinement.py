@@ -37,7 +37,7 @@ import pyworkflow.protocol.params as params
 
 from pwem.protocols import EMProtocol
 
-from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
+from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms, convertImage
 import emantomo
 import pwem.constants as emcts
 
@@ -50,7 +50,7 @@ SAME_AS_PICKING = 0
 
 class EmanTomoRefinementOutputs(enum.Enum):
     subtomograms = SetOfSubTomograms
-    averageSubTomogram = AverageSubTomogram
+    subtomogramAverage = AverageSubTomogram
 
 
 class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
@@ -60,7 +60,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     Protocol to performs a conventional iterative subtomogram averaging
     using the full set of particles.
     It will take a set of subtomograms (particles) and a subtomogram(reference,
-    potentially comming from the initial model protocol)
+    potentially coming from the initial model protocol)
     and 3D reconstruct a subtomogram.
     It also builds a set of subtomograms that contains the original particles
     plus the score, coverage and align matrix per subtomogram .
@@ -69,7 +69,6 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     _outputClassName = 'SubTomogramRefinement'
     _label = 'subtomogram refinement'
     _devStatus = BETA
-    OUTPUT_PREFIX = 'outputSetOfClassesSubTomograms'
     OUTPUT_DIR = "spt_00"
     _possibleOutputs = EmanTomoRefinementOutputs
 
@@ -210,14 +209,34 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         self._log.info('Launching: ' + program + ' ' + args + " from " + os.getcwd())
         self.runJob(program, args)
 
+        self.hdfToMrc("threed_\d+.hdf", self.getAverageFn())
+        self.hdfToMrc("threed_\d+_even.hdf", self.getEvenFn())
+        self.hdfToMrc("threed_\d+_odd.hdf", self.getOddFn())
+
+
+    def hdfToMrc(self, pattern, mrcName):
+
         # Fix the sampling rate as it might be set wrong
         program = emantomo.Plugin.getProgram('e2proc3d.py')
-        lastImage = self.getLastFromOutputPath("threed_\d+.hdf")
+        lastImage = self.getLastFromOutputPath(pattern)
         args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
-                                    lastImage, lastImage)
+                                    lastImage, mrcName)
         self.runJob(program, args)
 
+    def getAverageFn(self):
+
+        return self._getExtraPath("Average_refined.mrc")
+
+    def getEvenFn(self):
+
+        return self._getExtraPath("even.mrc")
+
+    def getOddFn(self):
+
+        return self._getExtraPath("odd.mrc")
+
     def getLastFromOutputPath(self, pattern):
+
         threedPaths = glob(self.getOutputPath("*"))
         imagePaths = sorted(path for path in threedPaths if re.match(pattern, os.path.basename(path)))
         if not imagePaths:
@@ -226,12 +245,13 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             return imagePaths[-1]
 
     def createOutputStep(self):
-        lastImage = self.getLastFromOutputPath("threed_\d+.hdf")
+
         inputSetOfSubTomograms = self.inputSetOfSubTomogram.get()
 
         # Output 1: AverageSubTomogram
         averageSubTomogram = AverageSubTomogram()
-        averageSubTomogram.setFileName(lastImage)
+        averageSubTomogram.setFileName(self.getAverageFn())
+        averageSubTomogram.setHalfMaps([self.getEvenFn(), self.getOddFn()])
         averageSubTomogram.setSamplingRate(inputSetOfSubTomograms.getSamplingRate())
 
         # Output 2: setOfSubTomograms
@@ -241,7 +261,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         outputSetOfSubTomograms.setCoordinates3D(inputSetOfSubTomograms.getCoordinates3D())
         updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, particleParams)
 
-        outputs = {EmanTomoRefinementOutputs.averageSubTomogram.name: averageSubTomogram,
+        outputs = {EmanTomoRefinementOutputs.subtomogramAverage.name: averageSubTomogram,
                    EmanTomoRefinementOutputs.subtomograms.name: outputSetOfSubTomograms}
 
         self._defineOutputs(**outputs)
