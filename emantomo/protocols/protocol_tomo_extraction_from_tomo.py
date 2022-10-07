@@ -23,8 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+import enum
 import glob
 from os.path import abspath
 
@@ -47,12 +46,15 @@ import tomo.constants as const
 SAME_AS_PICKING = 0
 OTHER = 1
 
+class OutputExtraction(enum.Enum):
+    subtomograms = SetOfSubTomograms
 
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'extraction from tomogram'
     _devStatus = BETA
-    OUTPUT_PREFIX = 'outputSetOfSubtomogram'
+    _possibleOutputs = OutputExtraction
+    OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
     tomoFiles = []
     lines = []
     coordsFileName = None
@@ -189,10 +191,17 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
         outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         acquisition = TomoAcquisition()
-        acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
-        acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
-        acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
+
+        firstTomo = self.getInputTomograms().getFirstItem()
+        acquisition.setAngleMin(firstTomo.getAcquisition().getAngleMin())
+        acquisition.setAngleMax(firstTomo.getAcquisition().getAngleMax())
+        acquisition.setStep(firstTomo.getAcquisition().getStep())
         outputSubTomogramsSet.setAcquisition(acquisition)
+
+        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
+        samplingRateTomo = firstTomo.getSamplingRate()
+        factor = samplingRateCoord / samplingRateTomo
+
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
                 if os.path.basename(tomoFile) == os.path.basename(item.getFileName()):
@@ -200,9 +209,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                     outputSet = self.readSetOfSubTomograms(tomoFile,
                                                            outputSubTomogramsSet,
                                                            coordSet,
-                                                           item.getObjId())
+                                                           item.getObjId(), factor)
 
-        self._defineOutputs(outputSetOfSubtomogram=outputSet)
+        self._defineOutputs(**{self._possibleOutputs.subtomograms.name:outputSet})
         self._defineSourceRelation(self.inputCoordinates, outputSet)
 
     # --------------------------- INFO functions --------------------------------
@@ -323,11 +332,18 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return self.inputTomograms.get()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId):
+    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId, factor):
+
+        self.info("Registering subtomograms for %s" % tomoFile)
+
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
+
         # ih = ImageHandler()
         for counter, subtomoFile in enumerate(subtomoFileList):
+
+            self.debug("Registering subtomogram %s - %s" % (counter, subtomoFile))
+
             subtomogram = SubTomogram()
             subtomogram.cleanObjId()
             subtomogram.setLocation(subtomoFile)
@@ -338,7 +354,12 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 subtomogram.setVolId(volId)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[counter])
-            subtomogram.setTransform(coordSet[counter]._eulerMatrix)
+            transformation = coordSet[counter]._eulerMatrix
+            shift_x, shift_y, shift_z = transformation.getShifts()
+            transformation.setShifts(factor * shift_x,
+                                     factor * shift_y,
+                                     factor * shift_z)
+            subtomogram.setTransform(transformation, convention=const.TR_EMAN)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
         return outputSubTomogramsSet
