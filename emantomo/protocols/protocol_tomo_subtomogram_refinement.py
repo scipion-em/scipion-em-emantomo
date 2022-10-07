@@ -40,6 +40,7 @@ from pwem.protocols import EMProtocol
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
 import emantomo
 import pwem.constants as emcts
+from pyworkflow.utils import replaceExt
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
@@ -47,6 +48,11 @@ from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubT
 from .. import SCRATCHDIR
 
 SAME_AS_PICKING = 0
+# Output average dict keys
+AVG = 'average'
+HALF_EVEN = 'halfEven'
+HALF_ODD = 'halfOdd'
+
 
 class EmanTomoRefinementOutputs(enum.Enum):
     subtomograms = SetOfSubTomograms
@@ -75,6 +81,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
+        self.outputAvgDict = dict.fromkeys([AVG, HALF_ODD, HALF_EVEN])
 
     # --------------- DEFINE param functions ---------------
 
@@ -152,6 +159,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.refinementSubtomogram)
         # TODO: Set and show the output
+        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
@@ -225,13 +233,28 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         else:
             return imagePaths[-1]
 
+    def convertOutputStep(self):
+        """Convert the generated hdf average and its halves into mrc."""
+        filesHdfDict = {
+            AVG: self.getLastFromOutputPath("threed_\d+.hdf"),
+            HALF_EVEN: self.getLastFromOutputPath("threed_\d+_even.hdf"),
+            HALF_ODD: self.getLastFromOutputPath("threed_\d+_odd.hdf")
+        }
+
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        for fileKey, hdfFile in filesHdfDict.items():
+            outMrcFile = replaceExt(hdfFile, 'mrc')
+            args = '%s %s ' % (hdfFile, outMrcFile)
+            self.outputAvgDict[fileKey] = outMrcFile
+            self.runJob(program, args)
+
     def createOutputStep(self):
-        lastImage = self.getLastFromOutputPath("threed_\d+.hdf")
         inputSetOfSubTomograms = self.inputSetOfSubTomogram.get()
 
         # Output 1: AverageSubTomogram
         averageSubTomogram = AverageSubTomogram()
-        averageSubTomogram.setFileName(lastImage)
+        averageSubTomogram.setFileName(self.outputAvgDict[AVG])
+        averageSubTomogram.setHalfMaps([self.outputAvgDict[HALF_EVEN], self.outputAvgDict[HALF_ODD]])
         averageSubTomogram.setSamplingRate(inputSetOfSubTomograms.getSamplingRate())
 
         # Output 2: setOfSubTomograms
