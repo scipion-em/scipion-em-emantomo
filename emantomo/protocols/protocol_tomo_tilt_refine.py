@@ -114,7 +114,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
             _ = ctf2Json(self.json_files, self.inputCTF.get(), mode='a')
 
     def extract2D(self):
-        boxSize = self.inputSubtomos.get().getCoordinates3D().get().getBoxSize()
+        boxSize = self.inputSubtomos.get().getCoordinates3D().getBoxSize()
         for file in self.tomo_files:
             args = os.path.abspath(file)
             args += " --rmbeadthr=-1 --shrink=1.0 --tltkeep=1.0 --padtwod=1.0  " \
