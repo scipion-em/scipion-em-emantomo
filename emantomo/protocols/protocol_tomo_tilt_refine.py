@@ -132,7 +132,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
         pwutils.makePath(project_path)
         refinement2Json(self, self.inputSubtomos.get())
         convertImage(self.inputAverage.get().getFileName(), os.path.join(project_path, 'threed_01.hdf'))
-        half1, half2 = self.recVolume.get().getHalfMaps().split(',')
+        half1, half2 = self.inputAverage.get().getHalfMaps().split(',')
         self.convertHalfToEman(project_path, half1)
         self.convertHalfToEman(project_path, half2)
         args_fsc = "%s %s --calcfsc %s" % \
@@ -189,7 +189,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
 
     def _validate(self):
         errorMsg = []
-        if not self.recVolume.get().getHalfMaps():
+        if not self.inputAverage.get().getHalfMaps():
             errorMsg.append('No halves were detected in the introduced average.')
         return errorMsg
 
