@@ -103,7 +103,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
     def writeJsonInfo(self):
         info_path = self._getExtraPath('info')
         pwutils.makePath(info_path)
-        coords = self.inputSubtomos.get().getCoordinates3D().get()
+        coords = self.inputSubtomos.get().getCoordinates3D()
         tomos = coords.getPrecedents()
         tltSeries = recoverTSFromObj(coords, self)
         self.json_files, self.tomo_files = jsonFilesFromSet(tomos, info_path)
