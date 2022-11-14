@@ -169,11 +169,12 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         program = emantomo.Plugin.getProgram('e2proc3d.py')
         args = "--apix %f %s %s" % (sampling_rate, self.newFn, self.newFn)
         self.runJob(program, args)
-        if self.inputRef.get() is not None:
-            refFileIn = self.inputRef.get().getFileName()
-            self.refFileOut = self._getExtraPath("reference.mrc")
-            args = "--apix %f %s %s" % (sampling_rate, refFileIn, self.refFileOut)
-            self.runJob(program, args)
+        self.refFileOut = self.inputRef.get().getFileName()
+        # if self.inputRef.get() is not None:
+        #     refFileIn = self.inputRef.get().getFileName()
+        #     self.refFileOut = self._getExtraPath("reference.mrc")
+        #     args = "--apix %f %s %s" % (sampling_rate, refFileIn, self.refFileOut)
+        #     self.runJob(program, args)
 
     def refinementSubtomogram(self):
         """ Run the Subtomogram refinement. """
@@ -205,7 +206,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             args += ' ' + self.extraParams.get()
         args += ' --threads=%d' % self.numberOfThreads.get()
 
-        program = emantomo.Plugin.getProgram('e2spt_refine.py')
+        program = emantomo.Plugin.getProgram('e2spt_refine_new.py')
         self._log.info('Launching: ' + program + ' ' + args + " from " + os.getcwd())
         self.runJob(program, args)
 
