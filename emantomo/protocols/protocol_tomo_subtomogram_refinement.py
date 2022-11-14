@@ -206,7 +206,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             args += ' ' + self.extraParams.get()
         args += ' --threads=%d' % self.numberOfThreads.get()
 
-        program = emantomo.Plugin.getProgram('e2spt_refine_new.py')
+        program = emantomo.Plugin.getProgram('e2spt_refine.py')
         self._log.info('Launching: ' + program + ' ' + args + " from " + os.getcwd())
         self.runJob(program, args)
 
