@@ -151,7 +151,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
                "--mask=auto  --threads=%d --parallel=thread:%d --tophat=%s" \
                % ('spt_00/', self.nIters.get(), self.keep.get(), self.numberOfThreads.get(),
                   self.numberOfThreads.get(), self.filter_choices[self.topHat.get()])
-        program = emantomo.Plugin.getProgram('e2spt_tiltrefine.py')
+        program = emantomo.Plugin.getProgram('e2spt_subtilt_old.py')
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def createOutputStep(self):
