@@ -465,6 +465,11 @@ class TestEmanTomoSubtomogramRefinement(TestEmanTomoBase):
             matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
             self.assertEqual(matrix.shape, (4, 4))
 
+        # FSCs
+        fscs = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.FSCs.name)
+
+        self.assertSetSize(fscs, 3, msg="FSCs not registered properly")
+
     def _runTomoSubtomogramRefinementWithSubtomo(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
                                                  goldcontinue=False, sym="c1", localfilter=False, maxtilt=90.0):
         protTomoExtraction = self._runPreviousProtocols()
