@@ -40,8 +40,8 @@ V2_91 = '2.91'
 #  'Previous_stable_eman_version' + '_' + 'date_of_release_in_format_year+month+day'
 # Example:
 #  V_CB = '2.91_211111' (Stable version 2.91 and commit downloaded on the 11/11/2021)
-COMMIT = '1f1f27c'
-V_CB = '2.91_211111'
+COMMIT = '89a4ac6'
+V_CB = '2.91_220421'
 
 # Installation requirements for continuous build
 CONDA_VCB = os.path.join(emantomo.__path__[0], 'requirements', 'Conda_EmanCB.txt')
@@ -235,3 +235,32 @@ SGD_INPUT_PTCLS = 1
 # Extra attributes for refinement
 EMAN_SCORE = 'eman_score'
 EMAN_COVERAGE = 'eman_coverage'
+
+# Default label for picking with eman
+TOMOBOX = 'tomobox'
+
+# SQLITE labels to manage the present objects in the input sets
+TOMO_ID = "_tomoId"
+TS_ID = "_tsId"
+GROUP_ID = "_groupId"
+
+# Extended attribute to store where the 2d and 3d particle stacks are located
+EMAN_PRJ_DIR = 'emanPrj'
+EMAN_PSUBTOMOS_SQLITE = 'emanPsubtomograms.sqlite'
+
+INFO_DIR = 'info'
+TS_DIR = 'tiltseries'
+TLT_DIR = 'tlt'
+INTERP_TS = 'tiltseries_ali'
+TOMOGRAMS_DIR = 'tomograms'
+PARTICLES_DIR = 'particles'
+PARTICLES_3D_DIR = 'particles3d'
+SUBTOMOGRAMS_DIR = 'subtomograms'
+SETS_DIR = 'sets'
+INIT_MODEL_DIR = 'sptsgd_00'
+INIT_MODEL_NAME = 'output_cls0.hdf'
+
+# Other
+SPT_00 = 'spt_00'
+INPUT_PTCLS_LST = 'input_ptcls.lst'
+THREED_01 = 'threed_01'
