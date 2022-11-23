@@ -40,6 +40,7 @@ import os
 from ast import literal_eval
 
 import pwem.constants as emcts
+from pwem.objects import FSC
 import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
@@ -835,3 +836,22 @@ def recoverTSFromObj(child_obj, protocol):
             if isinstance(pp.get(), SetOfTiltSeries) and pp.get().getFirstItem().getFirstItem().hasTransform():
                 return pp.get()
     raise ValueError('Could not find any SetOfTiltSeries associated to %s.' % type(child_obj))
+
+
+def emanFSCsToScipion(fscSet, *fscFiles):
+
+    def _getFscValues(fscFn):
+        resolution_inv, frc = [], []
+        with open(fscFn) as f1:
+            for l in f1:
+                resolution_inv.append(float(l.split()[0]))
+                frc.append(float(l.split()[1]))
+
+        return resolution_inv, frc
+
+    for fscFile in fscFiles:
+
+        res_inv, frc = _getFscValues(fscFile)
+        fsc = FSC(objLabel=os.path.basename(fscFile))
+        fsc.setData(res_inv, frc)
+        fscSet.append(fsc)

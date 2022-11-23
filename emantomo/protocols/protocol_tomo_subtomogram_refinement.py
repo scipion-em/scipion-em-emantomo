@@ -31,19 +31,19 @@ from glob import glob
 import os
 import re
 
+from pwem.objects import SetOfFSCs
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
 
 from pwem.protocols import EMProtocol
 
-from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms, convertImage
+from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms, emanFSCsToScipion
 import emantomo
 import pwem.constants as emcts
 
 from tomo.protocols import ProtTomoBase
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
-
+from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 from .. import SCRATCHDIR
 
 SAME_AS_PICKING = 0
@@ -51,6 +51,7 @@ SAME_AS_PICKING = 0
 class EmanTomoRefinementOutputs(enum.Enum):
     subtomograms = SetOfSubTomograms
     subtomogramAverage = AverageSubTomogram
+    FSCs = SetOfFSCs
 
 
 class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
@@ -261,8 +262,17 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         outputSetOfSubTomograms.setCoordinates3D(inputSetOfSubTomograms.getCoordinates3D())
         updateSetOfSubTomograms(inputSetOfSubTomograms, outputSetOfSubTomograms, particleParams)
 
+        # Output 3: FSCs
+        fscs= self._createSet(SetOfFSCs, 'fsc%s.sqlite', "")
+        fscMasked = self.getLastFromOutputPath('fsc_masked_\d+.txt')
+        fscUnmasked = self.getLastFromOutputPath('fsc_unmasked_\d+.txt')
+        fscTight = self.getLastFromOutputPath('fsc_maskedtight_\d+.txt')
+
+        emanFSCsToScipion(fscs, fscMasked, fscUnmasked, fscTight)
+
         outputs = {EmanTomoRefinementOutputs.subtomogramAverage.name: averageSubTomogram,
-                   EmanTomoRefinementOutputs.subtomograms.name: outputSetOfSubTomograms}
+                   EmanTomoRefinementOutputs.subtomograms.name: outputSetOfSubTomograms,
+                   EmanTomoRefinementOutputs.FSCs.name:fscs}
 
         self._defineOutputs(**outputs)
         self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)
