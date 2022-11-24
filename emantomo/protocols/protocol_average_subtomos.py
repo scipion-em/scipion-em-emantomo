@@ -1,10 +1,10 @@
 # coding=utf-8
 # **************************************************************************
 # *
-# * Authors:     David Herreros  (dherreros@cnb.csic.es) [2]
-# *              Scipion Team (scipion@cnb.csic.es)
+# * Authors:     David Herreros  (dherreros@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es) [1]
 # *
-# * [2] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
+# * [1] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by

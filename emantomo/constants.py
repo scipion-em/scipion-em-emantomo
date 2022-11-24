@@ -259,8 +259,11 @@ SUBTOMOGRAMS_DIR = 'subtomograms'
 SETS_DIR = 'sets'
 INIT_MODEL_DIR = 'sptsgd_00'
 INIT_MODEL_NAME = 'output_cls0.hdf'
-
-# Other
+INIR_MODEL_NAME_OLD = 'output.hdf'
 SPT_00 = 'spt_00'
 INPUT_PTCLS_LST = 'input_ptcls.lst'
 THREED_01 = 'threed_01'
+
+
+
+
