@@ -201,15 +201,16 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
         samplingRateTomo = firstTomo.getSamplingRate()
         factor = samplingRateCoord / samplingRateTomo
+        counter = 0
 
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
                 if os.path.basename(tomoFile) == os.path.basename(item.getFileName()):
                     coordSet = self.lines[ind]
-                    outputSet = self.readSetOfSubTomograms(tomoFile,
-                                                           outputSubTomogramsSet,
-                                                           coordSet,
-                                                           item.getObjId(), factor)
+                    outputSet, counter = self.readSetOfSubTomograms(tomoFile,
+                                                                    outputSubTomogramsSet,
+                                                                    coordSet,
+                                                                    item.getObjId(), factor, counter)
 
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name:outputSet})
         self._defineSourceRelation(self.inputCoordinates, outputSet)
@@ -332,7 +333,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return self.inputTomograms.get()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId, factor):
+    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId, factor, counter):
 
         self.info("Registering subtomograms for %s" % tomoFile)
 
@@ -340,7 +341,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         subtomoFileList = sorted(glob.glob(outRegex))
 
         # ih = ImageHandler()
-        for counter, subtomoFile in enumerate(subtomoFileList):
+        for idx, subtomoFile in enumerate(subtomoFileList):
 
             self.debug("Registering subtomogram %s - %s" % (counter, subtomoFile))
 
@@ -353,8 +354,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, dfactor)
                 subtomogram.setVolId(volId)
                 subtomogram.setLocation(fnSubtomo)
-            subtomogram.setCoordinate3D(coordSet[counter])
-            transformation = coordSet[counter]._eulerMatrix
+            subtomogram.setCoordinate3D(coordSet[idx])
+            transformation = coordSet[idx]._eulerMatrix
             shift_x, shift_y, shift_z = transformation.getShifts()
             transformation.setShifts(factor * shift_x,
                                      factor * shift_y,
@@ -362,4 +363,5 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             subtomogram.setTransform(transformation, convention=const.TR_EMAN)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
-        return outputSubTomogramsSet
+            counter += 1
+        return outputSubTomogramsSet, counter
