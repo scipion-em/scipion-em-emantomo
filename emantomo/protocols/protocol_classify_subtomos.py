@@ -158,7 +158,7 @@ class EmanProtTomoClassifySubtomos(EMProtocol, ProtTomoBase):
         if self.mask.get() is None:
             args += " --mask=none"
         else:
-            args += " --mask=%s" % self.mask.get().getFileName()
+            args += " --mask=%s" % os.path.abspath(self.mask.get().getFileName())
 
         args += " --sym=%s" % self.sym.get()
 
