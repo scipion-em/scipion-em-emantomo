@@ -86,8 +86,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       help='Select the tomogram from which to extract.')
 
         form.addParam('boxSize', params.FloatParam,
-                      label='Box size',
-                      help='The subtomograms are extracted as a cubic box of this size. '
+                      label='Final box size',
+                      help='The subtomograms are extracted as a cubic box of this size after downsampling. '
                            'The wizard selects same box size as picking')
 
         form.addParam('downFactor', params.FloatParam, default=1.0,
@@ -188,7 +188,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         outputSet = None
         outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
+        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
         outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         acquisition = TomoAcquisition()
 
@@ -351,7 +351,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             dfactor = self.downFactor.get()
             if dfactor != 1:
                 fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % counter)
-                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, dfactor)
+                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, 1/dfactor)
                 subtomogram.setVolId(volId)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[idx])
