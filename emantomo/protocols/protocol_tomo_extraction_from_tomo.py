@@ -49,6 +49,7 @@ OTHER = 1
 class OutputExtraction(enum.Enum):
     subtomograms = SetOfSubTomograms
 
+
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'extraction from tomogram'
@@ -86,8 +87,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       help='Select the tomogram from which to extract.')
 
         form.addParam('boxSize', params.FloatParam,
-                      label='Final box size',
-                      help='The subtomograms are extracted as a cubic box of this size after downsampling. '
+                      label='Box size',
+                      help='The subtomograms are extracted as a cubic box of this size. '
                            'The wizard selects same box size as picking')
 
         form.addParam('downFactor', params.FloatParam, default=1.0,
@@ -132,6 +133,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def writeSetOfCoordinates3D(self):
         tomoList = []
+        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
+        samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
+        scale = samplingRateCoord / samplingRateTomo
         for tomo in self.getInputTomograms():
             tomoList.append(tomo.clone())
 
@@ -144,9 +148,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 coords = self.inputCoordinates.get()
                 for coord3D in coords.iterCoordinates(volume=tomo):
                     if os.path.basename(tomo.getFileName()) == os.path.basename(coord3D.getVolName()):
-                        out.write("%d\t%d\t%d\n" % (coord3D.getX(const.BOTTOM_LEFT_CORNER),
-                                                    coord3D.getY(const.BOTTOM_LEFT_CORNER),
-                                                    coord3D.getZ(const.BOTTOM_LEFT_CORNER)))
+                        out.write("%d\t%d\t%d\n" % (coord3D.getX(const.BOTTOM_LEFT_CORNER) * scale,
+                                                    coord3D.getY(const.BOTTOM_LEFT_CORNER) * scale,
+                                                    coord3D.getZ(const.BOTTOM_LEFT_CORNER) * scale))
                         newCoord = coord3D.clone()
                         newCoord.setVolume(coord3D.getVolume())
                         coordDict.append(newCoord)
@@ -157,8 +161,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 self.samplingRateTomo = tomo.getSamplingRate()
 
     def extractParticles(self):
-        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
-        samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         for tomo in self.tomoFiles:
             args = '%s ' % os.path.abspath(tomo)
             args += "--coords %s --boxsize %i" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
@@ -166,7 +168,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 args += ' --invert'
             if self.doNormalize:
                 args += ' --normproc %s' % self.getEnumText('normproc')
-            args += ' --cshrink %d' % (samplingRateCoord / samplingRateTomo)
+            # args += ' --cshrink %i' % (samplingRateTomo / samplingRateCoord)
 
             program = emantomo.Plugin.getProgram('e2spt_boxer_old.py')
             self.runJob(program, args, cwd=self._getExtraPath(),
@@ -188,7 +190,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         outputSet = None
         outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() * self.downFactor.get())
+        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
         outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         acquisition = TomoAcquisition()
 
@@ -351,7 +353,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             dfactor = self.downFactor.get()
             if dfactor != 1:
                 fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % counter)
-                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, 1/dfactor)
+                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, dfactor)
                 subtomogram.setVolId(volId)
                 subtomogram.setLocation(fnSubtomo)
             subtomogram.setCoordinate3D(coordSet[idx])
