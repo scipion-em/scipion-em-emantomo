@@ -23,21 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 from enum import Enum
-
-from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD, PARTICLES_DIR
+from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD
 from pyworkflow import BETA
 from pyworkflow.protocol import params
-from pyworkflow.utils.path import makePath, replaceExt, replaceBaseExt
-
+from pyworkflow.utils.path import makePath, replaceBaseExt
 from pwem.protocols import EMProtocol
-
 import emantomo
-from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
-
+from emantomo.convert import writeSetOfSubTomograms
 from tomo.protocols import ProtTomoBase
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
+from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 
 
 class OutputsInitModel(Enum):
@@ -55,11 +50,12 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     plus the score, coverage and align matrix per subtomogram .
     """
 
+    _label = 'tomo initial model'
+    _devStatus = BETA
+
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
         self.volumeFileMrc = None
-        _label = 'tomo initial model'
-        _devStatus = BETA
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -208,7 +204,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
         #     os.remove(hdfFile)
 
     def createOutputStep(self):
-        outputSubtomos = None
+        # outputSubtomos = None
         particles = self.particles.get()
         downSamplingFactor = self.shrink.get()
 
