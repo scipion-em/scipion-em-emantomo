@@ -44,7 +44,7 @@ from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram
 
 
-class OutputAverage(enum.Enum):
+class OutputsAverageSubtomos(enum.Enum):
     averageSubTomos = AverageSubTomogram
 
 
@@ -56,7 +56,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
 
     _label = 'average subtomo'
     _devStatus = BETA
-    _possibleOutputs = OutputAverage
+    _possibleOutputs = OutputsAverageSubtomos
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -169,7 +169,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
         volume.setSamplingRate(inSubtomos.getSamplingRate())
         volume.fixMRCVolume()
 
-        self._defineOutputs(**{OutputAverage.averageSubTomos.name: volume})
+        self._defineOutputs(**{OutputsAverageSubtomos.averageSubTomos.name: volume})
         self._defineSourceRelation(inSubtomos, volume)
 
     # --------------- INFO functions -------------------------

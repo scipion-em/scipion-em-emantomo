@@ -25,26 +25,24 @@
 # **************************************************************************
 import enum
 import glob
-from os.path import abspath
+from os.path import abspath, basename, join
 
+from emantomo import Plugin
+from emantomo.constants import PROC_NORMALIZE
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
-
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
-
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_EMAN
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
-
-from emantomo.constants import *
-
-import tomo.constants as const
 
 # Tomogram type constants for particle extraction
 SAME_AS_PICKING = 0
 OTHER = 1
+
 
 class OutputExtraction(enum.Enum):
     subtomograms = SetOfSubTomograms
@@ -147,10 +145,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             with open(self.coordsFileName, "w") as out:
                 coords = self.inputCoordinates.get()
                 for coord3D in coords.iterCoordinates(volume=tomo):
-                    if os.path.basename(tomo.getFileName()) == os.path.basename(coord3D.getVolName()):
-                        out.write("%d\t%d\t%d\n" % (coord3D.getX(const.BOTTOM_LEFT_CORNER) * scale,
-                                                    coord3D.getY(const.BOTTOM_LEFT_CORNER) * scale,
-                                                    coord3D.getZ(const.BOTTOM_LEFT_CORNER) * scale))
+                    if basename(tomo.getFileName()) == basename(coord3D.getVolName()):
+                        out.write("%d\t%d\t%d\n" % (coord3D.getX(BOTTOM_LEFT_CORNER) * scale,
+                                                    coord3D.getY(BOTTOM_LEFT_CORNER) * scale,
+                                                    coord3D.getZ(BOTTOM_LEFT_CORNER) * scale))
                         newCoord = coord3D.clone()
                         newCoord.setVolume(coord3D.getVolume())
                         coordDict.append(newCoord)
@@ -162,7 +160,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def extractParticles(self):
         for tomo in self.tomoFiles:
-            args = '%s ' % os.path.abspath(tomo)
+            args = '%s ' % abspath(tomo)
             args += "--coords %s --boxsize %i" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
             if self.doInvert:
                 args += ' --invert'
@@ -170,15 +168,15 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 args += ' --normproc %s' % self.getEnumText('normproc')
             # args += ' --cshrink %i' % (samplingRateTomo / samplingRateCoord)
 
-            program = emantomo.Plugin.getProgram('e2spt_boxer_old.py')
+            program = Plugin.getProgram('e2spt_boxer_old.py')
             self.runJob(program, args, cwd=self._getExtraPath(),
                         numberOfMpi=1, numberOfThreads=1)
-            moveFile(self._getExtraPath(os.path.join('sptboxer_01', 'basename.hdf')),
+            moveFile(self._getExtraPath(join('sptboxer_01', 'basename.hdf')),
                      self._getExtraPath(pwutils.replaceBaseExt(tomo, 'hdf')))
             cleanPath(self._getExtraPath("sptboxer_01"))
 
     def convertOutput(self):
-        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        program = Plugin.getProgram('e2proc3d.py')
         for hdfFile in glob.glob(self._getExtraPath('*.hdf')):
             args = ' --unstacking'
             args += ' %s' % abspath(hdfFile)
@@ -207,14 +205,14 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
-                if os.path.basename(tomoFile) == os.path.basename(item.getFileName()):
+                if basename(tomoFile) == basename(item.getFileName()):
                     coordSet = self.lines[ind]
                     outputSet, counter = self.readSetOfSubTomograms(tomoFile,
                                                                     outputSubTomogramsSet,
                                                                     coordSet,
                                                                     item.getObjId(), factor, counter)
 
-        self._defineOutputs(**{self._possibleOutputs.subtomograms.name:outputSet})
+        self._defineOutputs(**{OutputExtraction.subtomograms.name:outputSet})
         self._defineSourceRelation(self.inputCoordinates, outputSet)
 
     # --------------------------- INFO functions --------------------------------
@@ -362,7 +360,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             transformation.setShifts(factor * shift_x,
                                      factor * shift_y,
                                      factor * shift_z)
-            subtomogram.setTransform(transformation, convention=const.TR_EMAN)
+            subtomogram.setTransform(transformation, convention=TR_EMAN)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
             counter += 1
