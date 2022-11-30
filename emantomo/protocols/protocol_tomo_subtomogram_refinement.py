@@ -36,13 +36,10 @@ from pwem.protocols import EMProtocol
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms, emanFSCsToScipion
 import emantomo
 import pwem.constants as emcts
-from pyworkflow.utils import removeBaseExt, createLink
+from pyworkflow.utils import createLink
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from .. import SCRATCHDIR
-from ..constants import SUBTOMOGRAMS_DIR
-
-SAME_AS_PICKING = 0
+from ..constants import SUBTOMOGRAMS_DIR, SPT_00
 
 
 class EmanTomoRefinementOutputs(enum.Enum):
@@ -67,7 +64,6 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     _outputClassName = 'SubTomogramRefinement'
     _label = 'subtomogram refinement'
     _devStatus = BETA
-    OUTPUT_DIR = "spt_00"
     _possibleOutputs = EmanTomoRefinementOutputs
 
     def __init__(self, **kwargs):
@@ -158,6 +154,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.refinementSubtomogram)
         # TODO: Set and show the output
+        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
@@ -178,7 +175,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         args = "--apix %f %s %s" % (sampling_rate, self.newFn, self.newFn)
         self.runJob(program, args)
         self.refFileIn = self.inputRef.get().getFileName()
-        self.refFileOut = self._getExtraPath(removeBaseExt(self.refFileIn) + '.hdf')
+        self.refFileOut = self._getExtraPath('refVol.hdf')
         # The same with the reference volume
         if self.refFileIn.endswith('.mrc'):
             args = "--apix %f %s %s" % (sampling_rate, self.refFileIn, self.refFileOut)
@@ -187,7 +184,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             createLink(self.refFileIn, self.refFileOut)
 
     def refinementSubtomogram(self):
-        """ Run the Subtomogram refinement. """
+        """Run the Subtomogram refinement. """
         args = ' %s' % abspath(self.newFn)
         args += ' --verbose=9'
         args += (' --reference=%s ' % abspath(self.refFileOut))
@@ -196,7 +193,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         args += ' --pkeep=%f ' % self.pkeep.get()
         args += ' --sym=%s ' % self.sym.get()
         args += ' --maxtilt=%s ' % self.maxtilt
-        args += ' --path=%s ' % self._getExtraPath()  #abspath(self.getOutputPath())
+        args += ' --path=%s ' % abspath(self.getOutputPath())
         args += ' --niter=%d' % self.niter.get()
         if self.goldcontinue:
             args += ' --goldcontinue '
@@ -217,34 +214,10 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
         self.runJob(program, args)
 
+    def convertOutputStep(self):
         self.hdfToMrc("threed_\d+.hdf", self.getAverageFn())
         self.hdfToMrc("threed_\d+_even.hdf", self.getEvenFn())
         self.hdfToMrc("threed_\d+_odd.hdf", self.getOddFn())
-
-    def hdfToMrc(self, pattern, mrcName):
-        # Fix the sampling rate as it might be set wrong
-        program = emantomo.Plugin.getProgram('e2proc3d.py')
-        lastImage = self.getLastFromOutputPath(pattern)
-        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
-                                    lastImage, mrcName)
-        self.runJob(program, args)
-
-    def getAverageFn(self):
-        return self._getExtraPath("Average_refined.mrc")
-
-    def getEvenFn(self):
-        return self._getExtraPath("even.mrc")
-
-    def getOddFn(self):
-        return self._getExtraPath("odd.mrc")
-
-    def getLastFromOutputPath(self, pattern):
-        threedPaths = glob(self.getOutputPath("*"))
-        imagePaths = sorted(path for path in threedPaths if re.match(pattern, basename(path)))
-        if not imagePaths:
-            raise Exception("No file in output directory matches pattern: %s" % pattern)
-        else:
-            return imagePaths[-1]
 
     def createOutputStep(self):
         inputSetOfSubTomograms = self.inputSetOfSubTomogram.get()
@@ -274,31 +247,9 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)
         self._defineSourceRelation(self.inputSetOfSubTomogram, outputSetOfSubTomograms)
 
-    def getOutputPath(self, *args):
-        return join(self._getExtraPath(self.OUTPUT_DIR, *args))
-
-    def getOutputFile(self, folderpattern, folder, files, pattern):
-        pattern = "^" + folderpattern + pattern
-        outputList = list()
-        for file in files:
-            if re.match(pattern, file) is not None:
-                outputList.append(file.replace(folder, ""))
-        lastIteration = max(re.findall(r'\d+', ''.join(outputList)))
-
-        output = [file for file in outputList if lastIteration in file]
-        return folder + output.pop()
-
-    def getLastOutputFolder(self, files):
-        folder = "./spt_"
-        validFolders = [file for file in files if folder in file]
-        folderSuffix = max(re.findall(r'\d+', ''.join(validFolders)))
-        folder = folder + folderSuffix
-        return folder
-
     # --------------- INFO functions -------------------------
     def _summary(self):
-        summary = []
-        summary.append("Set Of SubTomograms source: %s" % (self.inputSetOfSubTomogram.get().getFileName()))
+        summary = ["Subtomograms source: %s" % (self.inputSetOfSubTomogram.get().getFileName())]
 
         if self.inputRef.get() is not None:
             summary.append("Referenced Tomograms source: %s" % (self.inputRef.get().getFileName()))
@@ -317,3 +268,52 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             "A total of %d particles of dimensions %s were used"
             % (inputSetOfSubTomgrams.getSize(), inputSetOfSubTomgrams.getDimensions()),
         ]
+
+    # --------------------------- UTILS functions ------------------------------
+    def hdfToMrc(self, pattern, mrcName):
+        # Fix the sampling rate as it might be set wrong
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        lastImage = self.getLastFromOutputPath(pattern)
+        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
+                                    lastImage, mrcName)
+        self.runJob(program, args)
+
+    def getAverageFn(self):
+        return self._getExtraPath("Average_refined.mrc")
+
+    def getEvenFn(self):
+        return self._getExtraPath("even.mrc")
+
+    def getOddFn(self):
+        return self._getExtraPath("odd.mrc")
+
+    def getLastFromOutputPath(self, pattern):
+        threedPaths = glob(self.getOutputPath("*"))
+        imagePaths = sorted(path for path in threedPaths if re.match(pattern, basename(path)))
+        if not imagePaths:
+            raise Exception("No file in output directory matches pattern: %s" % pattern)
+        else:
+            return imagePaths[-1]
+
+    def getOutputPath(self, *args):
+        return join(self._getExtraPath(SPT_00, *args))
+
+    # @staticmethod
+    # def getOutputFile(folderpattern, folder, files, pattern):
+    #     pattern = "^" + folderpattern + pattern
+    #     outputList = list()
+    #     for file in files:
+    #         if re.match(pattern, file) is not None:
+    #             outputList.append(file.replace(folder, ""))
+    #     lastIteration = max(re.findall(r'\d+', ''.join(outputList)))
+    #
+    #     output = [file for file in outputList if lastIteration in file]
+    #     return folder + output.pop()
+    #
+    # @staticmethod
+    # def getLastOutputFolder(files):
+    #     folder = "./spt_"
+    #     validFolders = [file for file in files if folder in file]
+    #     folderSuffix = max(re.findall(r'\d+', ''.join(validFolders)))
+    #     folder = folder + folderSuffix
+    #     return folder
