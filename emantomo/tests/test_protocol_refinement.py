@@ -23,16 +23,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
-
+from os.path import exists
 import numpy as np
+from xmipp3.constants import MASK3D_CYLINDER
+from xmipp3.protocols import XmippProtCreateMask3D
+from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
 
 from imod.protocols import ProtImodTomoNormalization
 from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
 from pyworkflow.tests import setupTestProject, DataSet, BaseTest
 from pyworkflow.utils import magentaStr
 from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
-from . import EMD_10439, DataSetEmd10439
+from tomo.tests import EMD_10439, DataSetEmd10439
 from ..constants import EMAN_COVERAGE, EMAN_SCORE
 import tomo.protocols
 from tomo.constants import TR_EMAN
@@ -46,7 +48,7 @@ class TestEmanTomoSubtomogramRefinement(BaseTest):
     """
 
     nParticles = 39
-    boxSize = 32
+    boxSize = 44
     origSRate = 13.68
     ds = DataSet.getDataSet(EMD_10439)
 
@@ -109,79 +111,93 @@ class TestEmanTomoSubtomogramRefinement(BaseTest):
 
         return subtomosExtracted, avgSubtomo
 
-    def _performFinalValidation(self, protTomoSubtomogramRefinement):
-        outputSetOfSubTomograms = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.subtomograms.name)
-        averageSubTomogram = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.subtomogramAverage.name)
+    def testSubTomoRefinement(self):
+        protTomoSubtomogramRefinement = self._runTomoSubtomogramRefinement()
+        self._performFinalValidation(protTomoSubtomogramRefinement)
 
-        self.assertTrue(os.path.exists(averageSubTomogram.getFileName()))
+    def testSubTomoRefinementWithMask(self):
+        protTomoSubtomogramRefinement = self._runTomoSubtomogramRefinement(mask=self._runCreate3dMask())
+        self._performFinalValidation(protTomoSubtomogramRefinement)
 
-        # Check average is a mrc file
-        self.assertTrue(averageSubTomogram.getFileName().endswith(".mrc"))
-
-        self.assertEqual(averageSubTomogram.getSamplingRate(), self.origSRate)
-
-        self.assertEqual(outputSetOfSubTomograms.getDimensions(), (self.boxSize, self.boxSize, self.boxSize))
-        self.assertEqual(outputSetOfSubTomograms.getSize(), self.nParticles)
-        self.assertEqual(outputSetOfSubTomograms.getCoordinates3D().getSize(), self.nParticles)
-
-        for subTomogram in outputSetOfSubTomograms:
-            self.assertEqual(subTomogram.getSamplingRate(), self.origSRate)
-            self.assertTrue(hasattr(subTomogram, EMAN_COVERAGE))
-            self.assertTrue(hasattr(subTomogram, EMAN_SCORE))
-            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
-            self.assertEqual(matrix.shape, (4, 4))
-            self.assertFalse((matrix == np.eye(4)).all())
-
-        # FSCs
-        fscs = getattr(protTomoSubtomogramRefinement, EmanTomoRefinementOutputs.FSCs.name)
-        self.assertSetSize(fscs, 3, msg="FSCs not registered properly")
-
-    def _runTomoSubtomogramRefinement(self, niter=2, mass=500.0, threads=1, pkeep=1, goldstandard=-1,
-                                      goldcontinue=False, sym="c1", localfilter=False, maxtilt=90.0, refVol=None):
+    def _runTomoSubtomogramRefinement(self, mask=None):
 
         print(magentaStr("\n==> Refining the subtomograms:"))
         inputDict = {'inputSetOfSubTomogram': self.subtomosExtracted,
-                     'niter': niter,
-                     'mass': mass,
-                     'threads': threads,
-                     'pkeep': pkeep,
-                     'goldstandard': goldstandard,
-                     'goldcontinue': goldcontinue,
-                     'sym': sym,
-                     'localfilter': localfilter,
-                     'maxtilt': maxtilt,
+                     'inputRef': self.avgSubtomo,
+                     'pkeep': 1,
+                     'niter': 2,
                      'numberOfThreads': 10}
 
-        if refVol:
-            inputDict['inputRef'] = refVol
+        objLabel = 'Subtomo refinement'
+        if mask:
+            inputDict['maskFile'] = mask
+            objLabel += ' with mask'
 
         protTomoRefinement = self.newProtocol(EmanProtTomoRefinement, **inputDict)
+        protTomoRefinement.setObjLabel(objLabel)
         self.launchProtocol(protTomoRefinement)
 
         average = getattr(protTomoRefinement, EmanTomoRefinementOutputs.subtomogramAverage.name)
         self.assertIsNotNone(average, "There was a problem with average output")
-        self.assertTrue(os.path.exists(average.getFileName()), "Average %s does not exists" % average.getFileName())
+        self.assertTrue(exists(average.getFileName()), "Average %s does not exists" % average.getFileName())
         self.assertTrue(average.hasHalfMaps(), "Halves not registered")
 
         half1, half2 = average.getHalfMaps().split(',')
-        self.assertTrue(os.path.exists(half1), msg="Average 1st half %s does not exists" % half1)
-        self.assertTrue(os.path.exists(half2), msg="Average 2nd half %s does not exists" % half2)
+        self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
+        self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
 
         self.assertSetSize(getattr(protTomoRefinement, EmanTomoRefinementOutputs.subtomograms.name), None,
                            "There was a problem with particles output")
 
         return protTomoRefinement
 
-    def test_defaultSubTomogramRefinementWithSubTomo(self):
-        protTomoSubtomogramRefinement = self._runTomoSubtomogramRefinement()
-        self._performFinalValidation(protTomoSubtomogramRefinement)
+    def _performFinalValidation(self, protRefineSubtomos):
+        refinedSubtomos = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.subtomograms.name, None)
+        avgSubtomo = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.subtomogramAverage.name, None)
+        testBoxSize = (self.boxSize, self.boxSize, self.boxSize)
 
-        return protTomoSubtomogramRefinement
+        # Generation checking
+        self.assertIsNotNone(refinedSubtomos)
+        self.assertIsNotNone(avgSubtomo)
 
-    def test_defaultSubTomogramRefinementWithVolume(self):
-        # Generate the reference volume averaging the extracted particles
-        # Refine the subtomograms
-        protTomoSubtomogramRefinement = self._runTomoSubtomogramRefinement(refVol=self.avgSubtomo)
-        self._performFinalValidation(protTomoSubtomogramRefinement)
+        # Avg checking
+        self.assertTrue(exists(avgSubtomo.getFileName()))
+        self.assertTrue(avgSubtomo.getFileName().endswith(".mrc"))
+        self.assertEqual(avgSubtomo.getSamplingRate(), self.origSRate)
+        self.assertEqual(avgSubtomo.getDimensions(), testBoxSize)
 
-        return protTomoSubtomogramRefinement
+        # Subtomos checking
+        self.assertEqual(refinedSubtomos.getDimensions(), testBoxSize)
+        self.assertSetSize(refinedSubtomos, self.nParticles, msg='Expected size of the generated subtomograms is '
+                                                                 'different than expected: %i != %i' %
+                                                                 (refinedSubtomos.getSize(), self.nParticles))
+        self.assertEqual(refinedSubtomos.getCoordinates3D().getSize(), self.nParticles)
+        for subTomogram in refinedSubtomos:
+            self.assertEqual(subTomogram.getSamplingRate(), self.origSRate)
+            self.assertTrue(hasattr(subTomogram, EMAN_COVERAGE))
+            self.assertTrue(hasattr(subTomogram, EMAN_SCORE))
+            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
+            self.assertEqual(matrix.shape, (4, 4))
+            self.assertFalse((matrix == np.eye(4)).all())  # Then it contains the angles and shitfs
+
+        # FSCs checking
+        fscs = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.FSCs.name)
+        self.assertSetSize(fscs, 3, msg="FSCs not registered properly")
+
+    @classmethod
+    def _runCreate3dMask(cls):
+        print(magentaStr("\n==> Generating the 3D mask:"))
+        protCreateParticleMask = cls.newProtocol(XmippProtCreateMask3D,
+                                                 source=SOURCE_GEOMETRY,
+                                                 samplingRate=cls.origSRate,
+                                                 size=cls.boxSize,
+                                                 geo=MASK3D_CYLINDER,
+                                                 radius=12,
+                                                 shiftCenter=True,
+                                                 centerZ=6,
+                                                 height=30,
+                                                 doSmooth=True)
+        cls.launchProtocol(protCreateParticleMask)
+        genMask = getattr(protCreateParticleMask, 'outputMask', None)
+        cls.assertIsNotNone(genMask, 'the 3D mask was not generated')
+        return genMask
