@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Laura del Cano (ldelcano@cnb.csic.es)
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -28,79 +28,29 @@ import numpy as np
 from xmipp3.constants import MASK3D_CYLINDER
 from xmipp3.protocols import XmippProtCreateMask3D
 from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
-
-from imod.protocols import ProtImodTomoNormalization
-from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
-from pyworkflow.tests import setupTestProject, DataSet, BaseTest
 from pyworkflow.utils import magentaStr
-from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
-from tomo.tests import EMD_10439, DataSetEmd10439
+from .test_eman_base import TestEmantomoBase
 from ..constants import EMAN_COVERAGE, EMAN_SCORE
-import tomo.protocols
 from tomo.constants import TR_EMAN
 from ..protocols.protocol_average_subtomos import OutputsAverageSubtomos, EmanProtSubTomoAverage
-from ..protocols.protocol_tomo_extraction_from_tomo import OutputExtraction, SAME_AS_PICKING, EmanProtTomoExtraction
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
 
 
-class TestEmanTomoSubtomogramRefinement(BaseTest):
+class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
     """This class check if the protocol Subtomogram refinement works properly.
     """
 
-    nParticles = 39
-    boxSize = 44
-    origSRate = 13.68
-    ds = DataSet.getDataSet(EMD_10439)
-
     @classmethod
     def setUpClass(cls):
-        setupTestProject(cls)
+        super().setUpClass()
         cls.subtomosExtracted, cls.avgSubtomo = cls._runPreviousProtocols()
 
     @classmethod
     def _runPreviousProtocols(cls):
-        # Import tomograms
-        print(magentaStr("\n==> Importing the tomograms:"))
-        protImportTomogram = cls.newProtocol(tomo.protocols.ProtImportTomograms,
-                                             filesPath=cls.ds.getFile(DataSetEmd10439.tomoEmd10439.name),
-                                             samplingRate=cls.origSRate, )
-
-        cls.launchProtocol(protImportTomogram)
-        tomoImported = protImportTomogram.outputTomograms
-        cls.assertIsNotNone(tomoImported, "There was a problem with tomogram output")
-
-        # Import coordinates
-        print(magentaStr("\n==> Importing the 3D coordinates:"))
-        protImportCoordinates3d = cls.newProtocol(tomo.protocols.ProtImportCoordinates3DFromScipion,
-                                                  sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
-                                                  importTomograms=tomoImported,
-                                                  boxSize=cls.boxSize)
-
-        cls.launchProtocol(protImportCoordinates3d)
-        coordsImported = protImportCoordinates3d.outputCoordinates
-        cls.assertIsNotNone(coordsImported, "There was a problem with the 3D coordinates output")
-
-        # Bin the tomogram to make it smaller
-        print(magentaStr("\n==> Tomogram normalization:"))
-        protTomoNormalization = cls.newProtocol(ProtImodTomoNormalization,
-                                                inputSetOfTomograms=protImportTomogram.outputTomograms,
-                                                binning=2)
-
-        cls.launchProtocol(protTomoNormalization)
-        tomosBinned = getattr(protTomoNormalization, OUTPUT_TOMOGRAMS_NAME, None)
-        cls.assertIsNotNone(tomosBinned, 'No tomograms were genetated in tomo normalization.')
-
+        tomoImported = super().runImportTomograms()  # Import tomograms
+        coordsImported = super().runImport3dCoords(tomoImported)  # Import coordinates
         # Extract subtomograms
-        print(magentaStr("\n==> Extracting the subtomograms:"))
-        protTomoExtraction = cls.newProtocol(EmanProtTomoExtraction,
-                                             inputTomograms=tomosBinned,
-                                             inputCoordinates=coordsImported,
-                                             tomoSource=SAME_AS_PICKING,
-                                             boxSize=cls.boxSize)
-
-        cls.launchProtocol(protTomoExtraction)
-        subtomosExtracted = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        cls.assertIsNotNone(subtomosExtracted, "There was a problem with the subtomograms extraction")
+        subtomosExtracted = super().runExtractSubtomograms(coordsImported, tomograms=tomoImported, boxSize=cls.boxSize)
 
         # Average the subtomograms
         print(magentaStr("\n==> Averaging the subtomograms:"))
@@ -108,7 +58,6 @@ class TestEmanTomoSubtomogramRefinement(BaseTest):
         cls.launchProtocol(protAvgSubtomo)
         avgSubtomo = getattr(protAvgSubtomo, OutputsAverageSubtomos.averageSubTomos.name, None)
         cls.assertIsNotNone(avgSubtomo, "There was a problem calculating the average subtomogram")
-
         return subtomosExtracted, avgSubtomo
 
     def testSubTomoRefinement(self):

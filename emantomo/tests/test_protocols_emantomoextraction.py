@@ -1,6 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:    Laura del Cano (ldelcano@cnb.csic.es)
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
 # * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -23,104 +23,113 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from emantomo.tests.test_protocols_emantomo import TestEmanTomoBase
-from pyworkflow.tests import (setupTestProject)
-from tomo.protocols.protocol_import_coordinates import IMPORT_FROM_EMAN
-from ..protocols import *
-import tomo.protocols
+from os.path import exists
+import numpy as np
 
-from ..protocols.protocol_tomo_extraction_from_tomo import OutputExtraction
+from tomo.constants import TR_EMAN
+from .test_eman_base import TestEmantomoBase
+from ..protocols.protocol_tomo_extraction_from_tomo import OTHER
 
 
-class TestEmanTomoExtraction(TestEmanTomoBase):
+class TestEmanTomoExtraction(TestEmantomoBase):
     """This class check if the protocol to extract subtomograms
     in Eman works properly.
     """
 
+    tomosImported = None
+    tomosBinned = None
+    coordsImported = None
+
     @classmethod
     def setUpClass(cls):
-        setupTestProject(cls)
-        TestEmanTomoBase.setData()
+        super().setUpClass()
+        cls.tomosImported, cls.coordsImported, cls.tomosBinned = cls._runPreviousProtocols()
+        cls.coordExtremeValsNoBin = super().getMinAndMaxCoordValuesFromSet(cls.coordsImported,
+                                                                           cls.tomosImported.getFirstItem())
 
-    def _runTomoExtraction(self, tomoSource=0, doInvert=False, doNormalize=False, boxSize=32, downFactor=1):
-        protImportTomogram = self.newProtocol(tomo.protocols.ProtImportTomograms,
-                                              filesPath=self.tomogram,
-                                              samplingRate=5)
-
-        self.launchProtocol(protImportTomogram)
-
-        protImportCoordinates3d = self.newProtocol(tomo.protocols.ProtImportCoordinates3D,
-                                                   auto=IMPORT_FROM_EMAN,
-                                                   filesPath=self.coords3D,
-                                                   importTomograms=protImportTomogram.outputTomograms,
-                                                   filesPattern='', boxSize=32,
-                                                   samplingRate=5)
-
-        self.launchProtocol(protImportCoordinates3d)
-        self.assertSetSize(protImportTomogram.outputTomograms, 1,
-                           "There was a problem with tomogram output")
-        self.assertSetSize(protImportCoordinates3d.outputCoordinates, 5,
-                           "There was a problem with coordinates 3d output")
-
-        if tomoSource == 1:
-            protTomoExtraction = self.newProtocol(EmanProtTomoExtraction,
-                                                  inputTomograms=protImportTomogram.outputTomograms,
-                                                  inputCoordinates=protImportCoordinates3d.outputCoordinates,
-                                                  tomoSource=tomoSource,
-                                                  doInvert=doInvert,
-                                                  doNormalize=doNormalize,
-                                                  boxSize=boxSize,
-                                                  downFactor=downFactor)
-        else:
-            protTomoExtraction = self.newProtocol(EmanProtTomoExtraction,
-                                                  inputCoordinates=protImportCoordinates3d.outputCoordinates,
-                                                  tomoSource=tomoSource,
-                                                  doInvert=doInvert,
-                                                  doNormalize=doNormalize,
-                                                  boxSize=boxSize,
-                                                  downFactor=downFactor)
-        self.launchProtocol(protTomoExtraction)
-        self.assertSetSize(getattr(protTomoExtraction, OutputExtraction.subtomograms.name), 5,
-                           "There was a problem with SetOfSubtomogram output")
-        return protTomoExtraction
+    @classmethod
+    def _runPreviousProtocols(cls):
+        tomoImported = super().runImportTomograms()  # Import tomograms
+        coordsImported = super().runImport3dCoords(tomoImported)  # Import coordinates
+        tomosBinned = super().runBinTomograms(tomoImported)  # Bin the tomogram to make it smaller
+        return tomoImported, coordsImported, tomosBinned
 
     def test_extractParticlesSameAsPicking(self):
-        protTomoExtraction = self._runTomoExtraction()
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
+        subtomosExtracted = super().runExtractSubtomograms(self.coordsImported, boxSize=super().boxSize)
+        self.checkExtractedSubtomos(subtomosExtracted,
+                                    setSize=super().nParticles,
+                                    sRate=super().origSRate,
+                                    boxSize=super().boxSize,
+                                    tomo4extraction=self.tomosImported.getFirstItem())
 
-    def test_extractParticlesOther(self):
-        protTomoExtraction = self._runTomoExtraction(tomoSource=1)
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
+    def test_extractParticlesOtherTomoSource(self):
+        subtomosExtracted = super().runExtractSubtomograms(self.coordsImported,
+                                                           tomoSource=OTHER,
+                                                           tomograms=self.tomosBinned,
+                                                           boxSize=super().boxSize)
 
-    def test_extractParticlesWithDoInvert(self):
-        protTomoExtraction = self._runTomoExtraction(doInvert=True)
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
+        self.checkExtractedSubtomos(subtomosExtracted,
+                                    setSize=super().nParticles,
+                                    sRate=super().origSRate * 2,
+                                    boxSize=super().boxSize,
+                                    tomo4extraction=self.tomosBinned.getFirstItem())
 
-    def test_extractParticlesWithDoNormalize(self):
-        protTomoExtraction = self._runTomoExtraction(doNormalize=True)
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
+    # def test_extractParticlesWithDoInvert(self):
+    #     protTomoExtraction = self._runTomoExtraction(doInvert=True)
+    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
+    #     self.checkExtractedSubtomos(output)
+    #
+    # def test_extractParticlesWithDoNormalize(self):
+    #     protTomoExtraction = self._runTomoExtraction(doNormalize=True)
+    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
+    #     self.checkExtractedSubtomos(output)
+    #
+    # def test_extractParticlesModifiedDownFactor(self):
+    #     protTomoExtraction = self._runTomoExtraction(downFactor=2)
+    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
+    #     self.checkExtractedSubtomos(output)
+    #
+    # def test_extractParticlesModifiedBoxSize(self):
+    #     protTomoExtraction = self._runTomoExtraction(boxSize=64)
+    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
+    #     self.checkExtractedSubtomos(output)
+    #
+    # def test_extractParticlesWithAllOptions(self):
+    #     protTomoExtraction = self._runTomoExtraction(boxSize=64, downFactor=2, doNormalize=True, doInvert=True)
+    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
+    #     self.checkExtractedSubtomos(output)
 
-    def test_extractParticlesModifiedDownFactor(self):
-        protTomoExtraction = self._runTomoExtraction(downFactor=2)
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
+    def checkExtractedSubtomos(self, subtomograms, setSize=-1, sRate=-1, boxSize=-1, tomo4extraction=None):
+        scaleFactor = subtomograms.getSamplingRate() / super().origSRate
+        # Check the critical properties of the set
+        self.assertSetSize(subtomograms, setSize)
+        self.assertEqual(subtomograms.getSamplingRate(), sRate)
+        self.assertEqual(subtomograms.getDimensions(), (boxSize, boxSize, boxSize))
+        self.assertTrue(subtomograms.hasCoordinates3D())
+        # Check the subtomograms that compose the set
+        for subtomo in subtomograms:
+            subtomoTr = subtomo.getTransform(convention=TR_EMAN)
+            subtomoMatrix = subtomoTr.getMatrix()
+            coordinate = subtomo.getCoordinate3D()
+            coordTr = coordinate._eulerMatrix
+            coordMatrix = coordinate.getMatrix(convention=TR_EMAN)
+            self.assertTrue(exists(subtomo.getFileName()))
+            self.assertEqual(subtomo.getSamplingRate(), sRate)
+            # The shifts in the subtomograms transformation matrix should have been scaled properly
+            super().checkShiftsScaling(coordTr, subtomoTr, scaleFactor)
+            # Imported coordinates were picked using PySeg, so they must have an orientation
+            super().check3dTransformMatrix(subtomoMatrix)
+            # Also, at this point the transformation matrix should be the same as the coordinate matrix as the angles
+            # have not been refined yet
+            super().check3dTransformMatrix(coordMatrix)
+            self.assertTrue(np.array_equal(subtomoMatrix, coordMatrix))
+            # Check the tomoId
+            self.assertEqual(coordinate.getTomoId(), tomo4extraction.getTsId())
 
-    def test_extractParticlesModifiedBoxSize(self):
-        protTomoExtraction = self._runTomoExtraction(boxSize=64)
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
-
-    def test_extractParticlesWithAllOptions(self):
-        protTomoExtraction = self._runTomoExtraction(boxSize=64, downFactor=2, doNormalize=True, doInvert=True)
-        output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-        self.assessOutput(output)
-
-    def assessOutput(self, outputSet, size=5):
-
-        self.assertSetSize(outputSet, size)
-        self.assertTrue(outputSet.hasCoordinates3D())
+        # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
+        # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
+        # from the plugin scipion-em-tomo
+        currentCoordsExtremes = super().getMinAndMaxCoordValuesFromSet(subtomograms, tomo4extraction)
+        unbinnedCoordsExtremes = self.coordExtremeValsNoBin
+        self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
 
