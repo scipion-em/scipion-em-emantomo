@@ -25,8 +25,10 @@
 # **************************************************************************
 from os.path import exists
 import numpy as np
-
+from pyworkflow.utils import magentaStr
 from tomo.constants import TR_EMAN
+from tomo.protocols import ProtTomoExtractCoords
+from tomo.protocols.protocol_extract_coordinates import Output3dCoordExtraction
 from .test_eman_base import TestEmantomoBase
 from ..protocols.protocol_tomo_extraction_from_tomo import OTHER
 
@@ -43,61 +45,35 @@ class TestEmanTomoExtraction(TestEmantomoBase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.tomosImported, cls.coordsImported, cls.tomosBinned = cls._runPreviousProtocols()
-        cls.coordExtremeValsNoBin = super().getMinAndMaxCoordValuesFromSet(cls.coordsImported,
-                                                                           cls.tomosImported.getFirstItem())
+        cls.tomosImported, cls.coordsImported, cls.tomosBinned = cls.runPreviousProtocols()
+        cls.coordExtremeValsBin2 = super().getMinAndMaxCoordValuesFromSet(cls.coordsImported)
+        cls.subtomosSameAsPicking = super().runExtractSubtomograms(cls.coordsImported, boxSize=super().boxSize / 2)
+        cls.subtomosAnotherTomo = super().runExtractSubtomograms(cls.coordsImported,
+                                                                 tomoSource=OTHER,
+                                                                 tomograms=cls.tomosImported,
+                                                                 boxSize=super().boxSize)
 
     @classmethod
-    def _runPreviousProtocols(cls):
+    def runPreviousProtocols(cls):
         tomoImported = super().runImportTomograms()  # Import tomograms
-        coordsImported = super().runImport3dCoords(tomoImported)  # Import coordinates
         tomosBinned = super().runBinTomograms(tomoImported)  # Bin the tomogram to make it smaller
+        coordsImported = super().runImport3dCoords(tomosBinned)  # Import coordinates
+
         return tomoImported, coordsImported, tomosBinned
 
-    def test_extractParticlesSameAsPicking(self):
-        subtomosExtracted = super().runExtractSubtomograms(self.coordsImported, boxSize=super().boxSize)
-        self.checkExtractedSubtomos(subtomosExtracted,
-                                    setSize=super().nParticles,
-                                    sRate=super().origSRate,
-                                    boxSize=super().boxSize,
-                                    tomo4extraction=self.tomosImported.getFirstItem())
+    @classmethod
+    def runExtract3dCoords(cls, inputSubTomos=None, inputTomos=None, boxSize=None):
+        # Bin the tomogram to make it smaller
+        print(magentaStr("\n==> Extracting the 3D coordinates:"))
+        protExtract3dCoords = cls.newProtocol(ProtTomoExtractCoords,
+                                              inputSubTomos=inputSubTomos,
+                                              inputTomos=inputTomos,
+                                              boxSize=boxSize)
 
-    def test_extractParticlesOtherTomoSource(self):
-        subtomosExtracted = super().runExtractSubtomograms(self.coordsImported,
-                                                           tomoSource=OTHER,
-                                                           tomograms=self.tomosBinned,
-                                                           boxSize=super().boxSize)
-
-        self.checkExtractedSubtomos(subtomosExtracted,
-                                    setSize=super().nParticles,
-                                    sRate=super().origSRate * 2,
-                                    boxSize=super().boxSize,
-                                    tomo4extraction=self.tomosBinned.getFirstItem())
-
-    # def test_extractParticlesWithDoInvert(self):
-    #     protTomoExtraction = self._runTomoExtraction(doInvert=True)
-    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-    #     self.checkExtractedSubtomos(output)
-    #
-    # def test_extractParticlesWithDoNormalize(self):
-    #     protTomoExtraction = self._runTomoExtraction(doNormalize=True)
-    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-    #     self.checkExtractedSubtomos(output)
-    #
-    # def test_extractParticlesModifiedDownFactor(self):
-    #     protTomoExtraction = self._runTomoExtraction(downFactor=2)
-    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-    #     self.checkExtractedSubtomos(output)
-    #
-    # def test_extractParticlesModifiedBoxSize(self):
-    #     protTomoExtraction = self._runTomoExtraction(boxSize=64)
-    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-    #     self.checkExtractedSubtomos(output)
-    #
-    # def test_extractParticlesWithAllOptions(self):
-    #     protTomoExtraction = self._runTomoExtraction(boxSize=64, downFactor=2, doNormalize=True, doInvert=True)
-    #     output = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
-    #     self.checkExtractedSubtomos(output)
+        cls.launchProtocol(protExtract3dCoords)
+        coordsExtracted = getattr(protExtract3dCoords, Output3dCoordExtraction.coordinates3d.name, None)
+        cls.assertIsNotNone(coordsExtracted, "There was a problem with the 3d coordinates extraction")
+        return coordsExtracted
 
     def checkExtractedSubtomos(self, subtomograms, setSize=-1, sRate=-1, boxSize=-1, tomo4extraction=None):
         scaleFactor = subtomograms.getSamplingRate() / super().origSRate
@@ -129,7 +105,98 @@ class TestEmanTomoExtraction(TestEmantomoBase):
         # Check that the coordinates remain the same (the scaling is only applied to the shifts of the
         # transformation matrix, while the coordinates are only scaled in the coordinates extraction protocol
         # from the plugin scipion-em-tomo
-        currentCoordsExtremes = super().getMinAndMaxCoordValuesFromSet(subtomograms, tomo4extraction)
-        unbinnedCoordsExtremes = self.coordExtremeValsNoBin
+        currentCoordsExtremes = super().getMinAndMaxCoordValuesFromSet(subtomograms)
+        unbinnedCoordsExtremes = self.coordExtremeValsBin2
         self.assertTrue(np.array_equal(currentCoordsExtremes, unbinnedCoordsExtremes))
+
+    def checkExtracted3dCoordinates(self, extractedCoords, coordScaleFactor=1.0, shiftsScaleFactor=1.0,
+                                    tomoId=None, tomoSRate=-1):
+        binned2CoordsExtremes = self.coordExtremeValsBin2
+        currentCoordsExtremes = super().getMinAndMaxCoordValuesFromSet(extractedCoords)
+        # Check the coordinate extremes
+        self.assertTrue(np.array_equal(currentCoordsExtremes, coordScaleFactor * binned2CoordsExtremes))
+        # Check the sampling rate
+        self.assertEqual(extractedCoords.getSamplingRate(), tomoSRate)
+        # Check the set size
+        self.assertSetSize(extractedCoords, super().nParticles)
+        # Check the box size
+        self.assertEqual(extractedCoords.getBoxSize(), super().boxSize)
+        # Other checks per coordinate
+        for inSubtomos, outCoord in zip(self.subtomosSameAsPicking, extractedCoords):
+            # Check the transformation matrices and shifts
+            subtomoTr = inSubtomos.getTransform(convention=TR_EMAN)
+            coordTr = outCoord._eulerMatrix
+            super().check3dTransformMatrix(outCoord.getMatrix(convention=TR_EMAN))
+            super().checkShiftsScaling(subtomoTr, coordTr, shiftsScaleFactor)
+            # Check the tomoId
+            self.assertEqual(outCoord.getTomoId(), tomoId)
+
+    def test_extractParticlesSameAsPicking(self):
+        # The imported 3d coordinates were picked from the binned tomogram
+        self.checkExtractedSubtomos(self.subtomosSameAsPicking,
+                                    setSize=super().nParticles,
+                                    sRate=super().origSRate * 2,
+                                    boxSize=super().boxSize / 2,
+                                    tomo4extraction=self.tomosImported.getFirstItem())
+
+    def test_extractParticlesOtherTomoSource(self):
+        self.checkExtractedSubtomos(self.subtomosAnotherTomo,
+                                    setSize=super().nParticles,
+                                    sRate=super().origSRate,
+                                    boxSize=super().boxSize,
+                                    tomo4extraction=self.tomosBinned.getFirstItem())
+
+    # __________________________________________________________________________________________________________________
+    # NOTE:
+    # Although the coordinates extraction is not a part of the plugin emantomo, a part of its functionality
+    # will be tested here as it has a very direct relation with the particle extraction. In the coordinates
+    # extraction a new set of coordinates is generated, so in this case not only the shifts but the coordinates
+    # are expected to be scaled properly according to the sampling rate of the introduced tomograms.
+    # __________________________________________________________________________________________________________________
+
+    def test_extract3dCoordsToBiggerTomo(self):
+        """Subtomos extracted from the same tomo used for the picking, which was at bin 2. Coordinates will
+        be extracted to the original size (unbinned)."""
+        extractedCoords = self.runExtract3dCoords(inputSubTomos=self.subtomosSameAsPicking,
+                                                  inputTomos=self.tomosImported,
+                                                  boxSize=super().boxSize)
+
+        self.checkExtracted3dCoordinates(extractedCoords,
+                                         coordScaleFactor=2,
+                                         shiftsScaleFactor=2,
+                                         tomoId=self.tomosImported.getFirstItem().getTsId(),
+                                         tomoSRate=super().origSRate)
+
+    def test_extract3dCoordsToSmallerTomo(self):
+        """Subtomos extracted from the another tomo source, which was unbinned. Coordinates will
+        be extracted to bin 2."""
+        extractedCoords = self.runExtract3dCoords(inputSubTomos=self.subtomosAnotherTomo,
+                                                  inputTomos=self.tomosBinned,
+                                                  boxSize=super().boxSize)
+
+        self.checkExtracted3dCoordinates(extractedCoords,
+                                         coordScaleFactor=1,  # They'll remain the same
+                                         shiftsScaleFactor=0.5,
+                                         tomoId=self.tomosImported.getFirstItem().getTsId(),
+                                         tomoSRate=super().origSRate * 2)
+
+    def test_extract3dCoordsToTheSameTomo(self):
+        """Subtomos extracted from the same tomo used for the picking, which was at bin 2. Coordinates will
+               be extracted to the same tomogram."""
+        extractedCoords = self.runExtract3dCoords(inputSubTomos=self.subtomosSameAsPicking,
+                                                  inputTomos=self.tomosBinned,
+                                                  boxSize=super().boxSize)
+
+        self.checkExtracted3dCoordinates(extractedCoords,
+                                         coordScaleFactor=1,
+                                         shiftsScaleFactor=1,
+                                         tomoId=self.tomosImported.getFirstItem().getTsId(),
+                                         tomoSRate=super().origSRate * 2)
+
+
+
+
+
+
+
 

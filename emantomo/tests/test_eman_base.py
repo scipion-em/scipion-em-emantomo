@@ -103,8 +103,8 @@ class TestEmantomoBase(BaseTest):
             protLabel = 'Extraction - another tomo source'
 
         protTomoExtraction = cls.newProtocol(EmanProtTomoExtraction, **argsDict)
-        cls.launchProtocol(protTomoExtraction)
         protTomoExtraction.setObjLabel(protLabel)
+        cls.launchProtocol(protTomoExtraction)
         subtomosExtracted = getattr(protTomoExtraction, OutputExtraction.subtomograms.name, None)
         cls.assertIsNotNone(subtomosExtracted, "There was a problem with the subtomograms extraction")
         return subtomosExtracted
@@ -126,23 +126,15 @@ class TestEmantomoBase(BaseTest):
             self.assertEqual(outShift, scaleFactor * inShift)
 
     @staticmethod
-    def getMinAndMaxCoordValuesFromSet(inSet, inTomo):
+    def getMinAndMaxCoordValuesFromSet(inSet):
         if type(inSet) == SetOfSubTomograms:
             inSet = inSet.getCoordinates3D()
 
-        counter = 0
-        xCoordVector = np.zeros(inSet.getSize())
-        yCoordVector = np.array(xCoordVector, copy=True)
-        zCoordVector = np.array(xCoordVector, copy=True)
-        for coord in inSet.iterCoordinates(volume=inTomo):
-            xCoordVector[counter] = coord.getX(BOTTOM_LEFT_CORNER)
-            yCoordVector[counter] = coord.getY(BOTTOM_LEFT_CORNER)
-            zCoordVector[counter] = coord.getZ(BOTTOM_LEFT_CORNER)
-            counter += 1
-
-        return np.array([np.min(xCoordVector),
-                         np.max(xCoordVector),
-                         np.min(yCoordVector),
-                         np.max(yCoordVector),
-                         np.min(zCoordVector),
-                         np.max(zCoordVector)])
+        dataDict = inSet.aggregate(['MAX'], '_tomoId', ['_x', '_y', '_z'])
+        xcoords, ycoords, zcoords = zip(*[(d['_x'], d['_y'], d['_z']) for d in dataDict])
+        return np.array([min(xcoords),
+                         max(xcoords),
+                         min(ycoords),
+                         max(ycoords),
+                         min(zcoords),
+                         max(zcoords)])

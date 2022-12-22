@@ -26,11 +26,11 @@
 
 from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui import showInfo
-from .protocols import EmanProtTomoExtraction, EmanProtTSExtraction, EmanProtTomoTempMatch, EmanProtTomoResize
+from .protocols import EmanProtTomoExtraction, EmanProtTomoTempMatch, EmanProtTomoResize
 
 
 class EmanTomoExtractionWizard(EmWizard):
-    _targets = [(EmanProtTomoExtraction, ['boxSize']), (EmanProtTSExtraction, ['boxSize'])]
+    _targets = [(EmanProtTomoExtraction, ['boxSize'])]  #, (EmanProtTSExtraction, ['boxSize'])]
 
     def show(self, form):
         tomoExtractProt = form.protocol

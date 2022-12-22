@@ -32,6 +32,7 @@ from emantomo.constants import PROC_NORMALIZE
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
+from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
@@ -89,10 +90,15 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       help='The subtomograms are extracted as a cubic box of this size. '
                            'The wizard selects same box size as picking')
 
-        form.addParam('downFactor', params.FloatParam, default=1.0,
+        form.addParam('downFactor', params.FloatParam,
+                      default=1,
                       label='Downsampling factor',
-                      help='If 1.0 is used, no downsample is applied. '
-                           'Non-integer downsample factors are possible. ')
+                      expertLevel=LEVEL_ADVANCED,
+                      help='It can be used to directly interpolate the extracted subtomograms to '
+                           'another size that may correspond to the size of a tomogram that has not been '
+                           'reconstructed and this way it is not necessary to reconstruct it. '
+                           'If 1.0 is used, no downsampling is applied. Non-integer downsampling factors are '
+                           'allowed.')
 
         form.addSection(label='Preprocess')
         form.addParam('doInvert', params.BooleanParam, default=False,
