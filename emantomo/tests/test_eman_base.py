@@ -23,17 +23,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists
-
 import numpy as np
-
 from emantomo.protocols import EmanProtTomoExtraction
 from emantomo.protocols.protocol_tomo_extraction_from_tomo import SAME_AS_PICKING, OutputExtraction, OTHER
 from imod.protocols import ProtImodTomoNormalization
 from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pyworkflow.utils import magentaStr
-from tomo.constants import BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
 from tomo.tests import EMD_10439, DataSetEmd10439
@@ -42,7 +38,9 @@ from tomo.tests import EMD_10439, DataSetEmd10439
 class TestEmantomoBase(BaseTest):
     nParticles = 39
     boxSize = 44
+    binnedBoxSize = 22
     origSRate = 13.68
+    binnedSRate = 27.36
     ds = DataSet.getDataSet(EMD_10439)
 
     @classmethod
@@ -96,7 +94,8 @@ class TestEmantomoBase(BaseTest):
         protLabel = 'Extraction - same as picking'
         argsDict = {'inputCoordinates': coordsImported,
                     'tomoSource': tomoSource,
-                    'boxSize': boxSize}
+                    'boxSize': boxSize,
+                    'doInvert': True}
         if tomoSource != SAME_AS_PICKING:
             argsDict['tomoSource'] = OTHER
             argsDict['inputTomograms'] = tomograms

@@ -32,12 +32,11 @@ from pwem.protocols import EMProtocol
 import emantomo
 from emantomo.convert import writeSetOfSubTomograms
 from tomo.protocols import ProtTomoBase
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms
+from tomo.objects import AverageSubTomogram
 
 
 class OutputsInitModel(Enum):
     average = AverageSubTomogram
-    subtomograms = SetOfSubTomograms
 
 
 class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
@@ -77,8 +76,8 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
                       help='Select a 3D Mask to be applied to the initial model')
 
         form.addSection(label='Optimization')
-        form.addParam('symmetry', params.TextParam, default='c1',
-                      expertLevel=params.LEVEL_ADVANCED,
+        form.addParam('symmetry', params.StringParam,
+                      default='c1',
                       label='Symmetry',
                       help='Specify the symmetry.\nChoices are: c(n), d(n), '
                            'h(n), tet, oct, icos.\n'
@@ -94,37 +93,41 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
                       help='Gradient descent in fourier space')
         form.addParam('batchSize', params.IntParam, default=12,
                       label='Batch Size',
-                      help='SGD batch size')
+                      help='SGD batch size. Increasing batchsize will use more cores (if you have more than 12), and '
+                           'may cause it to converge to the correct answer in fewer iterations, but each iteration '
+                           'will not become faster.')
         form.addParam('learningRate', params.FloatParam, default=0.1,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Learn Rate',
                       help='Learning Rate. Default is 0.1')
         form.addParam('numberOfIterations', params.IntParam, default=5,
                       label='Number of iterations to perform',
-                      help='The total number of refinement to perform.')
+                      help='The total number of refinement iterations to perform.')
         form.addParam('numberOfBatches', params.IntParam, default=10,
                       label='Number of batches',
                       help='Number of batches per iteration')
-        form.addParam('shrink', params.IntParam, default=1,
+        form.addParam('shrink', params.IntParam,
+                      default=1,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Shrink factor',
                       help='Using a box-size >64 is not optimal for making '
                            'initial models. Suggest using this option to '
                            'shrink the input particles by an integer amount '
                            'prior to reconstruction. Default = 1, no shrinking')
-        form.addParam('applySim', params.BooleanParam, default=False,
+        form.addParam('applySim', params.BooleanParam,
+                      default=False,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Apply Symmetry',
                       help='Apply Symmetry')
 
-        form.addSection(label='Output')
-        form.addParam('returnSubtomos', params.BooleanParam, default=True,
-                      label="Return aligned subtomograms?",
-                      help="Depending on the number of iterations, batch size and number "
-                           "of batches chosen, it might be possible that some subtomograms "
-                           "will not contribute to the initial model. By default, algined "
-                           "subtomograms will be returned, even if the output set might have a "
-                           "lower number of items.")
+        # form.addSection(label='Output')
+        # form.addParam('returnSubtomos', params.BooleanParam, default=True,
+        #               label="Return aligned subtomograms?",
+        #               help="Depending on the number of iterations, batch size and number "
+        #                    "of batches chosen, it might be possible that some subtomograms "
+        #                    "will not contribute to the initial model. By default, algined "
+        #                    "subtomograms will be returned, even if the output set might have a "
+        #                    "lower number of items.")
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -154,10 +157,13 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
             'reference': self.reference.get().getFileName() if self.reference.get() else None,
             'outputPath': self.getOutputPath(),
         }
-        if self.mask.get():
-            command_params['mask'] = self.mask.get().getFileName()
 
         args = '%s/*.hdf' % self._getExtraPath("particles")
+
+        if self.mask.get():
+            command_params['mask'] = self.mask.get().getFileName()
+            args += ' --mask=%(mask)s'
+
         if command_params['reference']:
             args += ' --reference=%(reference)s'
 
@@ -171,8 +177,6 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
             args += ' --fourier'
         if self.applySim.get():
             args += ' --applysym'
-        if command_params['mask']:
-            args += ' --mask=%(mask)s'
 
         args += ' --path=%(outputPath)s'
 

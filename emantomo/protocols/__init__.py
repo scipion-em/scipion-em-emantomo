@@ -40,3 +40,4 @@ from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
 # from .protocol_tomo_tilt_refine import EmanProtRefineTS
 from .protocol_resize_tomograms import EmanProtTomoResize
 from .protocol_average_subtomos import EmanProtSubTomoAverage
+
