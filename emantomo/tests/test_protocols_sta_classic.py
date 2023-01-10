@@ -90,8 +90,8 @@ class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
         print(magentaStr("\n==> Generating the 3D mask:"))
         protCreateParticleMask = cls.newProtocol(XmippProtCreateMask3D,
                                                  source=SOURCE_GEOMETRY,
-                                                 samplingRate=cls.origSRate / 2,
-                                                 size=cls.boxSize / 2,
+                                                 samplingRate=super().binnedSRate,
+                                                 size=super().binnedBoxSize,
                                                  geo=MASK3D_CYLINDER,
                                                  radius=6,
                                                  shiftCenter=True,
@@ -171,7 +171,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
                                                                  (refinedSubtomos.getSize(), self.nParticles))
         self.assertEqual(refinedSubtomos.getCoordinates3D().getSize(), self.nParticles)
         for subTomogram in refinedSubtomos:
-            self.assertEqual(subTomogram.getSamplingRate(), self.origSRate)
+            self.assertEqual(subTomogram.getSamplingRate(), super().binnedSRate)
             self.assertTrue(hasattr(subTomogram, EMAN_COVERAGE))
             self.assertTrue(hasattr(subTomogram, EMAN_SCORE))
             matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()

@@ -26,7 +26,7 @@
 
 from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui import showInfo
-from .protocols import EmanProtTomoExtraction, EmanProtTomoTempMatch, EmanProtTomoResize
+from .protocols import EmanProtTomoExtraction, EmanProtTomoResize
 
 
 class EmanTomoExtractionWizard(EmWizard):
@@ -57,19 +57,19 @@ class EmanTomoExtractionWizard(EmWizard):
         form.setVar('boxSize', boxSize)
 
 
-class EmanTomoTempMatchWizard(EmWizard):
-    _targets = [(EmanProtTomoTempMatch, ['boxSize'])]
-
-    def show(self, form):
-        tomoExtractProt = form.protocol
-        inputReference = tomoExtractProt.ref.get()
-        if not inputReference:
-            print('You must specify input reference volume')
-            return
-
-        boxSize = inputReference.getDim()[0]
-
-        form.setVar('boxSize', boxSize)
+# class EmanTomoTempMatchWizard(EmWizard):
+#     _targets = [(EmanProtTomoTempMatch, ['boxSize'])]
+#
+#     def show(self, form):
+#         tomoExtractProt = form.protocol
+#         inputReference = tomoExtractProt.ref.get()
+#         if not inputReference:
+#             print('You must specify input reference volume')
+#             return
+#
+#         boxSize = inputReference.getDim()[0]
+#
+#         form.setVar('boxSize', boxSize)
 
 
 class EmanTomoResizeWizard(EmWizard):

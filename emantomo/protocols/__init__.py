@@ -27,7 +27,7 @@
 
 from .protocol_tomo_boxing import EmanProtTomoBoxing
 from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet   # TODO: check this
-from .protocol_tomo_template_match import EmanProtTomoTempMatch   # TODO: check this
+# from .protocol_tomo_template_match import EmanProtTomoTempMatch
 from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
 # from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
