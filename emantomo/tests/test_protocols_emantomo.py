@@ -41,6 +41,9 @@ from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementO
 
 
 class TestEmanBase(BaseTest):
+
+    origSRate = 5
+
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
@@ -284,7 +287,6 @@ class TestEmanTomoInitialModel(TestEmanTomoBase):
         self._performFinalValidation(protInitialModel)
 
         return protInitialModel
-
 
 
 class TestEmanTomoTempMatch(TestEmanTomoBase):

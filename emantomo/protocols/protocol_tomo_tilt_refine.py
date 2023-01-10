@@ -35,6 +35,7 @@ import pyworkflow.protocol.params as params
 
 from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
+from pyworkflow.utils import removeBaseExt
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
@@ -67,9 +68,9 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
                       pointerClass='SetOfSubTomograms', help='Select the inpu SetOfSubTomograms.')
         form.addParam('inputAverage', params.PointerParam, label='Input average', important=True,
                       pointerClass='AverageSubTomogram', help='Select the input AverageSubTomogram')
-        form.addParam('halfMaps', params.PointerParam, label='Half maps', important=True,
-                      pointerClass='SetOfAverageSubTomograms',
-                      help='Select the half maps associated to the input AverageSubTomogram')
+        # form.addParam('halfMaps', params.PointerParam, label='Half maps', important=True,
+        #               pointerClass='SetOfAverageSubTomograms',
+        #               help='Select the half maps associated to the input AverageSubTomogram')
         form.addParam('inputCTF', params.PointerParam, label="Input ctf", allowsNull=True,
                       pointerClass='SetOfCTFTomoSeries',
                       help='Optional - Estimated CTF for the tilts series associates to the '
@@ -102,7 +103,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
     def writeJsonInfo(self):
         info_path = self._getExtraPath('info')
         pwutils.makePath(info_path)
-        coords = self.inputSubtomos.get().getCoordinates3D().get()
+        coords = self.inputSubtomos.get().getCoordinates3D()
         tomos = coords.getPrecedents()
         tltSeries = recoverTSFromObj(coords, self)
         self.json_files, self.tomo_files = jsonFilesFromSet(tomos, info_path)
@@ -113,7 +114,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
             _ = ctf2Json(self.json_files, self.inputCTF.get(), mode='a')
 
     def extract2D(self):
-        boxSize = self.inputSubtomos.get().getCoordinates3D().get().getBoxSize()
+        boxSize = self.inputSubtomos.get().getCoordinates3D().getBoxSize()
         for file in self.tomo_files:
             args = os.path.abspath(file)
             args += " --rmbeadthr=-1 --shrink=1.0 --tltkeep=1.0 --padtwod=1.0  " \
@@ -131,9 +132,9 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
         pwutils.makePath(project_path)
         refinement2Json(self, self.inputSubtomos.get())
         convertImage(self.inputAverage.get().getFileName(), os.path.join(project_path, 'threed_01.hdf'))
-        for half_map in self.halfMaps.get().iterItems():
-            convertImage(half_map.getFileName(), os.path.join(project_path, 'threed_01_even.hdf'))
-            convertImage(half_map.getFileName(), os.path.join(project_path, 'threed_01_odd.hdf'))
+        half1, half2 = self.inputAverage.get().getHalfMaps().split(',')
+        self.convertHalfToEman(project_path, half1)
+        self.convertHalfToEman(project_path, half2)
         args_fsc = "%s %s --calcfsc %s" % \
                    (os.path.join(project_path, 'threed_01_even.hdf'),
                     os.path.join(project_path, 'fsc_masked_01.txt'),
@@ -145,13 +146,12 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
                                                  os.path.abspath(os.path.join(project_path, 'input_ptcls.lst'))),
                     cwd=self._getExtraPath())
 
-
     def refinementStep(self):
         args = "--path=%s --iter=-1 --niters=%d --keep=%f --maxalt=45.0 " \
                "--mask=auto  --threads=%d --parallel=thread:%d --tophat=%s" \
                % ('spt_00/', self.nIters.get(), self.keep.get(), self.numberOfThreads.get(),
                   self.numberOfThreads.get(), self.filter_choices[self.topHat.get()])
-        program = emantomo.Plugin.getProgram('e2spt_tiltrefine.py')
+        program = emantomo.Plugin.getProgram('e2spt_subtilt_old.py')
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def createOutputStep(self):
@@ -188,7 +188,10 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
         return summary
 
     def _validate(self):
-        pass
+        errorMsg = []
+        if not self.inputAverage.get().getHalfMaps():
+            errorMsg.append('No halves were detected in the introduced average.')
+        return errorMsg
 
     def _warnings(self):
         pass
@@ -204,3 +207,10 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
             raise Exception("No file in output directory matches pattern: %s" % pattern)
         else:
             return imagePaths[-1]
+
+    @staticmethod
+    def convertHalfToEman(project_path, inHalfName):
+        if 'even' in removeBaseExt(inHalfName):
+            convertImage(inHalfName, os.path.join(project_path, 'threed_01_even.hdf'))
+        else:
+            convertImage(inHalfName, os.path.join(project_path, 'threed_01_odd.hdf'))

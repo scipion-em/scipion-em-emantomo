@@ -1,9 +1,10 @@
 # coding=utf-8
 # **************************************************************************
 # *
-# * Authors:     David Herreros  (dherreros@cnb.csic.es) [2]
+# * Authors:     David Herreros  (dherreros@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es) [1]
 # *
-# * [2] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
+# * [1] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -26,12 +27,15 @@
 # **************************************************************************
 import enum
 import os
+import shutil
+from os.path import join
 
-from pyworkflow import utils as pwutils, BETA
-import pyworkflow.protocol.params as params
+from pyworkflow import BETA
 
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol import STEPS_PARALLEL
+from pyworkflow.protocol import PointerParam, FloatParam, StringParam, BooleanParam, LEVEL_ADVANCED
+from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt
+from ..constants import SPT_00, INPUT_PTCLS_LST, THREED_01
 
 from ..convert import writeSetOfSubTomograms, refinement2Json
 import emantomo
@@ -39,92 +43,136 @@ import emantomo
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram
 
-class OutputAverage(enum.Enum):
+
+class OutputsAverageSubtomos(enum.Enum):
     averageSubTomos = AverageSubTomogram
+
 
 class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
     """
     This protocol wraps *e2spt_average.py* EMAN2 program.
-    It computed the average from a SetOfSubtomograms based on their alignment.
+    Computes the average a selected subset of a SetOfSubtomograms in the predetermined orientation
     """
 
     _label = 'average subtomo'
     _devStatus = BETA
-    _possibleOutputs = OutputAverage
+    _possibleOutputs = OutputsAverageSubtomos
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
+        self.projectPath = None
+        self.volumeFileHdf = None
+        self.halfEvenFileHdf = None
+        self.halfOddFileHdf = None
+        self.hdfSubtomosDir = None
+        # self.stepsExecutionMode = STEPS_PARALLEL
 
-    #--------------- DEFINE param functions ---------------
-
+    # --------------- DEFINE param functions ---------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputSetOfSubTomogram', params.PointerParam,
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam('inputSetOfSubTomogram', PointerParam,
                       pointerClass='SetOfSubTomograms',
-                      important=True, label='Input SubTomograms',
+                      important=True,
+                      label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
-        form.addParam('msWedge', params.FloatParam, default=3,
+        form.addParam('symmetry', StringParam,
+                      label='Symmetry',
+                      default='c1',
+                      allowsNull=False,
+                      help='Symmetry of the input. Must be aligned in standard orientation to work properly.')
+        form.addParam('msWedge', FloatParam,
+                      default=3,
                       label="Missing wedge threshold",
+                      expertLevel=LEVEL_ADVANCED,
                       help="Threshold for identifying missing data in Fourier"
                            " space in terms of standard deviation of each Fourier"
                            " shell. Default 3.0. If set to 0.0, missing wedge correction"
                            " will be skipped")
+        form.addParam('skipPostProc', BooleanParam,
+                      default=True,
+                      label='Skip post process steps (fsc, mask and filters)',
+                      expertLevel=LEVEL_ADVANCED)
+        form.addParam('keepHdfFile', BooleanParam,
+                      default=False,
+                      label='Keep hdf files?',
+                      expertLevel=LEVEL_ADVANCED,
+                      help='If set to Yes, the generated files will be saved in both HDF and MRC formats. They are '
+                           'generated in HDF and then converted into MRC. The HDF files are deleted by default to '
+                           'save storage.')
+        form.addParallelSection(threads=4, mpi=0)
 
-    #--------------- INSERT steps functions ----------------
-
+    # --------------- INSERT steps functions ----------------
 
     def _insertAllSteps(self):
+        self._initialize()
         self._insertFunctionStep(self.convertInputStep)
-        self._insertFunctionStep(self.computeAverage)
+        self._insertFunctionStep(self.computeAverageStep)
+        self._insertFunctionStep(self.converOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
-    #--------------- STEPS functions -----------------------
+    # --------------- STEPS functions -----------------------
+    def _initialize(self):
+        self.projectPath = self._getExtraPath(SPT_00)
+        self.hdfSubtomosDir = self._getExtraPath("subtomograms")
+        makePath(self.hdfSubtomosDir)
+        makePath(self.projectPath)
+
     def convertInputStep(self):
-        storePath = self._getExtraPath("subtomograms")
-        pwutils.makePath(storePath)
+        inSubtomos = self.inputSetOfSubTomogram.get()
 
-        volName = self.inputSetOfSubTomogram.get().getFirstItem().getVolName()
-        self.newFn = pwutils.removeBaseExt(volName).split('__ctf')[0] + '.hdf'
-        self.newFn = pwutils.join(storePath, self.newFn)
-        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath)
+        volName = inSubtomos.getFirstItem().getVolName()
+        newFn = removeBaseExt(volName).split('__ctf')[0] + '.hdf'
+        newFn = join(self.hdfSubtomosDir, newFn)
+        writeSetOfSubTomograms(inSubtomos, self.hdfSubtomosDir)
 
-        self.project_path = self._getExtraPath('spt_00')
-        pwutils.makePath(self.project_path)
+        refinement2Json(self, inSubtomos)
 
-        refinement2Json(self, self.inputSetOfSubTomogram.get())
-
+        # Generate a virtual stack of particle represented by a .lst file, as expected by EMAN
+        args = ' --create %s %s' % (join(self.projectPath, INPUT_PTCLS_LST), newFn)
         program = emantomo.Plugin.getProgram('e2proclst.py')
-        self.runJob(program, ' --create %s %s' % (os.path.abspath(os.path.join(self.project_path, 'input_ptcls.lst')),
-                                                  os.path.abspath(self.newFn)),
-                    cwd=self._getExtraPath())
+        self.runJob(program, args)
 
-    def computeAverage(self):
-        args = " --path=%s --keep 1 --skippostp --wedgesigma=%f" % \
-               (self.project_path, self.msWedge.get())
+    def computeAverageStep(self):
+        args = " --path=%s --keep 1 --wedgesigma=%f --threads %i " % \
+               (self.projectPath, self.msWedge.get(), self.numberOfThreads.get())
+        if self.skipPostProc.get():
+            args += '--skippostp '
         program = emantomo.Plugin.getProgram('e2spt_average.py')
-        self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args)
 
-        # Fix the sampling rate as it might be set wrong
+    def converOutputStep(self):
+        # Also fix the sampling rate as it might be set wrong (the value stored in the hdf header may be referred
+        # to the original binning, and it will be also in the header of the resulting mrc file
+        sRate = self.inputSetOfSubTomogram.get().getSamplingRate()
         program = emantomo.Plugin.getProgram('e2proc3d.py')
-        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.hdf"))
-        args = "--apix %f %s %s" % (self.inputSetOfSubTomogram.get().getSamplingRate(),
-                                    volumeFile, pwutils.replaceExt(volumeFile, "mrc"))
-        self.runJob(program, args)
+        self.volumeFileHdf = self._getExtraPath(SPT_00, THREED_01 + '.hdf')
+        self.halfEvenFileHdf = self._getExtraPath(SPT_00, THREED_01 + '_even.hdf')
+        self.halfOddFileHdf = self._getExtraPath(SPT_00, THREED_01 + '_odd.hdf')
+        filesToConvert = [self.volumeFileHdf, self.halfEvenFileHdf, self.halfOddFileHdf]
+        for hdfFile in filesToConvert:
+            args = "%s %s --apix %f" % (hdfFile, replaceExt(hdfFile, "mrc"), sRate)
+            self.runJob(program, args)
+            # Remove the hdf files if requested
+            if not self.keepHdfFile.get():
+                os.remove(hdfFile)
+
+        # Finally, remove the hdf subtomograms generated in the conver input step, if requested
+        if not self.keepHdfFile.get():
+            shutil.rmtree(self.hdfSubtomosDir)
 
     def createOutputStep(self):
-        imgSet = self.inputSetOfSubTomogram.get()
+        mrcExt = 'mrc'
+        inSubtomos = self.inputSetOfSubTomogram.get()
         volume = AverageSubTomogram()
-        volumeFile = self._getExtraPath(os.path.join("spt_00", "threed_01.mrc"))
-        volume.setFileName(volumeFile)
-        volume.setSamplingRate(imgSet.getSamplingRate())
+        volume.setFileName(replaceExt(self.volumeFileHdf, mrcExt))
+        volume.setHalfMaps([replaceExt(self.halfEvenFileHdf, mrcExt), replaceExt(self.halfOddFileHdf, mrcExt)])
+        volume.setSamplingRate(inSubtomos.getSamplingRate())
         volume.fixMRCVolume()
 
-        self._defineOutputs(**{OutputAverage.averageSubTomos.name:volume})
-        self._defineSourceRelation(self.inputSetOfSubTomogram, volume)
+        self._defineOutputs(**{OutputsAverageSubtomos.averageSubTomos.name: volume})
+        self._defineSourceRelation(inSubtomos, volume)
 
-    #--------------- INFO functions -------------------------
+    # --------------- INFO functions -------------------------
     def _summary(self):
         summary = []
         if not hasattr(self, 'averageSubTomos'):

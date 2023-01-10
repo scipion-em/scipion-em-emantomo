@@ -1,9 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
-# *              Arnau Sanchez  (arnau@eyeseetea.com) [1]
+# * Authors:     Scipion Team (scipion@cnb.csic.es) [1]
 # *
-# * [1] EyeSeeTea Ltd, London, UK
+# * [1] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -24,19 +23,20 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+from enum import Enum
+from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD
 from pyworkflow import BETA
 from pyworkflow.protocol import params
-from pyworkflow.utils.path import makePath
-
+from pyworkflow.utils.path import makePath, replaceBaseExt
 from pwem.protocols import EMProtocol
-
 import emantomo
-from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms
-
+from emantomo.convert import writeSetOfSubTomograms
 from tomo.protocols import ProtTomoBase
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
+from tomo.objects import AverageSubTomogram
+
+
+class OutputsInitModel(Enum):
+    average = AverageSubTomogram
 
 
 class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
@@ -48,12 +48,13 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     It also builds a set of subtomograms that contains the original particles
     plus the score, coverage and align matrix per subtomogram .
     """
+
     _label = 'tomo initial model'
     _devStatus = BETA
-    OUTPUT_DIR = 'sptsgd_00'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
+        self.volumeFileMrc = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -75,8 +76,8 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
                       help='Select a 3D Mask to be applied to the initial model')
 
         form.addSection(label='Optimization')
-        form.addParam('symmetry', params.TextParam, default='c1',
-                      expertLevel=params.LEVEL_ADVANCED,
+        form.addParam('symmetry', params.StringParam,
+                      default='c1',
                       label='Symmetry',
                       help='Specify the symmetry.\nChoices are: c(n), d(n), '
                            'h(n), tet, oct, icos.\n'
@@ -92,43 +93,48 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
                       help='Gradient descent in fourier space')
         form.addParam('batchSize', params.IntParam, default=12,
                       label='Batch Size',
-                      help='SGD batch size')
+                      help='SGD batch size. Increasing batchsize will use more cores (if you have more than 12), and '
+                           'may cause it to converge to the correct answer in fewer iterations, but each iteration '
+                           'will not become faster.')
         form.addParam('learningRate', params.FloatParam, default=0.1,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Learn Rate',
                       help='Learning Rate. Default is 0.1')
         form.addParam('numberOfIterations', params.IntParam, default=5,
                       label='Number of iterations to perform',
-                      help='The total number of refinement to perform.')
+                      help='The total number of refinement iterations to perform.')
         form.addParam('numberOfBatches', params.IntParam, default=10,
                       label='Number of batches',
                       help='Number of batches per iteration')
-        form.addParam('shrink', params.IntParam, default=1,
+        form.addParam('shrink', params.IntParam,
+                      default=1,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Shrink factor',
                       help='Using a box-size >64 is not optimal for making '
                            'initial models. Suggest using this option to '
                            'shrink the input particles by an integer amount '
                            'prior to reconstruction. Default = 1, no shrinking')
-        form.addParam('applySim', params.BooleanParam, default=False,
+        form.addParam('applySim', params.BooleanParam,
+                      default=False,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Apply Symmetry',
                       help='Apply Symmetry')
 
-        form.addSection(label='Output')
-        form.addParam('returnSubtomos', params.BooleanParam, default=True,
-                      label="Return aligned subtomograms?",
-                      help="Depending on the number of iterations, batch size and number "
-                           "of batches chosen, it might be possible that some subtomograms "
-                           "will not contribute to the initial model. By default, algined "
-                           "subtomograms will be returned, even if the output set might have a "
-                           "lower number of items.")
+        # form.addSection(label='Output')
+        # form.addParam('returnSubtomos', params.BooleanParam, default=True,
+        #               label="Return aligned subtomograms?",
+        #               help="Depending on the number of iterations, batch size and number "
+        #                    "of batches chosen, it might be possible that some subtomograms "
+        #                    "will not contribute to the initial model. By default, algined "
+        #                    "subtomograms will be returned, even if the output set might have a "
+        #                    "lower number of items.")
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertImagesStep')
-        self._insertFunctionStep('createInitialModelStep')
-        self._insertFunctionStep('createOutputStep')
+        self._insertFunctionStep(self.convertImagesStep)
+        self._insertFunctionStep(self.createInitialModelStep)
+        self._insertFunctionStep(self.converOutputStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
     # Get Scipion references to subtomograms and write hdf files for emantomo to process.
@@ -147,13 +153,17 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
             'learningRate': self.learningRate.get(),
             'numberOfIterations': self.numberOfIterations.get(),
             'numberOfBatches': self.numberOfBatches.get(),
-            'mask': self.mask.get().getFileName(),
             'shrink': self.shrink.get(),
             'reference': self.reference.get().getFileName() if self.reference.get() else None,
             'outputPath': self.getOutputPath(),
         }
 
         args = '%s/*.hdf' % self._getExtraPath("particles")
+
+        if self.mask.get():
+            command_params['mask'] = self.mask.get().getFileName()
+            args += ' --mask=%(mask)s'
+
         if command_params['reference']:
             args += ' --reference=%(reference)s'
 
@@ -166,43 +176,67 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
         if self.fourier.get():
             args += ' --fourier'
         if self.applySim.get():
-            args += ' --applysim'
-        if command_params['mask']:
-            args += ' --mask=%(mask)s'
+            args += ' --applysym'
 
         args += ' --path=%(outputPath)s'
 
         program = emantomo.Plugin.getProgram("e2spt_sgd.py")
-        self._log.info('Launching: ' + program + ' ' + args % command_params)
         self.runJob(program, args % command_params)
 
-    def createOutputStep(self):
-        particles = self.particles.get()
+    def converOutputStep(self):
+        # Also fix the sampling rate as it might be set wrong (the value stored in the hdf header may be referred
+        # to the original binning, and it will be also in the header of the resulting mrc file
+        # 1) Average
+        sRate = self.particles.get().getSamplingRate()
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        volumeFileHdf = self._getExtraPath(INIT_MODEL_DIR, INIR_MODEL_NAME_OLD)
+        self.volumeFileMrc = self._getExtraPath(replaceBaseExt(volumeFileHdf, "mrc"))
+        args = "%s %s --apix=%f" % (volumeFileHdf, self.volumeFileMrc, sRate)
+        self.runJob(program, args)
 
-        # Output 1: Subtomogram
+        # # 2) Subtomograms
+        # if self.returnSubtomos.get():
+        #     particleStacks = glob.glob(self._getExtraPath(PARTICLES_DIR))
+        #     for hdfPartStack in particleStacks:
+        #         args = ' %s ' % hdfPartStack
+        #         args += '%s ' % replaceExt(hdfPartStack, 'mrc')
+        #         args += '--apix=%.3f --unstacking' % sRate
+        #         self.runJob(program, args)
+
+        # # Remove the hdf files if requested
+        # if not self.keepHdfFile.get():
+        #     os.remove(hdfFile)
+
+    def createOutputStep(self):
+        # outputSubtomos = None
+        particles = self.particles.get()
+        downSamplingFactor = self.shrink.get()
+
+        # Output 1: Average
         averageSubTomogram = AverageSubTomogram()
-        averageSubTomogram.setFileName(self.getOutputPath('output.hdf'))
-        averageSubTomogram.setSamplingRate(particles.getSamplingRate() * self.shrink.get())
-        setOfAverageSubTomograms = self._createSet(SetOfAverageSubTomograms, 'subtomograms%s.sqlite', "")
-        setOfAverageSubTomograms.copyInfo(particles)
-        setOfAverageSubTomograms.setSamplingRate(particles.getSamplingRate() * self.shrink.get())
-        setOfAverageSubTomograms.append(averageSubTomogram)
-        self._defineOutputs(averageSubTomogram=setOfAverageSubTomograms)
-        self._defineSourceRelation(self.particles, setOfAverageSubTomograms)
+        averageSubTomogram.setFileName(self.volumeFileMrc)
+        averageSubTomogram.setSamplingRate(particles.getSamplingRate() * downSamplingFactor)
+        outputDict = {OutputsInitModel.average.name: averageSubTomogram}
 
         # Output 2: setOfSubTomograms
-        if self.returnSubtomos.get():
-            particleParams = getLastParticlesParams(self.getOutputPath())
-            outputSetOfSubTomograms = self._createSet(SetOfSubTomograms, 'subtomograms%s.sqlite', "particles")
-            outputSetOfSubTomograms.setCoordinates3D(particles.getCoordinates3D())
-            outputSetOfSubTomograms.copyInfo(particles)
-            outputSetOfSubTomograms.setSamplingRate(particles.getSamplingRate() * self.shrink.get())
-            updateSetOfSubTomograms(particles, outputSetOfSubTomograms, particleParams)
-            self._defineOutputs(outputParticles=outputSetOfSubTomograms)
-            self._defineSourceRelation(self.particles, outputSetOfSubTomograms)
+        # TODO: ¿deberían estas partículas aparecer en el sqlite via setFileName de cada subtomo? Ver la explicación de returnSubtomos
+        # if self.returnSubtomos.get():
+        #     particleParams = getLastParticlesParams(self.getOutputPath())
+        #     outputSubtomos = SetOfSubTomograms.create(self._getPath(), template='setOfSubTomograms%s.sqlite')
+        #     outputSubtomos.setCoordinates3D(particles.getCoordinates3D())
+        #     outputSubtomos.copyInfo(particles)
+        #     outputSubtomos.setSamplingRate(particles.getSamplingRate() * downSamplingFactor)
+        #     updateSetOfSubTomograms(particles, outputSubtomos, particleParams)
+        #     outputDict[OutputsInitModel.subtomograms.name] = outputSubtomos
+
+        # Define outputs and relations
+        self._defineOutputs(**outputDict)
+        self._defineSourceRelation(particles, averageSubTomogram)
+        # if self.returnSubtomos.get():
+        #     self._defineSourceRelation(particles, outputSubtomos)
 
     def getOutputPath(self, *args):
-        return self._getExtraPath(self.OUTPUT_DIR, *args)
+        return self._getExtraPath(INIT_MODEL_DIR, *args)
 
     def _methods(self):
         particles = self.particles.get()
