@@ -39,7 +39,7 @@ import pwem.constants as emcts
 from pyworkflow.utils import createLink
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from ..constants import SUBTOMOGRAMS_DIR, SPT_00
+from ..constants import SUBTOMOGRAMS_DIR, SPT_00, SYMMETRY_HELP_MSG
 
 
 class EmanTomoRefinementOutputs(enum.Enum):
@@ -120,7 +120,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       help='Select the structure factor')
         form.addParam('sym', params.StringParam, default='c1',
                       label='Symmetry',
-                      help='Symmetry (Default: c1). See https://blake.bcm.edu/emanwiki/EMAN2/Symmetry for more.')
+                      help=SYMMETRY_HELP_MSG)
         form.addParam('localfilter', params.BooleanParam, default=False,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Local filter',

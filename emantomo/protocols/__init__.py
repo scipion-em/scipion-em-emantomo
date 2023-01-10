@@ -32,11 +32,11 @@ from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
 # from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
 from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
-from .protocol_classify_subtomos import EmanProtTomoClassifySubtomos
+from .protocol_pca_classify_subtomos import EmanProtPcaTomoClassifySubtomos
 # from .protocol_tomo_reconstruction import EmanProtTomoReconstruction
 # from .protocol_align_ts import EmanProtAlignTs
 # from .protocol_estimate_ctf import EmanProtEstimateCTF
-from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
+# from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
 # from .protocol_tomo_tilt_refine import EmanProtRefineTS
 from .protocol_resize_tomograms import EmanProtTomoResize
 from .protocol_average_subtomos import EmanProtSubTomoAverage

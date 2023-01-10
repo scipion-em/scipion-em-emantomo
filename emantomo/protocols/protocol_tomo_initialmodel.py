@@ -24,7 +24,7 @@
 # *
 # **************************************************************************
 from enum import Enum
-from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD
+from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD, SYMMETRY_HELP_MSG
 from pyworkflow import BETA
 from pyworkflow.protocol import params
 from pyworkflow.utils.path import makePath, replaceBaseExt
@@ -118,7 +118,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
                       default=False,
                       expertLevel=params.LEVEL_ADVANCED,
                       label='Apply Symmetry',
-                      help='Apply Symmetry')
+                      help=SYMMETRY_HELP_MSG)
 
         # form.addSection(label='Output')
         # form.addParam('returnSubtomos', params.BooleanParam, default=True,

@@ -35,7 +35,7 @@ from pyworkflow import BETA
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, FloatParam, StringParam, BooleanParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt
-from ..constants import SPT_00, INPUT_PTCLS_LST, THREED_01
+from ..constants import SPT_00, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG
 
 from ..convert import writeSetOfSubTomograms, refinement2Json
 import emantomo
@@ -79,7 +79,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                       label='Symmetry',
                       default='c1',
                       allowsNull=False,
-                      help='Symmetry of the input. Must be aligned in standard orientation to work properly.')
+                      help=SYMMETRY_HELP_MSG)
         form.addParam('msWedge', FloatParam,
                       default=3,
                       label="Missing wedge threshold",
