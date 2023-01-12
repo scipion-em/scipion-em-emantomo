@@ -423,7 +423,7 @@ class TestEmanTomoClassifySubtomos(TestEmanTomoBase):
                                               samplingRate=5)
         self.launchProtocol(protImportTomogram)
 
-        protClassifySubtomos = self.newProtocol(EmanProtTomoClassifySubtomos,
+        protClassifySubtomos = self.newProtocol(EmanProtPcaTomoClassifySubtomos,
                                                 inputSetOfSubTomogram=getattr(protTomoExtraction, OutputExtraction.subtomograms.name))
 
         self.launchProtocol(protClassifySubtomos)

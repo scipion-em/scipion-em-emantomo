@@ -25,53 +25,53 @@
 # **************************************************************************
 from os.path import exists
 import numpy as np
-from xmipp3.constants import MASK3D_CYLINDER
-from xmipp3.protocols import XmippProtCreateMask3D
-from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
 from pyworkflow.utils import magentaStr
 from .test_eman_base import TestEmantomoBase
 from ..constants import EMAN_COVERAGE, EMAN_SCORE
 from tomo.constants import TR_EMAN
 from ..protocols import EmanProtTomoInitialModel
 from ..protocols.protocol_average_subtomos import OutputsAverageSubtomos, EmanProtSubTomoAverage
+from ..protocols.protocol_pca_classify_subtomos import pcaOutputObjects, EmanProtPcaTomoClassifySubtomos
 from ..protocols.protocol_tomo_extraction_from_tomo import SAME_AS_PICKING
 from ..protocols.protocol_tomo_initialmodel import OutputsInitModel
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
 
 
-class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
-    """This class check if the protocol Subtomogram refinement works properly.
-    """
-
-    avgSubtomo = None
-    subtomosExtracted = None
+class TestEmanTomoAverageSubtomograms(TestEmantomoBase):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.subtomosExtracted, cls.avgSubtomo = cls.runPreviousProtocols()
+        cls.runPreviousProtocols()
 
     @classmethod
     def runPreviousProtocols(cls):
-        tomoImported = super().runImportTomograms()  # Import tomograms
-        tomosBinned = super().runBinTomograms(tomoImported)  # Bin the tomogram to make it smaller
-        coordsImported = super().runImport3dCoords(tomosBinned)  # Import the coordinates from the binned tomogram
-        # Extract subtomograms
-        subtomosExtracted = super().runExtractSubtomograms(coordsImported,
-                                                           tomoSource=SAME_AS_PICKING,
-                                                           boxSize=super().binnedBoxSize)
-        # Average the subtomograms
-        avgSubtomo = cls.runAverageSubtomograms(subtomosExtracted)
-        return subtomosExtracted, avgSubtomo
+        try:
+            super().runPreviousProtocols()
+        except Exception as e:
+            raise Exception('Some of the previous protocols failed --> \n%s' % e)
+
+    def test_averageSubtomograms(self):
+        avgSubtomo = super().runAverageSubtomograms()
+        super().checkAverage(avgSubtomo, boxSize=super().binnedBoxSize)
+
+
+class TestEmanTomoInitialModel(TestEmantomoBase):
+
+    avgSubtomo = None
 
     @classmethod
-    def runAverageSubtomograms(cls, subtomosExtracted):
-        print(magentaStr("\n==> Averaging the subtomograms:"))
-        protAvgSubtomo = cls.newProtocol(EmanProtSubTomoAverage, inputSetOfSubTomogram=subtomosExtracted)
-        cls.launchProtocol(protAvgSubtomo)
-        avgSubtomo = getattr(protAvgSubtomo, OutputsAverageSubtomos.averageSubTomos.name, None)
-        cls.assertIsNotNone(avgSubtomo, "There was a problem calculating the average subtomogram")
-        return avgSubtomo
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.runPreviousProtocols()
+
+    @classmethod
+    def runPreviousProtocols(cls):
+        try:
+            super().runPreviousProtocols()
+            cls.avgSubtomo = super().runAverageSubtomograms()
+        except Exception as e:
+            raise Exception('Some of the previous protocols failed --> \n%s' % e)
 
     @classmethod
     def runGenInitialModel(cls):
@@ -85,30 +85,111 @@ class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
         cls.assertIsNotNone(initModel, "There was a problem calculating the initial model")
         return initModel
 
-    @classmethod
-    def runCreate3dMask(cls):
-        print(magentaStr("\n==> Generating the 3D mask:"))
-        protCreateParticleMask = cls.newProtocol(XmippProtCreateMask3D,
-                                                 source=SOURCE_GEOMETRY,
-                                                 samplingRate=super().binnedSRate,
-                                                 size=super().binnedBoxSize,
-                                                 geo=MASK3D_CYLINDER,
-                                                 radius=6,
-                                                 shiftCenter=True,
-                                                 centerZ=3,
-                                                 height=15,
-                                                 doSmooth=True)
-        cls.launchProtocol(protCreateParticleMask)
-        genMask = getattr(protCreateParticleMask, 'outputMask', None)
-        cls.assertIsNotNone(genMask, 'the 3D mask was not generated')
-        return genMask
+    def test_genInitialModel(self):
+        initModel = self.runGenInitialModel()
+        super().checkAverage(initModel, boxSize=super().binnedBoxSize, halvesExpected=False)
+
+
+class TestEmanTomoPcaClassification(TestEmantomoBase):
+
+    pcaNumClasses = 2
+    mask = None
 
     @classmethod
-    def runTomoSubtomogramRefinement(cls, mask=None):
+    def setUpClass(cls):
+        # JORGE
+        import os
+        fname = "/home/jjimenez/Desktop/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
+        super().setUpClass()
+        cls.pcaResults = cls.genTestPcaClassifResults()
+        cls.runPreviousProtocols()
 
+    @classmethod
+    def runPreviousProtocols(cls):
+        try:
+            cls.mask = super().runCreate3dMask()  # Generate a mask
+            super().runPreviousProtocols()
+        except Exception as e:
+            raise Exception('Some of the previous protocols failed --> \n%s' % e)
+
+    @staticmethod
+    def genTestPcaClassifResults():
+        # keys --> classId, values --> subtomogram indices in the stack generated by eman
+        # (the same as the objId of the particles)
+        return {1: [0, 1, 10, 11, 15, 18, 2, 22, 27, 28, 3, 4, 5, 6, 7, 8, 9],
+                2: [12, 13, 14, 16, 17, 19, 20, 21, 23, 24, 25, 26, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]}
+
+    @classmethod
+    def runPcaClassification(cls, mask=None):
+        print(magentaStr("\n==> Running a PCA classification of the subtomograms:"))
+        argDict = {
+            'inSubtomos': cls.subtomosExtracted,
+            'nClass': cls.pcaNumClasses
+        }
+        objLabel = 'PCA classif'
+        if mask:
+            argDict['mask'] = mask
+            objLabel += ' with mask'
+
+        protPcaClassif = cls.newProtocol(EmanProtPcaTomoClassifySubtomos, **argDict)
+        protPcaClassif.setObjLabel(objLabel)
+        cls.launchProtocol(protPcaClassif)
+        return protPcaClassif
+
+    def test_pcaClassifWithoutMask(self):
+        pcaProt = self.runPcaClassification()
+        self.checkPcaResults(pcaProt)
+
+    def test_pcaClassifWithMask(self):
+        pcaProt = self.runPcaClassification(mask=self.mask)
+        self.checkPcaResults(pcaProt)
+
+    def checkPcaResults(self, protPca):
+        outSubtomos = getattr(protPca, pcaOutputObjects.subtomograms.name, None)
+        outClasses = getattr(protPca, pcaOutputObjects.classes.name, None)
+
+        # Check classes
+        self.assertEqual(outClasses.getSize(), self.pcaNumClasses)
+        a = []
+        for item in outClasses.iterClassItems():
+            a.append(item.getClassId())
+
+        z = 1
+
+
+class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
+
+    mask = None
+    avgSubtomo = None
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.runPreviousProtocols()
+
+    @classmethod
+    def runPreviousProtocols(cls):
+        try:
+            cls.mask = super().runCreate3dMask()  # Generate a mask
+            super().runPreviousProtocols()
+            cls.avgSubtomo = super().runAverageSubtomograms()
+        except Exception as e:
+            raise Exception('Some of the previous protocols failed --> \n%s' % e)
+
+    @classmethod
+    def runSubtomogramRefinement(cls, inputRef, mask=None):
         print(magentaStr("\n==> Refining the subtomograms:"))
         inputDict = {'inputSetOfSubTomogram': cls.subtomosExtracted,
-                     'inputRef': cls.avgSubtomo,
+                     'inputRef': inputRef,
                      'pkeep': 1,
                      'niter': 2,
                      'numberOfThreads': 10}
@@ -123,34 +204,13 @@ class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
         cls.launchProtocol(protTomoRefinement)
         return protTomoRefinement
 
-    def test_averageSubtomograms(self):
-        self.checkAverage(self.avgSubtomo, boxSize=super().binnedBoxSize)
-
-    def test_genInitialModel(self):
-        initModel = self.runGenInitialModel()
-        self.checkAverage(initModel, boxSize=super().binnedBoxSize, halvesExpected=False)
-
     def test_subtomoRefinement(self):
-        protTomoSubtomogramRefinement = self.runTomoSubtomogramRefinement()
-        self.checkRefinementResults(protTomoSubtomogramRefinement)
+        protSubtomoRefinement = self.runSubtomogramRefinement(self.avgSubtomo)
+        self.checkRefinementResults(protSubtomoRefinement)
 
     def test_subTomoRefinementWithMask(self):
-        protTomoSubtomogramRefinement = self.runTomoSubtomogramRefinement(mask=self.runCreate3dMask())
-        self.checkRefinementResults(protTomoSubtomogramRefinement)
-
-    def checkAverage(self, avg, boxSize=None, halvesExpected=True):
-        testBoxSize = (boxSize, boxSize, boxSize)
-        self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
-        self.assertTrue(avg.getFileName().endswith(".mrc"))
-        # The imported coordinates correspond to a binned 2 tomogram
-        self.assertEqual(avg.getSamplingRate(), super().binnedSRate)
-        self.assertEqual(avg.getDimensions(), testBoxSize)
-        # Check the halves
-        if halvesExpected:
-            self.assertTrue(avg.hasHalfMaps(), "Halves not registered")
-            half1, half2 = avg.getHalfMaps().split(',')
-            self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
-            self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
+        protSubtomoRefinement = self.runSubtomogramRefinement(self.avgSubtomo, mask=self.mask)
+        self.checkRefinementResults(protSubtomoRefinement)
 
     def checkRefinementResults(self, protRefineSubtomos):
         refinedSubtomos = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.subtomograms.name, None)
@@ -181,4 +241,7 @@ class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
         # FSCs checking
         fscs = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.FSCs.name)
         self.assertSetSize(fscs, 3, msg="FSCs not registered properly")
+
+
+
 

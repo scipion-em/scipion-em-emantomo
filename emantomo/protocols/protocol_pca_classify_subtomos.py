@@ -27,16 +27,24 @@
 # **************************************************************************
 
 import itertools
-import os
-from pyworkflow import utils as pwutils, BETA
+from enum import Enum
+from os.path import join, abspath
+from pwem import ALIGN_3D
+from pyworkflow import BETA
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import STEPS_PARALLEL, PointerParam, IntParam, StringParam, LEVEL_ADVANCED, FloatParam, \
     BooleanParam
-from ..constants import SYMMETRY_HELP_MSG
+from pyworkflow.utils import makePath, removeBaseExt
+from ..constants import SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR, SPT_00, INPUT_PTCLS_LST
 from ..convert import writeSetOfSubTomograms, refinement2Json, loadJson
 import emantomo
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SetOfAverageSubTomograms
+from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms
+
+
+class pcaOutputObjects(Enum):
+    subtomograms = SetOfSubTomograms
+    classes = SetOfClassesSubTomograms
 
 
 class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
@@ -47,14 +55,16 @@ class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
     """
 
     _outputClassName = 'MultiReferenceRefinement'
-    _label = 'classify subtomograms'
-    # OUTPUT_PREFIX = 'outputSetOf3DClassesSubTomograms'
-    # OUTPUT_DIR = "spt_00"
+    _label = 'PCA-based classification of subtomograms'
     _devStatus = BETA
+    _possibleOutputs = pcaOutputObjects
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
+        self.subtomosDir = None
+        self.spt00Dir = None
+        self.subtomoClassDict = {}
 
     # --------------- DEFINE param functions ---------------
     def _defineParams(self, form):
@@ -67,11 +77,6 @@ class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
                       label='Mask (opt.)',
                       allowsNull=True,
                       pointerClass='VolumeMask')
-        # form.addParam('inputRef', PointerParam,
-        #               pointerClass='AverageSubTomogram',
-        #               default=None,
-        #               label='Reference average (opt.)',
-        #               help='If not provided, a reference will be created using the input subtomograms.')
 
         form.addSection(label='Optimization')
         form.addParam('nClass', IntParam,
@@ -110,117 +115,116 @@ class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
+        self._initialize()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.pcaClassification)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
+    def _initialize(self):
+        self.subtomosDir = self._getExtraPath(SUBTOMOGRAMS_DIR)
+        self.spt00Dir = self._getExtraPath(SPT_00)
+        makePath(*[self.subtomosDir, self.spt00Dir])
+
     def convertInputStep(self):
-        storePath = self._getExtraPath("subtomograms")
-        pwutils.makePath(storePath)
-
         volName = self.inSubtomos.get().getFirstItem().getVolName()
-        self.newFn = pwutils.removeBaseExt(volName).split('__ctf')[0] + '.hdf'
-        self.newFn = pwutils.join(storePath, self.newFn)
-        writeSetOfSubTomograms(self.inSubtomos.get(), storePath)
+        stackHdf = join(self.subtomosDir, removeBaseExt(volName).split('__ctf')[0] + '.hdf')
 
-        project_path = self._getExtraPath('spt_00')
-        pwutils.makePath(project_path)
+        # Convert the particles to HDF if necessary
+        writeSetOfSubTomograms(self.inSubtomos.get(), self.subtomosDir, lignType=ALIGN_3D)
+
+        # Generate the refinement JSON expected to be in the SPT directory
         refinement2Json(self, self.inSubtomos.get())
 
+        # Generate the LST file expected to be in the SPT directory
         program = emantomo.Plugin.getProgram('e2proclst.py')
-        self.runJob(program, ' --create %s %s' % (os.path.abspath(os.path.join(project_path, 'input_ptcls.lst')),
-                                                  os.path.abspath(self.newFn)),
-                    cwd=self._getExtraPath())
+        args = ' --create %s %s' % (join(self.spt00Dir, INPUT_PTCLS_LST), abspath(stackHdf))
+        self.runJob(program, args)
 
-        program = emantomo.Plugin.getProgram('e2proc3d.py')
-        args = "%s %s" % (
-        self.inputRef.get().getFileName(), self._getExtraPath(os.path.join('spt_00', 'threed_01.hdf')))
+        # Average the introduced particles to get the refined expected to be in the SPT directory
+        args = " --path=%s --keep 1" % self.spt00Dir
+        program = emantomo.Plugin.getProgram('e2spt_average.py')
         self.runJob(program, args)
 
     def pcaClassification(self):
         """ Run the pca classification. """
-        args = " --path=%s --iter=1 --nclass=%d --nbasis=%d" % \
-               (os.path.abspath(self._getExtraPath('spt_00')), self.nClass.get(), self.nBasis.get())
-
+        args = " --path=%s" % SPT_00
+        args += " --nclass=%i" % self.nClass.get()
+        args += " --nbasis=%d" % self._estimatePCAComps()
+        args += " --sym=%s" % self.sym.get()
         if self.mask.get() is None:
             args += " --mask=none"
         else:
-            args += " --mask=%s" % os.path.abspath(self.mask.get().getFileName())
-
-        args += " --sym=%s" % self.sym.get()
-
+            args += " --mask=%s" % abspath(self.mask.get().getFileName())
         if not self.wedgeFill.get():
             args += " --nowedgefill"
-
         if self.clean.get():
             args += " --clean"
-
         if self.shrink.get():
-            args += " --shrink=%f" % self.shrink.get()
+            args += " --shrink=%i" % self.shrink.get()
 
-        args += ' --verbose=9'
+        args += ' --iter=1 --verbose=9'
         program = emantomo.Plugin.getProgram('e2spt_pcasplit.py')
-        self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def createOutputStep(self):
-        # self._manageGeneratedFiles()
-        subtomoSet = self.inSubtomos.get()
-        classes3D = self._createSetOfClassesSubTomograms(subtomoSet)
+        # 1) Subtomograms
+        inSubtomoSet = self.inSubtomos.get()
+        outSubtomoSet = SetOfSubTomograms.create(self._getPath(), template='setOfSubTomograms%s.sqlite')
+        outSubtomoSet.copyInfo(inSubtomoSet)
+
+        # Generate a dictionary with the classId and the corresponding particles determined by eman
+        for classID in range(self.nClass.get()):
+            keys_class = list(loadJson(
+                self._getExtraPath(join("sptcls_00", "particle_parms_%02d.json" % (classID + 1)))).keys())
+            partID = [int(item.split(", ")[1][:-1]) for item in keys_class]
+            self.subtomoClassDict[classID] = partID
+
+        # Fill the output set of subtomograms, adding the classId to the input ones
+        for i, subtomo in enumerate(inSubtomoSet):
+            for classId, idList in self.subtomoClassDict.items():
+                if i in idList:
+                    subtomo.setClassId(classId + 1)
+                    outSubtomoSet.append(subtomo)
+                    continue
+
+        # 2) Classes subtomograms
+        classes3D = self._createSetOfClassesSubTomograms(inSubtomoSet)
+        classes3D.setImages(inSubtomoSet)
         self._fillClassesFromJsons(classes3D)
 
-        self._defineOutputs(outputClasses=classes3D)
-        self._defineSourceRelation(subtomoSet, classes3D)
-
-        # Create a SetOfVolumes and define its relations
-        volumes = SetOfAverageSubTomograms.create(self._getPath(),
-                                                  template='avgSubtomograms%s.sqlite',
-                                                  suffix='')
-        volumes.setSamplingRate(subtomoSet.getSamplingRate())
-
-        for class3D in classes3D:
-            vol = class3D.getRepresentative()
-            vol.setObjId(class3D.getObjId())
-            volumes.append(vol)
-
-        self._defineOutputs(outputVolumes=volumes)
-        self._defineSourceRelation(subtomoSet, volumes)
+        # Define the outputs and relations
+        self._defineOutputs(**{pcaOutputObjects.classes.name: classes3D,
+                               pcaOutputObjects.subtomograms.name: outSubtomoSet})
+        self._defineSourceRelation(inSubtomoSet, outSubtomoSet)
+        self._defineSourceRelation(inSubtomoSet, classes3D)
 
     # --------------- UTILS functions ------------------------
     def _fillClassesFromJsons(self, clsSet):
-        self.particle_class = {}
-        for classID in range(self.nClass.get()):
-            keys_class = list(loadJson(
-                self._getExtraPath(os.path.join("sptcls_00", "particle_parms_%02d.json" % (classID + 1)))).keys())
-            partID = [int(item.split(", ")[1][:-1]) for item in keys_class]
-            self.particle_class[classID] = partID
-
         # Initialization of variables used during clasiffy, specially in the callbacks: _updateParticle and _updateCLass
         self.particleCounter = 0  # Particle counter that should match the value in particles list input
-        self.key_list = list(self.particle_class.keys())
-        self.val_list = list(self.particle_class.values())
-
         clsSet.classifyItems(updateItemCallback=self._updateParticle,
                              updateClassCallback=self._updateClass,
                              itemDataIterator=itertools.count(0))
 
     def _updateParticle(self, item, row):
-
         idx = self.particleCounter
-        position = [i for i, sublist in enumerate(self.val_list) if idx in sublist][0]
-        item.setClassId(self.key_list[position] + 1)
+        for classId, particleIndList in self.subtomoClassDict.items():
+            if idx in particleIndList:
+                item.setClassId(classId + 1)
+                break
         self.particleCounter += 1
 
     def _updateClass(self, item):
         classId = item.getObjId()
-        item.getRepresentative().setLocation(self._getExtraPath(os.path.join("sptcls_00", "threed_%02d.hdf" % classId)))
+        item.setAlignment3D()
+        item.getRepresentative().setLocation(self._getExtraPath(join("sptcls_00", "threed_%02d.hdf" % classId)))
 
     def _estimatePCAComps(self):
         pcaComps = self.nBasis.get()
         if not pcaComps:
             x, y, _ = self.inSubtomos.get().getDimensions()
-            pcaComps = round(1/100 * 0.5 * x * y)
+            pcaComps = round(1 / 100 * 0.5 * x * y)
 
         return pcaComps
 
@@ -234,6 +238,8 @@ class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
     def _validate(self):
         errors = []
         nSubtomos = self.inSubtomos.get().getSize()
-        if self.nBasis.get() > nSubtomos:
-            errors.append('Number of PCA components must be between 0 and min(n_samples, n_features).')
+        nPcaComps = self.nBasis.get()
+        if nPcaComps:
+            if nPcaComps > nSubtomos:
+                errors.append('Number of PCA components must be between 0 and min(n_samples, n_features).')
         return errors

@@ -31,6 +31,7 @@
 import glob
 import itertools
 import json
+from os.path import join
 
 import numpy as np
 
@@ -51,7 +52,6 @@ from tomo.constants import TR_EMAN
 
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE
-
 
 
 def loadJson(jsonFn):
@@ -713,7 +713,7 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
         # Populate Set of 3D Coordinates with 3D Coordinates
         readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, tomo.clone())
 
-    protocol._defineOutputs(**{outputname:coord3DSet})
+    protocol._defineOutputs(**{outputname: coord3DSet})
     protocol._defineSourceRelation(setTomograms, coord3DSet)
 
     # # Update Outputs
@@ -777,10 +777,10 @@ def ctf2Json(json_files, ctfSeries, mode='w'):
                 paths.append(json_file)
     return paths
 
+
 def refinement2Json(protocol, subTomos, mode='w'):
-    lst_file = protocol._getExtraPath(os.path.join('spt_00', 'input_ptcls.lst'))
-    json_name = protocol._getExtraPath(os.path.join('spt_00', 'particle_parms_01.json'))
-    sr = subTomos.getSamplingRate()
+    lst_file = protocol._getExtraPath(join('spt_00', 'input_ptcls.lst'))
+    json_name = protocol._getExtraPath(join('spt_00', 'particle_parms_01.json'))
     parms_dict = {}
 
     count = 0
@@ -788,9 +788,8 @@ def refinement2Json(protocol, subTomos, mode='w'):
         key = "('%s', %d)" % (os.path.abspath(lst_file), count)
         count += 1
         coverage = getattr(subTomo, EMAN_COVERAGE, Float(0.0)).get()
-        score = getattr(subTomo, EMAN_SCORE,Float(-0.0)).get()
+        score = getattr(subTomo, EMAN_SCORE, Float(-0.0)).get()
         matrix_st = subTomo.getTransform(convention=TR_EMAN).getMatrix()
-
 
         if subTomo.hasCoordinate3D():
             matrix_c = subTomo.getCoordinate3D().getMatrix(convention=TR_EMAN)
@@ -811,12 +810,13 @@ def refinement2Json(protocol, subTomos, mode='w'):
                            "xform.align3d": {"__class__": "Transform",
                                              "matrix": am_st},
                            "xform.start": {"__class__": "Transform",
-                                             "matrix": am_c},
+                                           "matrix": am_c},
                            }
     if mode == "w":
         writeJson(parms_dict, json_name, indent=1)
     elif mode == "a":
         appendJson(parms_dict, json_name, indent=1)
+
 
 def recoverTSFromObj(child_obj, protocol):
     p = protocol.getProject()
@@ -839,7 +839,6 @@ def recoverTSFromObj(child_obj, protocol):
 
 
 def emanFSCsToScipion(fscSet, *fscFiles):
-
     def _getFscValues(fscFn):
         resolution_inv, frc = [], []
         with open(fscFn) as f1:
@@ -850,7 +849,6 @@ def emanFSCsToScipion(fscSet, *fscFiles):
         return resolution_inv, frc
 
     for fscFile in fscFiles:
-
         res_inv, frc = _getFscValues(fscFile)
         fsc = FSC(objLabel=os.path.basename(fscFile))
         fsc.setData(res_inv, frc)
