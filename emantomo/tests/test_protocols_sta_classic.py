@@ -23,16 +23,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists
 import numpy as np
 from pyworkflow.utils import magentaStr
 from .test_eman_base import TestEmantomoBase
 from ..constants import EMAN_COVERAGE, EMAN_SCORE
 from tomo.constants import TR_EMAN
 from ..protocols import EmanProtTomoInitialModel
-from ..protocols.protocol_average_subtomos import OutputsAverageSubtomos, EmanProtSubTomoAverage
-from ..protocols.protocol_pca_classify_subtomos import pcaOutputObjects, EmanProtPcaTomoClassifySubtomos
-from ..protocols.protocol_tomo_extraction_from_tomo import SAME_AS_PICKING
+from ..protocols.protocol_pca_kmeans_classify_subtomos import pcaOutputObjects, EmanProtPcaKMeansClassifySubtomos
 from ..protocols.protocol_tomo_initialmodel import OutputsInitModel
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
 
@@ -97,18 +94,6 @@ class TestEmanTomoPcaClassification(TestEmantomoBase):
 
     @classmethod
     def setUpClass(cls):
-        # JORGE
-        import os
-        fname = "/home/jjimenez/Desktop/test_JJ.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        import time
-        time.sleep(10)
-        # JORGE_END
         super().setUpClass()
         cls.pcaResults = cls.genTestPcaClassifResults()
         cls.runPreviousProtocols()
@@ -140,7 +125,7 @@ class TestEmanTomoPcaClassification(TestEmantomoBase):
             argDict['mask'] = mask
             objLabel += ' with mask'
 
-        protPcaClassif = cls.newProtocol(EmanProtPcaTomoClassifySubtomos, **argDict)
+        protPcaClassif = cls.newProtocol(EmanProtPcaKMeansClassifySubtomos, **argDict)
         protPcaClassif.setObjLabel(objLabel)
         cls.launchProtocol(protPcaClassif)
         return protPcaClassif
@@ -157,13 +142,21 @@ class TestEmanTomoPcaClassification(TestEmantomoBase):
         outSubtomos = getattr(protPca, pcaOutputObjects.subtomograms.name, None)
         outClasses = getattr(protPca, pcaOutputObjects.classes.name, None)
 
-        # Check classes
-        self.assertEqual(outClasses.getSize(), self.pcaNumClasses)
-        a = []
-        for item in outClasses.iterClassItems():
-            a.append(item.getClassId())
+        # CHECK SUBTOMO OUTPUT SET
+        # Output set size must be lower or equal than the input set because some classes can have been purged
+        testBozSize = (super().binnedBoxSize, super().binnedBoxSize, super().binnedBoxSize)
+        self.assertLessEqual(outSubtomos.getSize(), super().nParticles)
+        self.assertEqual(outSubtomos.getSamplingRate(), super().binnedSRate)
+        self.assertEqual(outSubtomos.getDim(), testBozSize)
+        # The subtomograms haven't been previously classified --> Each must have a classId in range(1, nClasses + 1)
+        subtomoClassRange = range(1, self.pcaNumClasses + 1)
+        for subtomo in outSubtomos:
+            self.assertTrue(subtomo.getClassId() in subtomoClassRange)
+            self.assertEqual(subtomo.getSamplingRate(), super().binnedSRate)
+            self.assertEqual(subtomo.getDim(), testBozSize)
 
-        z = 1
+        # CHECK CLASSES OUTPUT SET
+        self.assertSetSize(outClasses, self.pcaNumClasses)
 
 
 class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):

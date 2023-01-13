@@ -47,15 +47,15 @@ class pcaOutputObjects(Enum):
     classes = SetOfClassesSubTomograms
 
 
-class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
+class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     """
     This protocol wraps *e2spt_pcasplit.py* EMAN2 program.
-    Protocol to performs a PCA (Principal Component Analysis) classification
+    Protocol to performs a PCA (Principal Component Analysis) and K-means classification
     using the full set of particles.
     """
 
     _outputClassName = 'MultiReferenceRefinement'
-    _label = 'PCA-based classification of subtomograms'
+    _label = 'PCA-K Means classification of subtomograms'
     _devStatus = BETA
     _possibleOutputs = pcaOutputObjects
     stepsExecutionMode = STEPS_PARALLEL
@@ -221,6 +221,7 @@ class EmanProtPcaTomoClassifySubtomos(EMProtocol, ProtTomoBase):
         item.getRepresentative().setLocation(self._getExtraPath(join("sptcls_00", "threed_%02d.hdf" % classId)))
 
     def _estimatePCAComps(self):
+        # Antonio Martinez-Sanchez rule... seems to work fine
         pcaComps = self.nBasis.get()
         if not pcaComps:
             x, y, _ = self.inSubtomos.get().getDimensions()

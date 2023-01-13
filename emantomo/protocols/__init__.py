@@ -32,7 +32,7 @@ from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
 # from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
 from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
-from .protocol_pca_classify_subtomos import EmanProtPcaTomoClassifySubtomos
+from .protocol_pca_kmeans_classify_subtomos import EmanProtPcaKMeansClassifySubtomos
 # from .protocol_tomo_reconstruction import EmanProtTomoReconstruction
 # from .protocol_align_ts import EmanProtAlignTs
 # from .protocol_estimate_ctf import EmanProtEstimateCTF
