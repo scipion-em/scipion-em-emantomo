@@ -54,11 +54,9 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     using the full set of particles.
     """
 
-    _outputClassName = 'MultiReferenceRefinement'
     _label = 'PCA-K Means classification of subtomograms'
     _devStatus = BETA
     _possibleOutputs = pcaOutputObjects
-    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
