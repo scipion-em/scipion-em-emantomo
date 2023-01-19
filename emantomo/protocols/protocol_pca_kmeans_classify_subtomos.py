@@ -25,26 +25,27 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+import glob
 import itertools
 from enum import Enum
 from os.path import join, abspath
 from pwem import ALIGN_3D
 from pyworkflow import BETA
 from pwem.protocols import EMProtocol
-from pyworkflow.protocol import STEPS_PARALLEL, PointerParam, IntParam, StringParam, LEVEL_ADVANCED, FloatParam, \
+from pyworkflow.protocol import PointerParam, IntParam, StringParam, LEVEL_ADVANCED, FloatParam, \
     BooleanParam
-from pyworkflow.utils import makePath, removeBaseExt
-from ..constants import SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR, SPT_00, INPUT_PTCLS_LST
+from pyworkflow.utils import makePath, removeBaseExt, removeExt
+from ..constants import SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR, SPT_00_DIR, INPUT_PTCLS_LST, SPTCLS_00_DIR
 from ..convert import writeSetOfSubTomograms, refinement2Json, loadJson
 import emantomo
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms
+from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SetOfAverageSubTomograms
 
 
 class pcaOutputObjects(Enum):
     subtomograms = SetOfSubTomograms
     classes = SetOfClassesSubTomograms
+    representatives = SetOfAverageSubTomograms
 
 
 class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
@@ -116,12 +117,13 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         self._initialize()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.pcaClassification)
+        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
     def _initialize(self):
         self.subtomosDir = self._getExtraPath(SUBTOMOGRAMS_DIR)
-        self.spt00Dir = self._getExtraPath(SPT_00)
+        self.spt00Dir = self._getExtraPath(SPT_00_DIR)
         makePath(*[self.subtomosDir, self.spt00Dir])
 
     def convertInputStep(self):
@@ -146,7 +148,7 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
 
     def pcaClassification(self):
         """ Run the pca classification. """
-        args = " --path=%s" % SPT_00
+        args = " --path=%s" % SPT_00_DIR
         args += " --nclass=%i" % self.nClass.get()
         args += " --nbasis=%d" % self._estimatePCAComps()
         args += " --sym=%s" % self.sym.get()
@@ -164,6 +166,17 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         args += ' --iter=1 --verbose=9'
         program = emantomo.Plugin.getProgram('e2spt_pcasplit.py')
         self.runJob(program, args, cwd=self._getExtraPath())
+
+    def convertOutputStep(self):
+        """Convert the class representatives and their halves from HDF to MRC"""
+        # They follow the syntax, for each class (e. g. class 1), threed_01.hdf, threed_01_even.hdf, threed_01_odd.hdf,
+        # located in directory extra/sptcls_00/
+        program = emantomo.Plugin.getProgram('e2proc3d.py')
+        sRate = self.inSubtomos.get().getSamplingRate()
+        for classFile in glob.glob(self._getExtraPath(SPTCLS_00_DIR, 'threed_*.hdf')):
+            outMrcFile = self._getExtraPath(SPTCLS_00_DIR, removeBaseExt(classFile) + '.mrc')
+            args = "--apix %f %s %s" % (sRate, classFile, outMrcFile)
+            self.runJob(program, args)
 
     def createOutputStep(self):
         # 1) Subtomograms
@@ -191,11 +204,23 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         classes3D.setImages(inSubtomoSet)
         self._fillClassesFromJsons(classes3D)
 
+        # 3) Set of averages with the representative of each class
+        # Create a SetOfVolumes and define its relations
+        averages = SetOfAverageSubTomograms.create(self._getPath(), template='avgSubtomograms%s.sqlite', suffix='')
+        averages.setSamplingRate(inSubtomoSet.getSamplingRate())
+        for class3D in classes3D:
+            representative = class3D.getRepresentative()
+            representative.setObjId(class3D.getObjId())  # class objId is the class number
+            representative.setHalfMaps(self.getHalvesFromClassRepresentative(representative))
+            averages.append(representative)
+
         # Define the outputs and relations
         self._defineOutputs(**{pcaOutputObjects.classes.name: classes3D,
-                               pcaOutputObjects.subtomograms.name: outSubtomoSet})
+                               pcaOutputObjects.subtomograms.name: outSubtomoSet,
+                               pcaOutputObjects.representatives.name: averages})
         self._defineSourceRelation(inSubtomoSet, outSubtomoSet)
         self._defineSourceRelation(inSubtomoSet, classes3D)
+        self._defineSourceRelation(inSubtomoSet, averages)
 
     # --------------- UTILS functions ------------------------
     def _fillClassesFromJsons(self, clsSet):
@@ -216,7 +241,9 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     def _updateClass(self, item):
         classId = item.getObjId()
         item.setAlignment3D()
-        item.getRepresentative().setLocation(self._getExtraPath(join("sptcls_00", "threed_%02d.hdf" % classId)))
+        representative = item.getRepresentative()
+        representative.setLocation(self._getExtraPath(join(SPTCLS_00_DIR, "threed_%02d.mrc" % classId)))
+        representative.setHalfMaps(self.getHalvesFromClassRepresentative(representative))
 
     def _estimatePCAComps(self):
         # Antonio Martinez-Sanchez rule... seems to work fine
@@ -226,6 +253,12 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
             pcaComps = round(1 / 100 * 0.5 * x * y)
 
         return pcaComps
+
+    @staticmethod
+    def getHalvesFromClassRepresentative(representative):
+        ext = '.mrc'
+        repPathAndBasename = removeExt(representative.getFileName())
+        return [repPathAndBasename + '_even' + ext, repPathAndBasename + '_odd' + ext]
 
     # --------------- INFO functions -------------------------
     def _summary(self):
@@ -237,7 +270,11 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     def _validate(self):
         errors = []
         nSubtomos = self.inSubtomos.get().getSize()
+        nClasses = self.nClass.get()
         nPcaComps = self.nBasis.get()
+        if nClasses > nSubtomos:
+            errors.append('The number of classes (%i) cannot be greater than the number of subtomograms (%i).' %
+                          (nClasses, nSubtomos))
         if nPcaComps:
             if nPcaComps > nSubtomos:
                 errors.append('Number of PCA components must be between 0 and min(n_samples, n_features).')

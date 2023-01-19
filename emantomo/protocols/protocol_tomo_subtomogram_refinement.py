@@ -39,7 +39,7 @@ import pwem.constants as emcts
 from pyworkflow.utils import createLink
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from ..constants import SUBTOMOGRAMS_DIR, SPT_00, SYMMETRY_HELP_MSG
+from ..constants import SUBTOMOGRAMS_DIR, SPT_00_DIR, SYMMETRY_HELP_MSG
 
 
 class EmanTomoRefinementOutputs(enum.Enum):
@@ -296,7 +296,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             return imagePaths[-1]
 
     def getOutputPath(self, *args):
-        return join(self._getExtraPath(SPT_00, *args))
+        return join(self._getExtraPath(SPT_00_DIR, *args))
 
     # @staticmethod
     # def getOutputFile(folderpattern, folder, files, pattern):

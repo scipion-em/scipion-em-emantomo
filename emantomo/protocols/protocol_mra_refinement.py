@@ -28,7 +28,7 @@ from enum import Enum
 from os.path import join, abspath
 
 import emantomo
-from emantomo.constants import SYMMETRY_HELP_MSG, INPUT_PTCLS_LST, SUBTOMOGRAMS_DIR, SPT_00, REFS_DIR
+from emantomo.constants import SYMMETRY_HELP_MSG, INPUT_PTCLS_LST, SUBTOMOGRAMS_DIR, SPT_00_DIR, REFS_DIR
 from emantomo.convert import writeSetOfSubTomograms, refinement2Json
 from pwem import ALIGN_3D
 from pwem.protocols import EMProtocol
@@ -107,7 +107,7 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     # --------------- STEPS functions -----------------------
     def _initialize(self):
         self.subtomosDir = self._getExtraPath(SUBTOMOGRAMS_DIR)
-        self.spt00Dir = self._getExtraPath(SPT_00)
+        self.spt00Dir = self._getExtraPath(SPT_00_DIR)
         self.refsDir = self._getExtraPath(REFS_DIR)
         makePath(*[self.subtomosDir, self.spt00Dir, self.refsDir])
 
@@ -143,4 +143,5 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     # --------------- INFO functions -------------------------
     # --------------- UTILS functions ------------------------
     def genMraCmd(self):
-        args =
+        pass
+        # args =

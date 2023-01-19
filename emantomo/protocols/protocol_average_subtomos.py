@@ -35,7 +35,7 @@ from pyworkflow import BETA
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, FloatParam, StringParam, BooleanParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt
-from ..constants import SPT_00, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG
+from ..constants import SPT_00_DIR, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG
 
 from ..convert import writeSetOfSubTomograms, refinement2Json
 import emantomo
@@ -112,7 +112,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
 
     # --------------- STEPS functions -----------------------
     def _initialize(self):
-        self.projectPath = self._getExtraPath(SPT_00)
+        self.projectPath = self._getExtraPath(SPT_00_DIR)
         self.hdfSubtomosDir = self._getExtraPath("subtomograms")
         makePath(self.hdfSubtomosDir)
         makePath(self.projectPath)
@@ -145,9 +145,9 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
         # to the original binning, and it will be also in the header of the resulting mrc file
         sRate = self.inputSetOfSubTomogram.get().getSamplingRate()
         program = emantomo.Plugin.getProgram('e2proc3d.py')
-        self.volumeFileHdf = self._getExtraPath(SPT_00, THREED_01 + '.hdf')
-        self.halfEvenFileHdf = self._getExtraPath(SPT_00, THREED_01 + '_even.hdf')
-        self.halfOddFileHdf = self._getExtraPath(SPT_00, THREED_01 + '_odd.hdf')
+        self.volumeFileHdf = self._getExtraPath(SPT_00_DIR, THREED_01 + '.hdf')
+        self.halfEvenFileHdf = self._getExtraPath(SPT_00_DIR, THREED_01 + '_even.hdf')
+        self.halfOddFileHdf = self._getExtraPath(SPT_00_DIR, THREED_01 + '_odd.hdf')
         filesToConvert = [self.volumeFileHdf, self.halfEvenFileHdf, self.halfOddFileHdf]
         for hdfFile in filesToConvert:
             args = "%s %s --apix %f" % (hdfFile, replaceExt(hdfFile, "mrc"), sRate)
@@ -156,7 +156,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
             if not self.keepHdfFile.get():
                 os.remove(hdfFile)
 
-        # Finally, remove the hdf subtomograms generated in the conver input step, if requested
+        # Finally, remove the hdf subtomograms generated in the convert input step, if requested
         if not self.keepHdfFile.get():
             shutil.rmtree(self.hdfSubtomosDir)
 
