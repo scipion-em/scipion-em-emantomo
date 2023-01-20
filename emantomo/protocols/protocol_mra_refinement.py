@@ -24,9 +24,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
 from enum import Enum
 from os.path import join, abspath
-
 import emantomo
 from emantomo.constants import SYMMETRY_HELP_MSG, INPUT_PTCLS_LST, SUBTOMOGRAMS_DIR, SPT_00_DIR, REFS_DIR
 from emantomo.convert import writeSetOfSubTomograms, refinement2Json
@@ -35,7 +35,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam, IntParam, StringParam, LEVEL_ADVANCED, FloatParam, BooleanParam
 from pyworkflow.utils import Message, removeBaseExt, makePath
-from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms
+from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, AverageSubTomogram
 from tomo.protocols import ProtTomoBase
 
 
@@ -44,7 +44,7 @@ class mraOutputObjects(Enum):
     classes = SetOfClassesSubTomograms
 
 
-class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
+class EmanMraClassifySubtomos(EMProtocol, ProtTomoBase):
     """This protocol wraps *e2spt_classify.py* EMAN2 program, which performs a
     multi-reference refinement of subtomograms."""
 
@@ -68,7 +68,7 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         form.addParam('inRefs', PointerParam,
                       label='References',
                       important=True,
-                      pointerClass='Subtomogram, SetOfSubtomograms, Volume, SetOfVolumes')
+                      pointerClass='AverageSubTomogram, SetOfAverageSubTomograms')
         form.addParam('mask', PointerParam,
                       label='Mask (opt.)',
                       allowsNull=True,
@@ -88,7 +88,7 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
                       label='Target resolution [Å]',
                       help='The specified target resolution to avoid under-filtering artifacts.')
         form.addParam('mass', FloatParam,
-                      default=0,
+                      default=500,
                       expertLevel=LEVEL_ADVANCED,
                       label='Mass of the particle [kDa]',
                       help='The rough mass of the particle in kilodaltons, used to normalize by mass. '
@@ -96,6 +96,7 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         form.addParam('doLocalFilter', BooleanParam,
                       default=False,
                       label='Do local filter (top hat)?')
+        form.addParallelSection(threads=4, mpi=0)
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
@@ -130,12 +131,26 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         # Convert the references into HDF if necessary
         program = emantomo.Plugin.getProgram('e2proc3d.py')
         sRate = inSubtomos.getSamplingRate()
-        for ref in self.inRefs.get():
-            args = "--apix %f %s %s" % (sRate, abspath(ref), self._getExtraPath(removeBaseExt(ref) + '.hdf'))
+        refs = self.inRefs.get()
+
+        def convert2Hdf():
+            args = '%s ' % abspath(refFName)
+            args += '%s ' % self._getExtraPath(REFS_DIR, removeBaseExt(refFName) + '.hdf')
+            args += "--apix %f " % sRate
             self.runJob(program, args)
 
+        if isinstance(refs, AverageSubTomogram):
+            refFName = refs.getFileName()
+            convert2Hdf()
+        else:
+            for ref in refs:
+                refFName = ref.getFileName()
+                convert2Hdf()
+
     def mraStep(self):
-        pass
+        program = emantomo.Plugin.getProgram('e2spt_classify.py')
+        args = self.genMraCmd()
+        self.runJob(program, args)
 
     def createOutputStep(self):
         pass
@@ -143,5 +158,22 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
     # --------------- INFO functions -------------------------
     # --------------- UTILS functions ------------------------
     def genMraCmd(self):
-        pass
-        # args =
+        args = '%s ' % abspath(self._getExtraPath(SPT_00_DIR, INPUT_PTCLS_LST))
+        args += '--refs=%s ' % self.getReferences()
+        if self.mask.get():
+            args += '--mask=%s' % abspath(self.mask.get().getFileName())
+        args += '--niter=%i ' % self.nIter.get()
+        args += '--sym=%s ' % self.sym.get()
+        args += '--tarres=%.2f ' % self.targetRes.get()
+        args += '--mass=%.2f ' % self.mass.get()
+        if self.doLocalFilter.get():
+            args += '--localfilter '
+        args += '--path=%s ' % self._getExtraPath(SPT_00_DIR)
+        args += '--threads=%i ' % self.numberOfThreads.get()
+        args += '--verbose=9 '
+        return args
+
+    def getReferences(self):
+        refList = glob.glob(self._getExtraPath(REFS_DIR, '*.hdf'))
+        refFullPathList = [abspath(ref) for ref in refList]
+        return ','.join(refFullPathList)
