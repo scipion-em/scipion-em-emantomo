@@ -41,11 +41,11 @@ class TestEmantomoBase(BaseTest):
     binnedBoxSize = 22
     origSRate = 13.68
     binnedSRate = 27.36
-    ds = DataSet.getDataSet(EMD_10439)
 
     @classmethod
     def setUpClass(cls):
         setupTestProject(cls)
+        cls.ds = DataSet.getDataSet(EMD_10439)
 
     @classmethod
     def runImportTomograms(cls):
