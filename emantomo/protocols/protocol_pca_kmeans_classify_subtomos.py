@@ -210,7 +210,9 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         averages.setSamplingRate(inSubtomoSet.getSamplingRate())
         for class3D in classes3D:
             representative = class3D.getRepresentative()
-            representative.setObjId(class3D.getObjId())  # class objId is the class number
+            classId = class3D.getObjId()
+            representative.setObjId(classId)  # The class objId is the class number
+            representative.setClassId(classId)
             representative.setHalfMaps(self.getHalvesFromClassRepresentative(representative))
             averages.append(representative)
 
@@ -277,5 +279,5 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
                           (nClasses, nSubtomos))
         if nPcaComps:
             if nPcaComps > nSubtomos:
-                errors.append('Number of PCA components must be between 0 and min(n_samples, n_features).')
+                errors.append('The number of PCA components must be between 0 and min(n_samples, n_features).')
         return errors

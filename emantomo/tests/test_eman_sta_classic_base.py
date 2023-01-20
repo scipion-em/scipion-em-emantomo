@@ -42,7 +42,7 @@ from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipi
 from tomo.tests import EMD_10439, DataSetEmd10439
 
 
-class TestEmantomoBase(BaseTest):
+class TestEmantomoStaClassicBase(BaseTest):
     coordsImported = None
     tomosBinned = None
     tomoImported = None

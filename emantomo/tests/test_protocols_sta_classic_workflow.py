@@ -23,10 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from os.path import exists
+
 import numpy as np
 from pyworkflow.utils import magentaStr
-from .test_eman_base import TestEmantomoBase
-from ..constants import EMAN_COVERAGE, EMAN_SCORE
+from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
+from ..constants import EMAN_COVERAGE, EMAN_SCORE, SPTCLS_00_DIR
 from tomo.constants import TR_EMAN
 from ..protocols import EmanProtTomoInitialModel
 from ..protocols.protocol_pca_kmeans_classify_subtomos import pcaOutputObjects, EmanProtPcaKMeansClassifySubtomos
@@ -34,7 +36,7 @@ from ..protocols.protocol_tomo_initialmodel import OutputsInitModel
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
 
 
-class TestEmanTomoAverageSubtomograms(TestEmantomoBase):
+class TestEmanTomoAverageSubtomogramsStaClassic(TestEmantomoStaClassicBase):
 
     @classmethod
     def setUpClass(cls):
@@ -53,7 +55,7 @@ class TestEmanTomoAverageSubtomograms(TestEmantomoBase):
         super().checkAverage(avgSubtomo, boxSize=super().binnedBoxSize)
 
 
-class TestEmanTomoInitialModel(TestEmantomoBase):
+class TestEmanTomoInitialModelStaClassic(TestEmantomoStaClassicBase):
 
     avgSubtomo = None
 
@@ -87,7 +89,7 @@ class TestEmanTomoInitialModel(TestEmantomoBase):
         super().checkAverage(initModel, boxSize=super().binnedBoxSize, halvesExpected=False)
 
 
-class TestEmanTomoPcaClassification(TestEmantomoBase):
+class TestEmanTomoPcaClassificationStaClassic(TestEmantomoStaClassicBase):
 
     pcaNumClasses = 2
     mask = None
@@ -130,6 +132,16 @@ class TestEmanTomoPcaClassification(TestEmantomoBase):
         cls.launchProtocol(protPcaClassif)
         return protPcaClassif
 
+    @staticmethod
+    def getRepresentativeTestName(prot, classId, ext='.mrc'):
+        return prot._getExtraPath(SPTCLS_00_DIR, 'threed_%02i%s' % (classId, ext))
+
+    @staticmethod
+    def getRepresentativeTestHalves(prot, classId):
+        ext = '.mrc'
+        pathAndBaseName = TestEmanTomoPcaClassificationStaClassic.getRepresentativeTestName(prot, classId, ext='')
+        return [pathAndBaseName + '_even' + ext, pathAndBaseName + '_odd' + ext]
+
     def test_pcaClassifWithoutMask(self):
         pcaProt = self.runPcaClassification()
         self.checkPcaResults(pcaProt)
@@ -141,6 +153,7 @@ class TestEmanTomoPcaClassification(TestEmantomoBase):
     def checkPcaResults(self, protPca):
         outSubtomos = getattr(protPca, pcaOutputObjects.subtomograms.name, None)
         outClasses = getattr(protPca, pcaOutputObjects.classes.name, None)
+        outAverages = getattr(protPca, pcaOutputObjects.representatives.name, None)
 
         # CHECK SUBTOMO OUTPUT SET
         # Output set size must be lower or equal than the input set because some classes can have been purged
@@ -157,9 +170,29 @@ class TestEmanTomoPcaClassification(TestEmantomoBase):
 
         # CHECK CLASSES OUTPUT SET
         self.assertSetSize(outClasses, self.pcaNumClasses)
+        for class3d in outClasses:
+            representative = class3d.getRepresentative()
+            classId = class3d.getObjId()
+            self.assertEqual(class3d.getSamplingRate(), super().binnedSRate)
+            self.assertTrue(exists(representative.getFileName()))
+            # The object id of each class corresponds to the class id number
+            self.assertEqual(representative.getFileName(), self.getRepresentativeTestName(protPca, classId))
+            self.assertTrue(representative.getHalfMaps(), self.getRepresentativeTestHalves(protPca, classId))
+            for subtomo in class3d:
+                self.assertEqual(subtomo.getClassId(), classId)
+
+        # CHECK AVERAGES OUTPUT SET
+        self.assertSetSize(outAverages, self.pcaNumClasses)
+        for avg in outAverages:
+            self.assertEqual(avg.getSamplingRate(), super().binnedSRate)
+            # The object id of each class corresponds to the class id number
+            classId = avg.getClassId()
+            self.assertEqual(classId, avg.getObjId())
+            self.assertEqual(avg.getFileName(), self.getRepresentativeTestName(protPca, classId))
+            self.assertTrue(avg.getHalfMaps(), self.getRepresentativeTestHalves(protPca, classId))
 
 
-class TestEmanTomoSubtomogramRefinement(TestEmantomoBase):
+class TestEmanTomoSubtomogramRefinementStaClassic(TestEmantomoStaClassicBase):
 
     mask = None
     avgSubtomo = None

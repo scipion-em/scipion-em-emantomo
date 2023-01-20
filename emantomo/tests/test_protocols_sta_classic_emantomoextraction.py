@@ -29,11 +29,11 @@ from pyworkflow.utils import magentaStr
 from tomo.constants import TR_EMAN
 from tomo.protocols import ProtTomoExtractCoords
 from tomo.protocols.protocol_extract_coordinates import Output3dCoordExtraction
-from .test_eman_base import TestEmantomoBase
+from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
 from ..protocols.protocol_tomo_extraction_from_tomo import OTHER
 
 
-class TestEmanTomoExtraction(TestEmantomoBase):
+class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
     """This class check if the protocol to extract subtomograms
     in Eman works properly.
     """
