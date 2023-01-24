@@ -26,7 +26,7 @@
 
 from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui import showInfo
-from .protocols import EmanProtTomoExtraction, EmanProtTomoResize
+from .protocols import EmanProtTomoExtraction
 
 
 class EmanTomoExtractionWizard(EmWizard):

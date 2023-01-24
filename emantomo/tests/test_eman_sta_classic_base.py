@@ -39,10 +39,12 @@ from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pyworkflow.utils import magentaStr
 from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
+from tomo.protocols.protocol_import_coordinates_from_scipion import outputObjs
 from tomo.tests import EMD_10439, DataSetEmd10439
 
 
 class TestEmantomoStaClassicBase(BaseTest):
+    ds = None
     coordsImported = None
     tomosBinned = None
     tomoImported = None
@@ -111,7 +113,7 @@ class TestEmantomoStaClassicBase(BaseTest):
                                                   boxSize=cls.boxSize)
 
         cls.launchProtocol(protImportCoordinates3d)
-        coordsImported = protImportCoordinates3d.outputCoordinates
+        coordsImported = getattr(protImportCoordinates3d, outputObjs.coordinates.name, None)
         cls.assertIsNotNone(coordsImported, "There was a problem with the 3D coordinates output")
         return coordsImported
 
