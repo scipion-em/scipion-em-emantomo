@@ -260,10 +260,18 @@ SETS_DIR = 'sets'
 INIT_MODEL_DIR = 'sptsgd_00'
 INIT_MODEL_NAME = 'output_cls0.hdf'
 INIR_MODEL_NAME_OLD = 'output.hdf'
-SPT_00 = 'spt_00'
+SPT_00_DIR = 'spt_00'
+REFS_DIR = 'references'
 INPUT_PTCLS_LST = 'input_ptcls.lst'
 THREED_01 = 'threed_01'
+SPTCLS_00_DIR = 'sptcls_00'
 
-
+SYMMETRY_HELP_MSG = 'Supported symmetries are :\n\n' \
+                    'Cn - single rotational n-fold symmetry axis\n' \
+                    'Dn - dihedral rotational n-fold, eg - GroEL is ~D7\n' \
+                    'icos - icosahedral, (5,3,2)\n' \
+                    'oct - octahedral, symmetry of a cube (4,3,2)\n' \
+                    'tet - tetrahedral, (3,2)\n' \
+                    'h - helical'
 
 

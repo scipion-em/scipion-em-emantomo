@@ -23,8 +23,15 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from os.path import exists
+
 import numpy as np
-from emantomo.protocols import EmanProtTomoExtraction
+from xmipp3.constants import MASK3D_CYLINDER
+from xmipp3.protocols import XmippProtCreateMask3D
+from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
+
+from emantomo.protocols import EmanProtTomoExtraction, EmanProtSubTomoAverage
+from emantomo.protocols.protocol_average_subtomos import OutputsAverageSubtomos
 from emantomo.protocols.protocol_tomo_extraction_from_tomo import SAME_AS_PICKING, OutputExtraction, OTHER
 from imod.protocols import ProtImodTomoNormalization
 from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
@@ -32,10 +39,16 @@ from pyworkflow.tests import BaseTest, DataSet, setupTestProject
 from pyworkflow.utils import magentaStr
 from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
+from tomo.protocols.protocol_import_coordinates_from_scipion import outputObjs
 from tomo.tests import EMD_10439, DataSetEmd10439
 
 
-class TestEmantomoBase(BaseTest):
+class TestEmantomoStaClassicBase(BaseTest):
+    ds = None
+    coordsImported = None
+    tomosBinned = None
+    tomoImported = None
+    subtomosExtracted = None
     nParticles = 39
     boxSize = 44
     binnedBoxSize = 22
@@ -46,6 +59,36 @@ class TestEmantomoBase(BaseTest):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(EMD_10439)
+
+    @classmethod
+    def runPreviousProtocols(cls):
+        cls.tomoImported = cls.runImportTomograms()  # Import tomograms
+        cls.tomosBinned = cls.runBinTomograms(cls.tomoImported)  # Bin the tomogram to make it smaller
+        cls.coordsImported = cls.runImport3dCoords(
+            cls.tomosBinned)  # Import the coordinates from the binned tomogram
+        # Extract subtomograms
+        cls.subtomosExtracted = cls.runExtractSubtomograms(cls.coordsImported,
+                                                           tomoSource=SAME_AS_PICKING,
+                                                           boxSize=cls.binnedBoxSize)
+
+    # --------------- RUNS functions -----------------------
+    @classmethod
+    def runCreate3dMask(cls):
+        print(magentaStr("\n==> Generating the 3D mask:"))
+        protCreateParticleMask = cls.newProtocol(XmippProtCreateMask3D,
+                                                 source=SOURCE_GEOMETRY,
+                                                 samplingRate=cls.binnedSRate,
+                                                 size=cls.binnedBoxSize,
+                                                 geo=MASK3D_CYLINDER,
+                                                 radius=6,
+                                                 shiftCenter=True,
+                                                 centerZ=3,
+                                                 height=15,
+                                                 doSmooth=True)
+        cls.launchProtocol(protCreateParticleMask)
+        genMask = getattr(protCreateParticleMask, 'outputMask', None)
+        cls.assertIsNotNone(genMask, 'the 3D mask was not generated')
+        return genMask
 
     @classmethod
     def runImportTomograms(cls):
@@ -70,7 +113,7 @@ class TestEmantomoBase(BaseTest):
                                                   boxSize=cls.boxSize)
 
         cls.launchProtocol(protImportCoordinates3d)
-        coordsImported = protImportCoordinates3d.outputCoordinates
+        coordsImported = getattr(protImportCoordinates3d, outputObjs.coordinates.name, None)
         cls.assertIsNotNone(coordsImported, "There was a problem with the 3D coordinates output")
         return coordsImported
 
@@ -108,6 +151,17 @@ class TestEmantomoBase(BaseTest):
         cls.assertIsNotNone(subtomosExtracted, "There was a problem with the subtomograms extraction")
         return subtomosExtracted
 
+    @classmethod
+    def runAverageSubtomograms(cls):
+        print(magentaStr("\n==> Averaging the subtomograms:"))
+        protAvgSubtomo = cls.newProtocol(EmanProtSubTomoAverage, inputSetOfSubTomogram=cls.subtomosExtracted)
+        cls.launchProtocol(protAvgSubtomo)
+        avgSubtomo = getattr(protAvgSubtomo, OutputsAverageSubtomos.averageSubTomos.name, None)
+        cls.assertIsNotNone(avgSubtomo, "There was a problem calculating the average subtomogram")
+        return avgSubtomo
+
+    # --------------- CHECKS functions -----------------------
+
     def check3dTransformMatrix(self, outMatrix):
         transfMatrixShape = (4, 4)
         self.assertIsNotNone(outMatrix)
@@ -124,6 +178,23 @@ class TestEmantomoBase(BaseTest):
         for inShift, outShift in zip([sx, sy, sz], [osx, osy, osz]):
             self.assertEqual(outShift, scaleFactor * inShift)
 
+    def checkAverage(self, avg, boxSize=None, halvesExpected=True):
+        testBoxSize = (boxSize, boxSize, boxSize)
+        self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
+        self.assertTrue(avg.getFileName().endswith(".mrc"))
+        # The imported coordinates correspond to a binned 2 tomogram
+        self.assertEqual(avg.getSamplingRate(), self.binnedSRate)
+        self.assertEqual(avg.getDimensions(), testBoxSize)
+        # Check the halves
+        if halvesExpected:
+            self.assertTrue(avg.hasHalfMaps(), "Halves not registered")
+            half1, half2 = avg.getHalfMaps().split(',')
+            self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
+            self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
+
+
+    # --------------- AUX functions -----------------------
+
     @staticmethod
     def getMinAndMaxCoordValuesFromSet(inSet):
         if type(inSet) == SetOfSubTomograms:
@@ -137,3 +208,4 @@ class TestEmantomoBase(BaseTest):
                          max(ycoords),
                          min(zcoords),
                          max(zcoords)])
+

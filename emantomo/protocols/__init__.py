@@ -23,8 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
+from .protocol_mra_refinement import EmanMraClassifySubtomos
 from .protocol_tomo_boxing import EmanProtTomoBoxing
 from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet   # TODO: check this
 # from .protocol_tomo_template_match import EmanProtTomoTempMatch
@@ -32,12 +31,12 @@ from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
 # from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
 from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
-from .protocol_classify_subtomos import EmanProtTomoClassifySubtomos
+from .protocol_pca_kmeans_classify_subtomos import EmanProtPcaKMeansClassifySubtomos
 # from .protocol_tomo_reconstruction import EmanProtTomoReconstruction
 # from .protocol_align_ts import EmanProtAlignTs
 # from .protocol_estimate_ctf import EmanProtEstimateCTF
-from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
+# from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
 # from .protocol_tomo_tilt_refine import EmanProtRefineTS
-from .protocol_resize_tomograms import EmanProtTomoResize
+# from .protocol_resize_tomograms import EmanProtTomoResize
 from .protocol_average_subtomos import EmanProtSubTomoAverage
 
