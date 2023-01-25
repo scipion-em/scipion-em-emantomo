@@ -63,7 +63,6 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
 
     @classmethod
     def runExtract3dCoords(cls, inputSubTomos=None, inputTomos=None, boxSize=None):
-        # Bin the tomogram to make it smaller
         print(magentaStr("\n==> Extracting the 3D coordinates:"))
         protExtract3dCoords = cls.newProtocol(ProtTomoExtractCoords,
                                               inputSubTomos=inputSubTomos,
