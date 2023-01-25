@@ -94,6 +94,7 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
                            ' classification')
         form.addParam('nBasis', IntParam,
                       allowsNull=True,
+                      expertLevel=LEVEL_ADVANCED,
                       label='Number of PCA basis vectors',
                       help='Number of PCA components. If 0 or None, then they will be automatically estimated '
                            'considering the size of the input subtomograms.')
