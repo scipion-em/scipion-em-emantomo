@@ -1,2 +1,7 @@
+v3.1.1:
+  - Developers:
+    - Multiple refactoring, tests renewed, protocols re-evaluated and new useful parameter addition.
+    - Version STA classic can be considered as complete, but may be expanded to the MRA in the near future.
+
 v3.1.0:
   - First plugin release
