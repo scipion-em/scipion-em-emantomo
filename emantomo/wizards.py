@@ -26,7 +26,7 @@
 
 from pwem.wizards.wizard import EmWizard
 from pyworkflow.gui import showInfo
-from .protocols import EmanProtTomoExtraction, EmanProtTomoResize
+from .protocols import EmanProtTomoExtraction
 
 
 class EmanTomoExtractionWizard(EmWizard):
@@ -72,18 +72,18 @@ class EmanTomoExtractionWizard(EmWizard):
 #         form.setVar('boxSize', boxSize)
 
 
-class EmanTomoResizeWizard(EmWizard):
-    _targets = [(EmanProtTomoResize, ['xDim', 'yDim', 'zDim'])]
-
-    def show(self, form):
-        tomoResizeProt = form.protocol
-        inputTomos = tomoResizeProt.inputTomograms.get()
-        if not inputTomos:
-            print('You must specify input tomograms first')
-            return
-
-        dim = inputTomos.getFirstItem().getDim()
-
-        form.setVar('xDim', dim[0])
-        form.setVar('yDim', dim[1])
-        form.setVar('zDim', dim[2])
+# class EmanTomoResizeWizard(EmWizard):
+#     _targets = [(EmanProtTomoResize, ['xDim', 'yDim', 'zDim'])]
+#
+#     def show(self, form):
+#         tomoResizeProt = form.protocol
+#         inputTomos = tomoResizeProt.inputTomograms.get()
+#         if not inputTomos:
+#             print('You must specify input tomograms first')
+#             return
+#
+#         dim = inputTomos.getFirstItem().getDim()
+#
+#         form.setVar('xDim', dim[0])
+#         form.setVar('yDim', dim[1])
+#         form.setVar('zDim', dim[2])

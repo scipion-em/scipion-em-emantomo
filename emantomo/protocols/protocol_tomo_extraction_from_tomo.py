@@ -187,6 +187,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             args = ' --unstacking'
             args += ' %s' % abspath(hdfFile)
             args += ' %s' % abspath(self._getExtraPath(pwutils.replaceBaseExt(hdfFile, 'mrc')))
+            args += ' --apix %.3f' % self.getOutputSamplingRate()
             self.runJob(program, args, cwd=self._getExtraPath(),
                         numberOfMpi=1, numberOfThreads=1)
             cleanPattern(hdfFile)
@@ -194,7 +195,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def createOutputStep(self):
         outputSet = None
         outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
+        outputSubTomogramsSet.setSamplingRate(self.getOutputSamplingRate())
         outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
         acquisition = TomoAcquisition()
 
@@ -371,3 +372,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             outputSubTomogramsSet.append(subtomogram)
             counter += 1
         return outputSubTomogramsSet, counter
+
+    def getOutputSamplingRate(self):
+        return self.getInputTomograms().getSamplingRate() / self.downFactor.get()
