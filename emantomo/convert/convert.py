@@ -221,29 +221,18 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
             pwutils.createLink(fn, newFn)
             print("   %s -> %s" % (fn, newFn))
     else:
-        hasVolName = firstItem.getVolName() or False
-
         fileName = ""
         a = 0
         proc = Plugin.createEmanProcess(args='write')
 
-        for i, subtomo in iterSubtomogramsByVol(subtomogramSet):
-            volName = volId = subtomo.getVolId()
-            if hasVolName:
-                volName = subtomogramSet.getFirstItem().getVolName().split(":")[0]
-                volName = pwutils.removeBaseExt(volName)
+        for subtomo in subtomogramSet.iterItems(orderBy=['_volId', 'id'], direction='ASC'):
+            volName = os.path.basename(subtomo.getVolName())
+
             objDict = subtomo.getObjDict()
 
-            if not volId:
-                volId = 0
-
             suffix = kwargs.get('suffix', '')
-            if hasVolName and (volName != str(volId)):
-                objDict['hdfFn'] = pwutils.join(path,
-                                                "%s%s.hdf" % (volName, suffix))
-            else:
-                objDict['hdfFn'] = pwutils.join(path,
-                                                "subtomo_%06d%s.hdf" % (volId, suffix))
+
+            objDict['hdfFn'] = pwutils.join(path, "%s%s.hdf" % (volName, suffix))
 
             alignType = kwargs.get('alignType')
 
@@ -255,9 +244,10 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
                 objDict['_angles'] = angles.tolist()
             objDict['_itemId'] = subtomo.getObjId()
 
+            objFn = objDict['_filename']
             # the index in EMAN begins with 0
-            if fileName != objDict['_filename']:
-                fileName = objDict['_filename']
+            if fileName != objFn:
+                fileName = objFn
                 fileName = fileName.split(":")[0]
                 objDict['_filename'] = fileName
                 if objDict['_index'] == 0:
@@ -265,6 +255,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
                 else:
                     a = 1
             objDict['_index'] = int(objDict['_index'] - a)
+
             # Write the e2converter.py process from where to read the image
             print(json.dumps(objDict), file=proc.stdin, flush=True)
             proc.stdout.readline()
