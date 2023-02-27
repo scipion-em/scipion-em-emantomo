@@ -226,7 +226,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         proc = Plugin.createEmanProcess(args='write')
 
         for subtomo in subtomogramSet.iterItems(orderBy=['_volId', 'id'], direction='ASC'):
-            volName = os.path.basename(subtomo.getVolName())
+            volName, _ = os.path.splitext(os.path.basename(subtomo.getVolName()))
 
             objDict = subtomo.getObjDict()
 
@@ -247,8 +247,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
             objFn = objDict['_filename']
             # the index in EMAN begins with 0
             if fileName != objFn:
-                fileName = objFn
-                fileName = fileName.split(":")[0]
+                fileName = objFn.split(":")[0]
                 objDict['_filename'] = fileName
                 if objDict['_index'] == 0:
                     a = 0
