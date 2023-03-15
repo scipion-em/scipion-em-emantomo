@@ -23,24 +23,25 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import copy
 import enum
 import glob
 from os.path import abspath, basename, join
-
 from emantomo import Plugin
 from emantomo.constants import PROC_NORMALIZE
+from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
-from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_EMAN
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
 
 # Tomogram type constants for particle extraction
+from tomo.utils import scaleTrMatrixShifts
+
 SAME_AS_PICKING = 0
 OTHER = 1
 
@@ -88,17 +89,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         form.addParam('boxSize', params.FloatParam,
                       label='Box size',
                       help='The subtomograms are extracted as a cubic box of this size. '
-                           'The wizard selects same box size as picking')
-
-        form.addParam('downFactor', params.FloatParam,
-                      default=1,
-                      label='Downsampling factor',
-                      expertLevel=LEVEL_ADVANCED,
-                      help='It can be used to directly interpolate the extracted subtomograms to '
-                           'another size that may correspond to the size of a tomogram that has not been '
-                           'reconstructed and this way it is not necessary to reconstruct it. '
-                           'If 1.0 is used, no downsampling is applied. Non-integer downsampling factors are '
-                           'allowed.')
+                           'The wizard will select the box size considering the sampling rate ratio between the '
+                           'introduced coordinates and the tomograms that will br used for the extraction.')
 
         form.addSection(label='Preprocess')
         form.addParam('doInvert', params.BooleanParam, default=False,
@@ -121,9 +113,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       display=params.EnumParam.DISPLAY_COMBO,
                       help='Use normalize.edgemean if the particles have a clear solvent background '
                            '(i.e., they are not part of a larger complex or embeded in a membrane)')
-
-        # Uncomment once migrated to new tomo extraction (e2spt_extract.py)
-        # form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
 
@@ -214,10 +203,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             for ind, tomoFile in enumerate(self.tomoFiles):
                 if basename(tomoFile) == basename(item.getFileName()):
                     coordSet = self.lines[ind]
-                    outputSet, counter = self.readSetOfSubTomograms(tomoFile,
-                                                                    outputSubTomogramsSet,
-                                                                    coordSet,
-                                                                    item.getObjId(), factor, counter)
+                    outputSet, counter = self.readSetOfSubTomograms(tomoFile, outputSubTomogramsSet,
+                                                                    coordSet, factor, counter)
 
         self._defineOutputs(**{OutputExtraction.subtomograms.name:outputSet})
         self._defineSourceRelation(self.inputCoordinates, outputSet)
@@ -238,9 +225,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             methodsMsgs.append("Set of Subtomograms not ready yet")
         if self.doInvert:
             methodsMsgs.append("Inverted contrast on images.")
-        if self.downFactor.get() != 1:
-            methodsMsgs.append("Subtomograms downsample by factor %d."
-                               % self.downFactor.get())
         if self.doNormalize:
             methodsMsgs.append("Particles were normalised. Using normalization method %s"
                                % self.getEnumText('normproc'))
@@ -340,38 +324,24 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return self.inputTomograms.get()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId, factor, counter):
-
-        self.info("Registering subtomograms for %s" % tomoFile)
-
+    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, factor, counter):
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
-
-        # ih = ImageHandler()
+        coordList = [coord.clone() for coord in coordSet]
         for idx, subtomoFile in enumerate(subtomoFileList):
-
             self.debug("Registering subtomogram %s - %s" % (counter, subtomoFile))
-
             subtomogram = SubTomogram()
-            subtomogram.cleanObjId()
+            transform = Transform()
             subtomogram.setLocation(subtomoFile)
-            dfactor = self.downFactor.get()
-            if dfactor != 1:
-                fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % counter)
-                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, dfactor)
-                subtomogram.setVolId(volId)
-                subtomogram.setLocation(fnSubtomo)
-            subtomogram.setCoordinate3D(coordSet[idx])
-            transformation = coordSet[idx]._eulerMatrix
-            shift_x, shift_y, shift_z = transformation.getShifts()
-            transformation.setShifts(factor * shift_x,
-                                     factor * shift_y,
-                                     factor * shift_z)
-            subtomogram.setTransform(transformation, convention=TR_EMAN)
+            currentCoord = coordList[idx]
+            subtomogram.setCoordinate3D(currentCoord)
+            trMatrix = copy.copy(currentCoord.getMatrix())
+            transform.setMatrix(scaleTrMatrixShifts(trMatrix, factor))
+            subtomogram.setTransform(transform, convention=TR_EMAN)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
             counter += 1
         return outputSubTomogramsSet, counter
 
     def getOutputSamplingRate(self):
-        return self.getInputTomograms().getSamplingRate() / self.downFactor.get()
+        return self.getInputTomograms().getSamplingRate()
