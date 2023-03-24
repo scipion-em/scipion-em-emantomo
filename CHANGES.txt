@@ -1,4 +1,5 @@
 v3.1.1:
+  - Users: fix in particles extraction -> shifts are now correctly scaled if the particles are extracted from another tomo source.
   - Developers:
     - Multiple refactoring, tests renewed, protocols re-evaluated and new useful parameter addition.
     - Version STA classic can be considered as complete, but may be expanded to the MRA in the near future.

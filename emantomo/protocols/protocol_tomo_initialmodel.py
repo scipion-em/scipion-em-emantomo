@@ -49,7 +49,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     plus the score, coverage and align matrix per subtomogram .
     """
 
-    _label = 'tomo initial model'
+    _label = 'Initial model'
     _devStatus = BETA
 
     def __init__(self, **kwargs):
