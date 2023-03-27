@@ -39,6 +39,12 @@ The plugin can be installed in user (stable) or developer (latest, may be unstab
 
     git clone https://github.com/scipion-em/scipion-em-emantomo.git
 
+* Move to devel branch:
+
+.. code-block::
+
+    git checkout devel
+
 * Install:
 
 .. code-block::
