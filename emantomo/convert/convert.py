@@ -559,8 +559,8 @@ def getLastParticlesParams(directory):
         score = values.get("score")
         alignMatrix = values.get("xform.align3d", {}).get("matrix")
 
-        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
-            alignMatrix = literal_eval(alignMatrix)
+        # if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+        alignMatrix = literal_eval(alignMatrix)
 
         if coverage and score and alignMatrix:
             customParticleParams = dict(
@@ -792,9 +792,9 @@ def refinement2Json(protocol, subTomos, mode='w'):
         am_st[3], am_st[7], am_st[11] = matrix_st[0, 3], matrix_st[1, 3], matrix_st[2, 3]
         am_c[3], am_c[7], am_c[11] = matrix_c[0, 3], matrix_c[1, 3], matrix_c[2, 3]
 
-        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
-            am_c = "[" + ",".join(str(a) for a in am_c) + "]"
-            am_st = "[" + ",".join(str(a) for a in am_st) + "]"
+        # if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+        am_c = "[" + ",".join(str(a) for a in am_c) + "]"
+        am_st = "[" + ",".join(str(a) for a in am_st) + "]"
 
         parms_dict[key] = {"coverage": coverage, "score": score,
                            "xform.align3d": {"__class__": "Transform",
