@@ -1,9 +1,7 @@
 # **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
-# *              David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     Scipion Team (scipion@cnb.csic.es)
 # *
-# * [1] SciLifeLab, Stockholm University
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -24,21 +22,13 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-import os
-import subprocess
-
 import eman2
-import pwem
-import pyworkflow.utils as pwutils
-from scipion.install.funcs import VOID_TGZ
-
 import emantomo.constants as emanConst
 
 __version__ = "4.0.0"
 _logo = "eman2_logo.png"
 _references = ['GALAZMONTOYA2015279', 'BELL201625']
-_url = "https://blake.bcm.edu/emanwiki/EMAN2/"
+_url = "https://github.com/scipion-em/scipion-em-emantomo"
 
 
 class Plugin(eman2.Plugin):
