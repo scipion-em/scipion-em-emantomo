@@ -32,9 +32,11 @@ from .protocols import EmanProtTomoExtraction
 class EmanTomoExtractionWizard(EmWizard):
     _targets = [(EmanProtTomoExtraction, ['boxSize'])]  #, (EmanProtTSExtraction, ['boxSize'])]
 
+    def _getProtocol(self, form)-> EmanProtTomoExtraction:
+        return form.protocol
     def show(self, form):
-        tomoExtractProt = form.protocol
-        inputCoordinates = tomoExtractProt.inputCoordinates.get()
+        tomoExtractProt = self._getProtocol(form)
+        inputCoordinates = tomoExtractProt._getSetOfCoordinates()
         if not inputCoordinates:
             showInfo('Box wizard', 'You must specify input coordinates', form.root)
             return
@@ -50,9 +52,6 @@ class EmanTomoExtractionWizard(EmWizard):
         samplingRateTomo = inputTomos.getSamplingRate()
         scale = samplingRateCoord / samplingRateTomo
         boxSize = float(boxSize * scale)
-
-        if tomoExtractProt.downFactor.get() != 1 and isinstance(tomoExtractProt, EmanProtTomoExtraction):
-            boxSize = float(boxSize/tomoExtractProt.downFactor.get())
 
         form.setVar('boxSize', boxSize)
 
