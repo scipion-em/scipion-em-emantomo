@@ -34,9 +34,9 @@ from scipion.install.funcs import VOID_TGZ
 
 import emantomo.constants as emanConst
 
-__version__ = "3.1.1"
+__version__ = "3.1.2"
 _logo = "eman2_logo.png"
-_references = ['Tang2007']  # TODO --> update references to newer and tomo referred
+_references = ['GALAZMONTOYA2015279', 'BELL201625']
 _url = "https://github.com/scipion-em/scipion-em-emantomo"
 
 

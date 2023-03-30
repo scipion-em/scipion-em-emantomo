@@ -23,24 +23,26 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import copy
 import enum
 import glob
 from os.path import abspath, basename, join
-
 from emantomo import Plugin
 from emantomo.constants import PROC_NORMALIZE
+from pyworkflow.mapper.sqlite import ID
+from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
-from pyworkflow.protocol import LEVEL_ADVANCED
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
-from pwem.emlib.image import ImageHandler
 from pwem.protocols import EMProtocol
-from tomo.constants import BOTTOM_LEFT_CORNER, TR_EMAN
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_EMAN, TR_SCIPION
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D
 
 # Tomogram type constants for particle extraction
+from tomo.utils import scaleTrMatrixShifts
+
 SAME_AS_PICKING = 0
 OTHER = 1
 
@@ -51,20 +53,18 @@ class OutputExtraction(enum.Enum):
 
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
-    _label = 'extraction from tomogram'
+    _label = 'Subtomograms extraction from tomogram'
     _devStatus = BETA
     _possibleOutputs = OutputExtraction
     OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
     tomoFiles = []
     lines = []
-    coordsFileName = None
-    samplingRateTomo = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('inputCoordinates', params.PointerParam, label="Input Coordinates", important=True,
-                      pointerClass='SetOfCoordinates3D', help='Select the SetOfCoordinates3D.')
+        form.addParam('inputCoordinates', params.PointerParam, label="Coordinates/Subtomograms", important=True,
+                      pointerClass=[SetOfCoordinates3D, SetOfSubTomograms],  help='Choose coordinates or subtomograms derived from 3d coordinates.')
 
         form.addParam('tomoSource', params.EnumParam,
                       choices=['same as picking', 'other'],
@@ -88,17 +88,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         form.addParam('boxSize', params.FloatParam,
                       label='Box size',
                       help='The subtomograms are extracted as a cubic box of this size. '
-                           'The wizard selects same box size as picking')
-
-        form.addParam('downFactor', params.FloatParam,
-                      default=1,
-                      label='Downsampling factor',
-                      expertLevel=LEVEL_ADVANCED,
-                      help='It can be used to directly interpolate the extracted subtomograms to '
-                           'another size that may correspond to the size of a tomogram that has not been '
-                           'reconstructed and this way it is not necessary to reconstruct it. '
-                           'If 1.0 is used, no downsampling is applied. Non-integer downsampling factors are '
-                           'allowed.')
+                           'The wizard will select the box size considering the sampling rate ratio between the '
+                           'introduced coordinates and the tomograms that will br used for the extraction.')
 
         form.addSection(label='Preprocess')
         form.addParam('doInvert', params.BooleanParam, default=False,
@@ -122,9 +113,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       help='Use normalize.edgemean if the particles have a clear solvent background '
                            '(i.e., they are not part of a larger complex or embeded in a membrane)')
 
-        # Uncomment once migrated to new tomo extraction (e2spt_extract.py)
-        # form.addParallelSection(threads=4, mpi=0)
-
     # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
@@ -135,34 +123,95 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions -----------------------------
 
+    def _isInputASetOfSubtomograms(self):
+        """ returns true if the input is a set of subtomograms"""
+        return isinstance(self.inputCoordinates.get(), SetOfSubTomograms)
+    def _getSetOfCoordinates(self):
+        if self._isInputASetOfSubtomograms():
+            return self.inputCoordinates.get().getCoordinates3D()
+        else:
+            return self.inputCoordinates.get()
+
     def writeSetOfCoordinates3D(self):
-        tomoList = []
-        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
+
+        inputSet = self.inputCoordinates.get()
+        coordSet = self._getSetOfCoordinates()
+
+        # Calculate ratio/factor
+        samplingRateCoord = coordSet.getSamplingRate()
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         scale = samplingRateCoord / samplingRateTomo
+
+        # Store the tomograms to be use
+        tomoDict = dict()
         for tomo in self.getInputTomograms():
-            tomoList.append(tomo.clone())
+            tomoDict[tomo.getTsId()] = tomo.clone()
 
-        for tomo in tomoList:
-            coordDict = []
-            self.coordsFileName = self._getExtraPath(
-                pwutils.replaceBaseExt(tomo.getFileName(), 'coords'))
+        def onTomogramFinish(coordList):
 
-            with open(self.coordsFileName, "w") as out:
-                coords = self.inputCoordinates.get()
-                for coord3D in coords.iterCoordinates(volume=tomo):
-                    if basename(tomo.getFileName()) == basename(coord3D.getVolName()):
-                        out.write("%d\t%d\t%d\n" % (coord3D.getX(BOTTOM_LEFT_CORNER) * scale,
-                                                    coord3D.getY(BOTTOM_LEFT_CORNER) * scale,
-                                                    coord3D.getZ(BOTTOM_LEFT_CORNER) * scale))
-                        newCoord = coord3D.clone()
-                        newCoord.setVolume(coord3D.getVolume())
-                        coordDict.append(newCoord)
-
-            if coordDict:
-                self.lines.append(coordDict)
+            self.info("Finishing conversion of tomogram %s." % tomoId)
+            if coordList:
+                self.lines.append(coordList)
                 self.tomoFiles.append(tomo.getFileName())
-                self.samplingRateTomo = tomo.getSamplingRate()
+                emanCoordFile.close()
+
+        # Variables for each tomogram "step"
+        tomoId = None
+        item_list = []
+        emanCoordFile = None
+
+        # Define iterator based on input type
+        if self._isInputASetOfSubtomograms():
+            iterator = inputSet.iterSubtomos
+            orderBy = [SubTomogram.VOL_NAME_FIELD, ID]
+        else:
+            iterator = inputSet.iterCoordinates
+            orderBy = [Coordinate3D.TOMO_ID_ATTR, ID]
+
+        # Iterate in order based on tomogram/Ts id
+        for item in iterator(orderBy=orderBy):
+
+            coord3D = self._getCoordinateFromItem(item)
+            currentTomoId = coord3D.getTomoId()
+
+            # When changing the tomogram...
+            if currentTomoId != tomoId:
+                tomoId = currentTomoId
+
+                onTomogramFinish(item_list)
+
+                tomo = tomoDict.get(currentTomoId, None)
+                if tomo is None:
+                    self.info("Tomogram %s not found in input tomograms set. Coordinates for this tomogram will be skipped." % tomoId)
+                    item_list = []
+                    continue
+                else:
+                    # need to open a new file
+                    coordFile = self._getExtraPath(pwutils.replaceBaseExt(tomo.getFileName(), 'coords'))
+                    emanCoordFile = open(coordFile, "w")
+                    item_list = []
+
+
+            # On each coordinate ... if there is not a tomogram we skip it
+            if tomo is None:
+                continue
+
+            baseTomoName = basename(tomo.getFileName())
+            baseCoordVolume = basename(coord3D.getVolName())
+
+            # Is this check necessary providing the tomoId matches?
+            if baseTomoName == baseCoordVolume:
+                emanCoordFile.write("%d\t%d\t%d\n" % (coord3D.getX(BOTTOM_LEFT_CORNER) * scale,
+                                            coord3D.getY(BOTTOM_LEFT_CORNER) * scale,
+                                            coord3D.getZ(BOTTOM_LEFT_CORNER) * scale))
+                newItem = item.clone()
+                # Do we need the volume?? --> newItem.setVolume(coord3D.getVolume())
+                item_list.append(newItem)
+            else:
+                self.warning("Tomogram name '%s' does not match associated volume in the coordinate '%s'" % (baseTomoName, baseCoordVolume))
+
+        # Last iteration, call onTomogramChange
+        onTomogramFinish(item_list)
 
     def extractParticles(self):
         for tomo in self.tomoFiles:
@@ -193,10 +242,12 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             cleanPattern(hdfFile)
 
     def createOutputStep(self):
+
+        #Note: using self.lines here prevents the protocol from continuing in case this step code fails!
         outputSet = None
         outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
         outputSubTomogramsSet.setSamplingRate(self.getOutputSamplingRate())
-        outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
+        outputSubTomogramsSet.setCoordinates3D(self._getSetOfCoordinates())
         acquisition = TomoAcquisition()
 
         firstTomo = self.getInputTomograms().getFirstItem()
@@ -205,42 +256,37 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         acquisition.setStep(firstTomo.getAcquisition().getStep())
         outputSubTomogramsSet.setAcquisition(acquisition)
 
-        samplingRateCoord = self.inputCoordinates.get().getSamplingRate()
+        samplingRateInput = self.inputCoordinates.get().getSamplingRate()
         samplingRateTomo = firstTomo.getSamplingRate()
-        factor = samplingRateCoord / samplingRateTomo
+        factor = samplingRateInput / samplingRateTomo
         counter = 0
 
         for item in self.getInputTomograms().iterItems():
             for ind, tomoFile in enumerate(self.tomoFiles):
                 if basename(tomoFile) == basename(item.getFileName()):
                     coordSet = self.lines[ind]
-                    outputSet, counter = self.readSetOfSubTomograms(tomoFile,
-                                                                    outputSubTomogramsSet,
-                                                                    coordSet,
-                                                                    item.getObjId(), factor, counter)
+                    outputSet, counter = self.readSetOfSubTomograms(tomoFile, outputSubTomogramsSet,
+                                                                    coordSet, factor, counter)
 
         self._defineOutputs(**{OutputExtraction.subtomograms.name:outputSet})
-        self._defineSourceRelation(self.inputCoordinates, outputSet)
+        self._defineSourceRelation(self._getSetOfCoordinates(), outputSet)
 
     # --------------------------- INFO functions --------------------------------
     def _methods(self):
         methodsMsgs = []
         if self.getOutputsSize() >= 1:
             msg = ("A total of %s subtomograms of size %s were extracted"
-                   % (str(self.inputCoordinates.get().getSize()), self.boxSize.get()))
+                   % (str(self._getSetOfCoordinates().getSize()), self.boxSize.get()))
             if self._tomosOther():
                 msg += (" from another set of tomograms: %s"
                         % self.getObjectTag('inputTomogram'))
-            msg += " using coordinates %s" % self.getObjectTag('inputCoordinates')
+            msg += " using coordinates from %s" % self.getObjectTag('inputCoordinates')
             msg += self.methodsVar.get('')
             methodsMsgs.append(msg)
         else:
             methodsMsgs.append("Set of Subtomograms not ready yet")
         if self.doInvert:
             methodsMsgs.append("Inverted contrast on images.")
-        if self.downFactor.get() != 1:
-            methodsMsgs.append("Subtomograms downsample by factor %d."
-                               % self.downFactor.get())
         if self.doNormalize:
             methodsMsgs.append("Particles were normalised. Using normalization method %s"
                                % self.getEnumText('normproc'))
@@ -253,7 +299,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         if self.getOutputsSize() >= 1:
             summary.append("Particle box size: *%s*" % self.boxSize.get())
             summary.append("Subtomogram extracted: *%s*" %
-                           self.inputCoordinates.get().getSize())
+                           self._getSetOfCoordinates().getSize())
         else:
             summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
@@ -264,7 +310,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         errors = []
         if self.tomoSource.get() == SAME_AS_PICKING:
             return errors
-        tomo_from_coords = self.inputCoordinates.get().getPrecedents()
+        tomo_from_coords = self._getSetOfCoordinates().getPrecedents()
         tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
         coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
         numberMatches = len(set(tomoFiles) & set(coordFiles))
@@ -279,7 +325,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def _warnings(self):
         warnings = []
         if self.tomoSource.get() != SAME_AS_PICKING:
-            precedentsSet = self.inputCoordinates.get().getPrecedents()
+            precedentsSet = self._getSetOfCoordinates().getPrecedents()
             if getattr(precedentsSet.getFirstItem(), '_tsId', None) and \
                     getattr(self.inputTomograms.get().getFirstItem(), '_tsId', None):
                 # Match by id (tomoId, tsId)
@@ -336,42 +382,58 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     def getInputTomograms(self):
         """ Return the tomogram associated to the 'SetOfCoordinates3D' or 'Other' tomograms. """
         if self.tomoSource.get() == SAME_AS_PICKING:
-            return self.inputCoordinates.get().getPrecedents()
+            return self._getSetOfCoordinates().getPrecedents()
         else:
             return self.inputTomograms.get()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet, volId, factor, counter):
+    @staticmethod
+    def _getCoordinateFromItem(item):
+        """ Returns the coordinate 3d either because the item is the Coordinate or is a subtomogram"""
 
-        self.info("Registering subtomograms for %s" % tomoFile)
+        if isinstance(item, Coordinate3D):
+            return item
+        else:
+            return item.getCoordinate3D()
+    @staticmethod
 
+    def _getMatrixFromItem(item):
+        """ Returns the matrix of the subtomograms otherwise the matrix of the coordinate"""
+        if isinstance(item, Coordinate3D):
+            return item.getMatrix()
+        else:
+            return item.getTransform().getMatrix()
+
+    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, inputSet, factor, counter):
+        """
+        Populates the set of subtomograms
+
+        :param tomoFile: tomogram file
+        :param outputSubTomogramsSet: output set of subtomograms
+        :param inputSet: Subtomograms or 3D coordinates set
+        :param factor: factor between the inputSet and the tomogram
+        :param counter: counter for eman hdf index
+        """
+
+        import time
+        time.sleep(10)
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
-
-        # ih = ImageHandler()
+        itemList = [item.clone() for item in inputSet] # Get the items (coords or subtomos) in a list)
         for idx, subtomoFile in enumerate(subtomoFileList):
-
             self.debug("Registering subtomogram %s - %s" % (counter, subtomoFile))
-
             subtomogram = SubTomogram()
-            subtomogram.cleanObjId()
+            transform = Transform()
             subtomogram.setLocation(subtomoFile)
-            dfactor = self.downFactor.get()
-            if dfactor != 1:
-                fnSubtomo = self._getExtraPath("downsampled_subtomo%d.mrc" % counter)
-                ImageHandler.scaleSplines(subtomogram.getLocation()[1]+':mrc', fnSubtomo, dfactor)
-                subtomogram.setVolId(volId)
-                subtomogram.setLocation(fnSubtomo)
-            subtomogram.setCoordinate3D(coordSet[idx])
-            transformation = coordSet[idx]._eulerMatrix
-            shift_x, shift_y, shift_z = transformation.getShifts()
-            transformation.setShifts(factor * shift_x,
-                                     factor * shift_y,
-                                     factor * shift_z)
-            subtomogram.setTransform(transformation, convention=TR_EMAN)
+            currentItem = itemList[idx]
+            coord = EmanProtTomoExtraction._getCoordinateFromItem(currentItem)
+            subtomogram.setCoordinate3D(coord)
+            trMatrix = copy.copy(EmanProtTomoExtraction._getMatrixFromItem(currentItem))
+            transform.setMatrix(scaleTrMatrixShifts(trMatrix, factor))
+            subtomogram.setTransform(transform, convention=TR_SCIPION)
             subtomogram.setVolName(tomoFile)
             outputSubTomogramsSet.append(subtomogram)
             counter += 1
         return outputSubTomogramsSet, counter
 
     def getOutputSamplingRate(self):
-        return self.getInputTomograms().getSamplingRate() / self.downFactor.get()
+        return self.getInputTomograms().getSamplingRate()

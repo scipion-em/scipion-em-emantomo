@@ -54,7 +54,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
     Computes the average a selected subset of a SetOfSubtomograms in the predetermined orientation
     """
 
-    _label = 'average subtomo'
+    _label = 'average subtomograms'
     _devStatus = BETA
     _possibleOutputs = OutputsAverageSubtomos
 
