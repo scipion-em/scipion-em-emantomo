@@ -53,6 +53,7 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
                                                                  tomograms=cls.tomosImported,
                                                                  boxSize=super().boxSize)
 
+        cls.subtomosFromSubtomos = super().runExtractSubtomograms(cls.subtomosSameAsPicking, boxSize=super().boxSize / 2, label="Extraction from subtomograms")
     @classmethod
     def runPreviousProtocols(cls):
         tomoImported = super().runImportTomograms()  # Import tomograms
@@ -133,6 +134,14 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
     def test_extractParticlesSameAsPicking(self):
         # The imported 3d coordinates were picked from the binned tomogram
         self.checkExtractedSubtomos(self.subtomosSameAsPicking,
+                                    setSize=super().nParticles,
+                                    sRate=super().origSRate * 2,
+                                    boxSize=super().boxSize / 2,
+                                    tomo4extraction=self.tomosImported.getFirstItem())
+
+    def test_extractParticlesSameAsPickingSubtomos(self):
+        # The imported 3d coordinates were picked from the binned tomogram
+        self.checkExtractedSubtomos(self.subtomosFromSubtomos,
                                     setSize=super().nParticles,
                                     sRate=super().origSRate * 2,
                                     boxSize=super().boxSize / 2,

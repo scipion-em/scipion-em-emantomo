@@ -23,9 +23,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from .protocol_mra_refinement import EmanMraClassifySubtomos
+# from .protocol_mra_refinement import EmanMraClassifySubtomos
 from .protocol_tomo_boxing import EmanProtTomoBoxing
-from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet   # TODO: check this
+# from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet   # TODO: check this
 # from .protocol_tomo_template_match import EmanProtTomoTempMatch
 from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
 # from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
