@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     David Herreros (dherreros@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es)
 # *
 # * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -23,196 +24,278 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
 import glob
-from os.path import abspath
-
-from pyworkflow import BETA
-from pyworkflow import utils as pwutils
-import pyworkflow.protocol.params as params
-from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
-
-from pwem.emlib.image import ImageHandler
+from enum import Enum
+from os.path import abspath, join, basename
+from emantomo import Plugin
+from emantomo.constants import INFO_DIR, TOMO_ID, GROUP_ID, TS_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOGRAMS_DIR
+from emantomo.utils import getPresentPrecedents, getBoxSize, getFromPresentObjects, genEmanGrouping
+from emantomo.objects import EmanMetaData
+from pwem.objects import Transform
 from pwem.protocols import EMProtocol
-
+from pyworkflow import BETA
+from pyworkflow.object import String
+from pyworkflow.protocol import PointerParam, FloatParam, BooleanParam, LEVEL_ADVANCED, GE, LE, GT, IntParam
+from pyworkflow.utils import makePath, Message, replaceBaseExt, createLink
+from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
+from tomo.constants import TR_EMAN
+from tomo.objects import SetOfSubTomograms, SubTomogram
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SetOfSubTomograms, SubTomogram, TomoAcquisition
-
-from emantomo.constants import *
-
-import tomo.constants as const
-
-# Tomogram type constants for particle extraction
-from emantomo.convert import setCoords3D2Jsons, tltParams2Json, loadJson, recoverTSFromObj, jsonFilesFromSet, ctf2Json
+from tomo.utils import getNonInterpolatedTsFromRelations
 
 SAME_AS_PICKING = 0
 OTHER = 1
 
 
+class outputObjects(Enum):
+    subtomograms = SetOfSubTomograms
+
+
 class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
-    """ Extraction of subtomograms from tilt serie using EMAN2 e2spt_extract.py."""
-    _label = 'extraction from tilt-series'
+    """Extract 2D subtilt particles from the tilt series, and reconstruct 3D subvolumes."""
+
+    _label = 'particles extraction from TS'
     _devStatus = BETA
-    OUTPUT_PREFIX = 'outputSetOfSubtomogram'
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self.groupIds = None
+        self.emanDict = None
+        self.sphAb = None
+        self.voltage = None
+        self.presentTsIds = None
+        self.scaleFactor = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputCoordinates', params.PointerParam, label="Input coordinates", important=True,
-                      pointerClass='SetOfCoordinates3D', help='Select the SetOfCoordinates3D.')
-        form.addParam('inputCTF', params.PointerParam, label="Input ctf", allowsNull=True,
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam('inputCoordinates', PointerParam,
+                      label="Coordinates",
+                      important=True,
+                      pointerClass='SetOfCoordinates3D',
+                      help='The corresponding tomograms data will be accessed from the provided coordinates.')
+        form.addParam('inputCTF', PointerParam,
+                      label="CTF tomo series",
                       pointerClass='SetOfCTFTomoSeries',
-                      help='Optional - Estimated CTF for the tilts series associates to the '
-                           'tomograms used to pick the input coordinates. Will be taken into '
-                           'account during the extraction if provided.')
-        form.addParam('boxSize', params.FloatParam,
-                      label='Box size',
-                      help='The subtomograms are extracted as a cubic box of this size. '
-                           'The wizard selects same box size as picking')
-
-        form.addParam('downFactor', params.FloatParam, default=1.0,
-                      label='Downsampling factor',
-                      help='If 1.0 is used, no downsample is applied. '
-                           'Non-integer downsample factors are possible. ')
-
-        form.addParam('tltKeep', params.FloatParam, default=1.0,
-                      label='Keep tilt fraction',
-                      help='Keep a fraction of tilt images with good score '
-                           'determined from tomogram reconstruction')
-
-        form.addParam('rmThr', params.FloatParam, default=-1,
-                      label='Contrast threshold',
-                      help='Remove 2d particles with high contrast object beyond N '
-                           'sigma at 100A. Note that this may result in generating '
-                           'fewer particles than selected. Default is -1 (include '
-                           'all particles). 0.5 might be a good choice for '
-                           'removing gold beads but may need some testing...')
-
+                      help='Estimated CTF for the tilt series associates to the tomograms used to pick the input '
+                           'coordinates. The corresponding tilt series data will be also accessed through them.')
+        form.addParam('inputTS', PointerParam,
+                      help="Tilt series with alignment (non interpolated) used in the tomograms reconstruction. "
+                           "To be deprecated!!",
+                      pointerClass='SetOfTiltSeries',
+                      label="Input tilt series",
+                      important=True,
+                      expertLevel=LEVEL_ADVANCED,
+                      allowsNull=True)
+        form.addParam('boxSize', FloatParam,
+                      label='Box size unbinned (pix.)',
+                      help='The subtomograms are extracted as a cubic box of this size. The wizard selects same '
+                           'box size as picking')
+        form.addParam('maxTilt', IntParam,
+                      default=100,
+                      label='Max tilt',
+                      expertLevel=LEVEL_ADVANCED)
+        form.addParam('tltKeep', FloatParam,
+                      default=1.0,
+                      label='Tilt fraction to keep',
+                      expertLevel=LEVEL_ADVANCED,
+                      validators=[GT(0), LE(1)],
+                      help='Keep a fraction of tilt images with good score determined from tomogram reconstruction')
+        form.addParam('rmThr', FloatParam,
+                      default=-1,
+                      label='Contrast threshold for 2D particle removal',
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Remove 2d particles with high contrast object beyond N sigma at 100Å. Note that '
+                           'this may result in generating fewer particles than selected. Default is -1 '
+                           '(include all particles). 0.5 might be a good choice for removing gold beads.')
+        form.addParam('paddingFactor', FloatParam,
+                      label='Padding factor',
+                      default=2,
+                      allowsNull=False,
+                      validators=[GE(0)],
+                      expertLevel=LEVEL_ADVANCED,
+                      help='If set to 0, no padding will be considered. If your particles are deeply buried in other '
+                           'densities, using a bigger padtwod may help, but doing so may significantly increase the '
+                           'memory usage and slow down the process.')
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
-
     def _insertAllSteps(self):
-        self._insertFunctionStep('writeSetOfCoordinates3D')
-        self._insertFunctionStep('extractParticles')
-        self._insertFunctionStep('convertOutput')
-        self._insertFunctionStep('createOutputStep')
+        mdObjDict = self._initialize()
+        for mdObj in mdObjDict.values():
+            self._insertFunctionStep(self.convertInputStep, mdObj)
+            self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
+            self._insertFunctionStep(self.extractParticlesStep, mdObj)
+            self._insertFunctionStep(self.convertOutputStep, mdObj)
+        self._insertFunctionStep(self.createOutputStep, mdObjDict)
 
     # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        infoDir = self._getExtraPath(INFO_DIR)
+        makePath(infoDir, self._getExtraPath(TOMOGRAMS_DIR))
 
-    def writeSetOfCoordinates3D(self):
-        info_path = self._getExtraPath('info')
-        pwutils.makePath(info_path)
+        # Get the group ids and the emanDict to have the correspondence between the previous classes and
+        # how EMAN will refer them
         coords = self.inputCoordinates.get()
-        tomos = coords.getPrecedents()
-        tltSeries = recoverTSFromObj(coords, self)
-        self.json_files, self.tomo_files = jsonFilesFromSet(tomos, info_path)
-        _ = setCoords3D2Jsons(self.json_files, coords)
-        _ = tltParams2Json(self.json_files, tltSeries, mode="a")
+        uniqueTomoValsDict = getFromPresentObjects(coords, [TOMO_ID, GROUP_ID])
+        self.groupIds = uniqueTomoValsDict[GROUP_ID]
+        self.emanDict = genEmanGrouping(self.groupIds)
 
-        if self.inputCTF.get() is not None:
-            _ = ctf2Json(self.json_files, self.inputCTF.get(), mode='a')
+        # Manage the TS and CTF tomo Series
+        inCtfSet = self.inputCTF.get()
+        inTsSet = self.inputTS.get()
+        uniqueCtfValsDict = getFromPresentObjects(inCtfSet, [TS_ID])
+        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if uniqueCtfValsDict[TS_ID]}
+        presentTsIds = list(tsIdsDict.keys())
+        ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet if ctf.getTsId() in presentTsIds}
 
-    def extractParticles(self):
-        for file in self.tomo_files:
-            args = os.path.abspath(file)
-            args += " --rmbeadthr=%f --shrink=%f --tltkeep=%f --padtwod=1.0  " \
-                    "--curves=-1 --curves_overlap=0.5 --compressbits=-1 --boxsz_unbin=%d  " \
-                    "--threads=%d" \
-                    % (self.rmThr.get(), self.downFactor.get(),
-                       self.tltKeep.get(), self.boxSize.get(), self.numberOfThreads.get())
-            program = emantomo.Plugin.getProgram('e2spt_extract.py')
+        # Get the required acquisition data
+        self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
+        self.voltage = inTsSet.getAcquisition().getVoltage()
+
+        # Split all the data into subunits referred to the same tsId
+        mdObjDict = {}
+        self.presentTsIds = []
+        self.scaleFactor = coords.getSamplingRate() / inTsSet.getSamplingRate()
+        for tomo in getPresentPrecedents(coords, uniqueTomoValsDict[TOMO_ID]):
+            tomoId = tomo.getTsId()
+            self.presentTsIds.append(tomoId)
+            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
+                                             inTomo=tomo,
+                                             ts=tsIdsDict[tomoId],
+                                             ctf=ctfIdsDict[tomoId],
+                                             coords=[coord.clone() for coord in coords.iterCoordinates(volume=tomo)],
+                                             jsonFile=join(infoDir, '%s_info.json' % tomoId)
+                                             # jsonFile=genTomoJsonFileName(tomo.getFileName(), infoDir)
+                                             )
+        return mdObjDict
+
+    def convertInputStep(self, mdObj):
+        """Convert the precedent tomograms into HDF files if they are not"""
+        program = Plugin.getProgram('e2proc3d.py')
+        inTomoFName = mdObj.inTomo.getFileName()
+        if inTomoFName.endswith('.hdf'):
+            outFile = join(TOMOGRAMS_DIR, basename(inTomoFName))
+            createLink(inTomoFName, outFile)
+        else:
+            inFile = abspath(inTomoFName)
+            outFile = join(TOMOGRAMS_DIR, replaceBaseExt(inTomoFName, 'hdf'))
+            args = '%s %s --apix %i ' % (inFile, outFile, mdObj.inTomo.getSamplingRate())
             self.runJob(program, args, cwd=self._getExtraPath())
+        # Store the tomoHdfName in the current mdObj
+        mdObj.tomoHdfName = outFile
 
-    def convertOutput(self):
-        program = emantomo.Plugin.getProgram('e2proc3d.py')
-        part_path = self._getExtraPath(os.path.join('particles3d', '*.hdf'))
-        for hdfFile in glob.glob(part_path):
-            args = ' --unstacking'
-            args += ' %s' % abspath(hdfFile)
-            args += ' %s' % abspath(self._getExtraPath(pwutils.removeBaseExt(hdfFile) + '.mrc'))
-            self.runJob(program, args, cwd=self._getExtraPath(),
-                        numberOfMpi=1, numberOfThreads=1)
+    def writeData2JsonFileStep(self, mdObj):
+        coords2Json(mdObj, self.emanDict, self.groupIds, getBoxSize(self))
+        ts2Json(mdObj, mode='a')
+        # tltParams2Json([mdObj.jsonFile], mdObj.ts, mode="w")
+        # If CTF tomo series are introduced, the defocus data is read and added to the corresponding json file
+        if mdObj.ctf:
+            ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
-    def createOutputStep(self):
-        self.outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        self.outputSubTomogramsSet.setSamplingRate(self.getInputTomograms().getSamplingRate() / self.downFactor.get())
-        self.outputSubTomogramsSet.setCoordinates3D(self.inputCoordinates)
-        acquisition = TomoAcquisition()
-        acquisition.setAngleMin(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMin())
-        acquisition.setAngleMax(self.getInputTomograms().getFirstItem().getAcquisition().getAngleMax())
-        acquisition.setStep(self.getInputTomograms().getFirstItem().getAcquisition().getStep())
-        self.outputSubTomogramsSet.setAcquisition(acquisition)
-        coordSet = self.inputCoordinates.get()
-        for tomo in coordSet.getPrecedents().iterItems():
-            tomoFile = tomo.getFileName()
-            coordSet = [coord.clone() for coord in coordSet.iterCoordinates(volume=tomo)]
-            outputSet = self.readSetOfSubTomograms(tomoFile,
-                                                   self.outputSubTomogramsSet,
-                                                   coordSet)
+    def extractParticlesStep(self, mdObj):
+        # TODO: update the command with the new parameters and considerations
+        program = Plugin.getProgram('e2spt_extract.py')
+        self.runJob(program, self._genExtractArgs(mdObj), cwd=self._getExtraPath())
 
-        self._defineOutputs(outputSetOfSubtomogram=outputSet)
-        self._defineSourceRelation(self.inputCoordinates, outputSet)
+    def convertOutputStep(self, mdObj):
+        # stacks2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '*.hdf'))
+        stacks3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % mdObj.inTomo.getTsId()))
+        # self.unstackParticles(stacks2d)
+        self.unstackParticles(stacks3d)
+        # cleanPattern(hdfFile)
+
+    def createOutputStep(self, mdObjDict):
+        sRate = self.inputCoordinates.get().getSamplingRate()
+        subtomoSet = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
+        subtomoSet.setSamplingRate(sRate)
+        subtomoSet.setCoordinates3D(self.inputCoordinates.get())
+        for tsId in self.presentTsIds:
+            mdObj = mdObjDict[tsId]
+            coords = mdObj.coords
+            tomoFile = mdObj.inTomo.getFileName()
+            subtomoFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId))
+            tsSubStack = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
+            for coord, subtomoFile in zip(coords, subtomoFiles):
+                subtomogram = SubTomogram()
+                transform = Transform()
+                subtomogram.setFileName(subtomoFile)
+                subtomogram.setLocation(subtomoFile)
+                subtomogram.setSamplingRate(sRate)
+                subtomogram.setCoordinate3D(coord)
+                M = coord.getMatrix()
+                shift_x = M[0, 3]
+                shift_y = M[1, 3]
+                shift_z = M[2, 3]
+                transform.setMatrix(M)
+                transform.setShifts(self.scaleFactor * shift_x,
+                                    self.scaleFactor * shift_y,
+                                    self.scaleFactor * shift_z)
+                subtomogram.setTransform(transform, convention=TR_EMAN)
+                subtomogram.setVolName(tomoFile)
+                subtomogram._tsSubStack = String(tsSubStack)
+                subtomoSet.append(subtomogram)
+
+        self._defineOutputs(**{outputObjects.subtomograms.name: subtomoSet})
+        self._defineSourceRelation(self.inputCoordinates.get(), subtomoSet)
+        self._defineSourceRelation(self.inputCTF.get(), subtomoSet)
+        if self.inputTS.get():
+            self._defineSourceRelation(self.inputTS.get(), subtomoSet)
+
+        # # Output pseudosubtomograms --> set of volumes for visualization purposes
+        # outputSet = SetOfEmanPseudoSubtomograms.create(self._getPath(), EMAN_PSUBTOMOS_SQLITE)
+        # outputSet.setSamplingRate(sRate)
+        # for mdObj in mdObjList:
+        #     tsId = mdObj.tsId
+        #     stackFile, stackLen = emanPrj.getParticlesStackInfo(tsId)
+        #     for i in range(1, stackLen + 1):
+        #         emanPSubtomo = EmanPSubtomogram(fileName=stackFile,
+        #                                         index=i,
+        #                                         tsId=tsId,
+        #                                         samplingRate=sRate)
+        #         outputSet.append(emanPSubtomo)
+        #
+        # self._defineOutputs(**{outputObjects.emanPSubtomograms.name: outputSet,
+        #                        outputObjects.emanProject.name: emanPrj})
+        # self._defineSourceRelation(self.inputCoordinates.get(), outputSet)
+        # self._defineSourceRelation(self.inputCTF.get(), outputSet)
+        # self._defineSourceRelation(self.inputCoordinates.get(), emanPrj)
+        # self._defineSourceRelation(self.inputCTF.get(), emanPrj)
 
     # --------------------------- INFO functions --------------------------------
-    def _methods(self):
-        methodsMsgs = []
-        if self.getOutputsSize() >= 1:
-            msg = ("A total of %s subtomograms of size %s were extracted"
-                   % (str(self.inputCoordinates.get().getSize()), self.boxSize.get()))
-            msg += " using coordinates %s" % self.getObjectTag('inputCoordinates')
-            msg += self.methodsVar.get('')
-            methodsMsgs.append(msg)
-        else:
-            methodsMsgs.append("Set of Subtomograms not ready yet")
-        if self.downFactor.get() != 1:
-            methodsMsgs.append("Subtomograms downsample by factor %d."
-                               % self.downFactor.get())
-        return methodsMsgs
-
-    def _summary(self):
-        summary = []
-        summary.append("Tomogram source: *%s*"
-                       % self.getEnumText("tomoSource"))
-        if self.getOutputsSize() >= 1:
-            summary.append("Particle box size: *%s*" % self.boxSize.get())
-            summary.append("Subtomogram extracted: *%s*" %
-                           self.inputCoordinates.get().getSize())
-        else:
-            summary.append("Output subtomograms not ready yet.")
-        if self.doInvert:
-            summary.append('*Contrast was inverted.*')
-        return summary
-
     def _validate(self):
-        pass
-
-    def _warnings(self):
-        pass
+        valMsg = []
+        if not self.inputTS.get():
+            try:
+                getNonInterpolatedTsFromRelations(self.inputCoordinates.get(), self)
+            except:
+                valMsg.append('Unable to go via relations from the introduced coordinates to the '
+                              'corresponding non-interpolated tilt series. Please introduce them using the '
+                              'advanced parameter "Tilt series with alignment..."')
+        return valMsg
 
     # --------------------------- UTILS functions ----------------------------------
-    def getInputTomograms(self):
-        """ Return the tomogram associated to the 'SetOfCoordinates3D' or 'Other' tomograms. """
-        return self.inputCoordinates.get().getPrecedents()
+    def _genExtractArgs(self, mdObj):
+        args = '%s ' % mdObj.tomoHdfName
+        args += '--rmbeadthr=%.2f ' % self.rmThr.get()
+        args += '--shrink=%.2f ' % self.downFactor.get()
+        args += '--boxsz_unbin=%i ' % getBoxSize(self)
+        args += '--tltkeep=%.2f ' % self.tltKeep.get()
+        args += '--padtwod=%.2f ' % self.paddingFactor.get()
+        args += '--threads=%i ' % self.numberOfThreads.get()
+        args += '--append '
+        if self.doSkipCtfCorrection.get():
+            args += '--noctf '
+        if self.skip3dRec.get():
+            args += '--skip3d '
+        return args
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, coordSet):
-        if "__" in tomoFile:
-            tomoFile = tomoFile.split("__")[0]
-        else:
-            parentFolder = pwutils.removeBaseExt(os.path.dirname(tomoFile))
-            tomoFile = '%s-%s' % (parentFolder, tomoFile)
-        outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '*.mrc')
-        subtomoFileList = sorted(glob.glob(outRegex))
-        for counter, subtomoFile in enumerate(subtomoFileList):
-            subtomogram = SubTomogram()
-            subtomogram.cleanObjId()
-            subtomogram.setLocation(subtomoFile)
-            subtomogram.setCoordinate3D(coordSet[counter])
-            subtomogram.setTransform(coordSet[counter]._eulerMatrix, convention=const.TR_EMAN)
-            subtomogram.setVolName(tomoFile)
-            outputSubTomogramsSet.append(subtomogram)
-        return outputSubTomogramsSet
+    def unstackParticles(self, stackList, outExt='mrc'):
+        """Unstacks and coverts a list of stack files into separate particles"""
+        program = Plugin.getProgram('e2proc3d.py')
+        outDir = PARTICLES_3D_DIR if PARTICLES_3D_DIR in stackList[0] else PARTICLES_DIR
+        for hdfFile in stackList:
+            args = ' --unstacking'
+            args += ' %s' % abspath(hdfFile)
+            args += ' %s' % join(outDir, replaceBaseExt(hdfFile, outExt))
+            self.runJob(program, args, cwd=self._getExtraPath())

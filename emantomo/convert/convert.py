@@ -51,7 +51,7 @@ from tomo.objects import SetOfTiltSeries, SetOfTomograms
 from tomo.constants import TR_EMAN
 
 from .. import Plugin
-from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE
+from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX
 
 
 def loadJson(jsonFn):
@@ -843,3 +843,93 @@ def emanFSCsToScipion(fscSet, *fscFiles):
         fsc = FSC(objLabel=os.path.basename(fscFile))
         fsc.setData(res_inv, frc)
         fscSet.append(fsc)
+
+
+def ctfTomo2Json(mdObj, sphAb, voltage, mode="w"):
+    paths = []
+    defocus = []
+    phase = []
+    jsonFile = mdObj.jsonFile
+    for ctfTi in mdObj.ctf:
+        defocus_eman = (ctfTi.getDefocusU() + ctfTi.getDefocusV()) / 20000.0
+        phaseShift = ctfTi.getPhaseShift()
+        phase.append(phaseShift if phaseShift else 0)
+        defocus.append(defocus_eman)
+
+    ctfDict = {"cs": sphAb,
+               "voltage": voltage,
+               "defocus": defocus,
+               "phase": phase
+               }
+    if mode == "w":
+        writeJson(ctfDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(ctfDict, jsonFile)
+        paths.append(jsonFile)
+    return paths
+
+
+def ts2Json(mdObj, mode="w"):
+    paths = []
+    tltParams = []
+    ts = mdObj.ts
+    jsonFile = mdObj.jsonFile
+    unRotMatrix = np.eye(2)
+    for tiltImage in ts:
+        paths.append(os.path.abspath(tiltImage.getFileName()))
+        trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
+        rotAngle = -np.rad2deg(np.arccos(trMatrix[0, 0]))
+        tiltAngle = tiltImage.getTiltAngle()
+        offTiltAngle = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
+
+        rotAngleCorrected = rotAngle - np.deg2rad(offTiltAngle)  # Consider the off tilt axis angle
+        # Undo the rotation to express the shifts considering the EMAN transformation (first translated and then
+        # rotated) --> 1) Rotate minus angle, 2) Calculate the shifts in the un rotated reference system
+        unRotMatrix[0, 0] = unRotMatrix[1, 1] = np.cos(-rotAngleCorrected)
+        unRotMatrix[0, 1] = np.sin(-rotAngleCorrected)
+        unRotMatrix[1, 0] = -np.sin(-rotAngleCorrected)
+        tx = -trMatrix[0, 2]
+        ty = -trMatrix[1, 2]
+        shiftsScipion = np.array([tx, ty])
+        shiftsEman = unRotMatrix.dot(shiftsScipion)
+
+        tltParams.append([shiftsEman[0], shiftsEman[1], rotAngle, tiltAngle, offTiltAngle])
+    tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
+    tltFiles = os.path.abspath(ts[1].getFileName())
+    tltDict = {"apix_unbin": ts.getSamplingRate(),
+               "tlt_file": tltFiles,
+               "tlt_params": tltParams}
+    if mode == "w":
+        writeJson(tltDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(tltDict, jsonFile)
+        paths.append(jsonFile)
+    return
+
+
+def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
+    paths = []
+    coords = []
+    jsonFile = mdObj.jsonFile
+    for coord in mdObj.coords:
+        coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
+                       coord.getY(const.BOTTOM_LEFT_CORNER),
+                       coord.getZ(const.BOTTOM_LEFT_CORNER),
+                       TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+
+    coordDict = {"boxes_3d": coords,
+                 "class_list": {}}
+
+    for i, groupId in enumerate(groupIds):
+        coordDict["class_list"]["%s" % emanDict[groupId]] = {"boxsize": boxSize,
+                                                             "name": TOMOBOX} #("class_%i" % i).zfill(3)}
+    if mode == "w":
+        writeJson(coordDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(coordDict, jsonFile)
+        paths.append(jsonFile)
+
+    return paths
