@@ -65,7 +65,7 @@ def loadJson(jsonFn):
 def writeJson(jsonDict, jsonFn, indent=None):
     """ This function write a Json dictionary """
     with open(jsonFn, 'w') as outfile:
-        json.dump(jsonDict, outfile, indent=indent)
+        json.dump(jsonDict, outfile, indent=2)
 
 
 def appendJson(jsonDict, jsonFn, indent=None):
@@ -74,7 +74,7 @@ def appendJson(jsonDict, jsonFn, indent=None):
         data = json.load(outfile)
         data.update(jsonDict)
         outfile.seek(0)
-        json.dump(data, outfile, indent=indent)
+        json.dump(data, outfile, indent=2)
 
 
 def readCTFModel(ctfModel, filename):
@@ -875,24 +875,32 @@ def ts2Json(mdObj, mode="w"):
     tltParams = []
     ts = mdObj.ts
     jsonFile = mdObj.jsonFile
-    unRotMatrix = np.eye(2)
     for tiltImage in ts:
         paths.append(os.path.abspath(tiltImage.getFileName()))
         trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
         rotAngle = -np.rad2deg(np.arccos(trMatrix[0, 0]))
         tiltAngle = tiltImage.getTiltAngle()
         offTiltAngle = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
+        tx = trMatrix[0, 2]
+        ty = trMatrix[1, 2]
+        shiftsScipion = np.array([tx, ty])
 
-        rotAngleCorrected = rotAngle - np.deg2rad(offTiltAngle)  # Consider the off tilt axis angle
+        emanRotMatrix = np.eye(2)
+        emanRotMatrix[0, 0] = emanRotMatrix[1, 1] = np.cos(rotAngle)
+        emanRotMatrix[0, 1] = np.sin(rotAngle)
+        emanRotMatrix[1, 0] = -np.sin(rotAngle)
+        shiftsEman = np.linalg.inv(emanRotMatrix).dot(shiftsScipion)
+
+
         # Undo the rotation to express the shifts considering the EMAN transformation (first translated and then
         # rotated) --> 1) Rotate minus angle, 2) Calculate the shifts in the un rotated reference system
-        unRotMatrix[0, 0] = unRotMatrix[1, 1] = np.cos(-rotAngleCorrected)
-        unRotMatrix[0, 1] = np.sin(-rotAngleCorrected)
-        unRotMatrix[1, 0] = -np.sin(-rotAngleCorrected)
-        tx = -trMatrix[0, 2]
-        ty = -trMatrix[1, 2]
-        shiftsScipion = np.array([tx, ty])
-        shiftsEman = unRotMatrix.dot(shiftsScipion)
+        # unRotMatrix[0, 0] = unRotMatrix[1, 1] = np.cos(rotAngleCorrected)
+        # unRotMatrix[0, 1] = np.sin(rotAngleCorrected)
+        # unRotMatrix[1, 0] = -np.sin(rotAngleCorrected)
+        # tx = trMatrix[0, 2]
+        # ty = trMatrix[1, 2]
+        # shiftsScipion = np.array([tx, ty])
+        # shiftsEman = unRotMatrix.dot(shiftsScipion)
 
         tltParams.append([shiftsEman[0], shiftsEman[1], rotAngle, tiltAngle, offTiltAngle])
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle

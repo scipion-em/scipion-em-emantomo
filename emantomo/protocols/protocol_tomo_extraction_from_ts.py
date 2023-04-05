@@ -26,9 +26,10 @@
 # **************************************************************************
 import glob
 from enum import Enum
-from os.path import abspath, join, basename
+from os.path import abspath, join, basename, realpath
 from emantomo import Plugin
-from emantomo.constants import INFO_DIR, TOMO_ID, GROUP_ID, TS_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOGRAMS_DIR
+from emantomo.constants import INFO_DIR, TOMO_ID, GROUP_ID, TS_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOGRAMS_DIR, \
+    TS_DIR
 from emantomo.utils import getPresentPrecedents, getBoxSize, getFromPresentObjects, genEmanGrouping
 from emantomo.objects import EmanMetaData
 from pwem.objects import Transform
@@ -63,7 +64,6 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         self.emanDict = None
         self.sphAb = None
         self.voltage = None
-        self.presentTsIds = None
         self.scaleFactor = None
 
     # --------------------------- DEFINE param functions ----------------------
@@ -77,16 +77,16 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         form.addParam('inputCTF', PointerParam,
                       label="CTF tomo series",
                       pointerClass='SetOfCTFTomoSeries',
+                      important=True,
                       help='Estimated CTF for the tilt series associates to the tomograms used to pick the input '
                            'coordinates. The corresponding tilt series data will be also accessed through them.')
         form.addParam('inputTS', PointerParam,
-                      help="Tilt series with alignment (non interpolated) used in the tomograms reconstruction. "
-                           "To be deprecated!!",
                       pointerClass='SetOfTiltSeries',
-                      label="Input tilt series",
-                      important=True,
+                      label='Tilt series with alignment, non-interpolated',
                       expertLevel=LEVEL_ADVANCED,
-                      allowsNull=True)
+                      allowsNull=True,
+                      help='Tilt series with alignment (non interpolated) used in the tomograms reconstruction. '
+                           'To be deprecated!!')
         form.addParam('boxSize', FloatParam,
                       label='Box size unbinned (pix.)',
                       help='The subtomograms are extracted as a cubic box of this size. The wizard selects same '
@@ -132,7 +132,7 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         infoDir = self._getExtraPath(INFO_DIR)
-        makePath(infoDir, self._getExtraPath(TOMOGRAMS_DIR))
+        makePath(infoDir, self._getExtraPath(TOMOGRAMS_DIR), self._getExtraPath(TS_DIR))
 
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
@@ -141,28 +141,26 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         self.groupIds = uniqueTomoValsDict[GROUP_ID]
         self.emanDict = genEmanGrouping(self.groupIds)
 
-        # Manage the TS and CTF tomo Series
+        # Manage the TS, CTF tomo Series and tomograms
         inCtfSet = self.inputCTF.get()
-        inTsSet = self.inputTS.get()
+        inTsSet = self.getTS()
         uniqueCtfValsDict = getFromPresentObjects(inCtfSet, [TS_ID])
         tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if uniqueCtfValsDict[TS_ID]}
-        presentTsIds = list(tsIdsDict.keys())
-        ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet if ctf.getTsId() in presentTsIds}
+        ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet}
+        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in coords.getPrecedents()}
 
         # Get the required acquisition data
         self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
         self.voltage = inTsSet.getAcquisition().getVoltage()
 
-        # Split all the data into subunits referred to the same tsId
+        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
         mdObjDict = {}
-        self.presentTsIds = []
         self.scaleFactor = coords.getSamplingRate() / inTsSet.getSamplingRate()
-        for tomo in getPresentPrecedents(coords, uniqueTomoValsDict[TOMO_ID]):
-            tomoId = tomo.getTsId()
-            self.presentTsIds.append(tomoId)
+        for tomoId, ts in tsIdsDict.items():
+            tomo = tomoIdsDict[tomoId]
             mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
                                              inTomo=tomo,
-                                             ts=tsIdsDict[tomoId],
+                                             ts=ts,
                                              ctf=ctfIdsDict[tomoId],
                                              coords=[coord.clone() for coord in coords.iterCoordinates(volume=tomo)],
                                              jsonFile=join(infoDir, '%s_info.json' % tomoId)
@@ -171,27 +169,33 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         return mdObjDict
 
     def convertInputStep(self, mdObj):
-        """Convert the precedent tomograms into HDF files if they are not"""
-        program = Plugin.getProgram('e2proc3d.py')
+        """Fill the simulated EMAN project directories with the expected data at this point of the pipeline.
+        Also convert the precedent tomograms into HDF files if they are not"""
         inTomoFName = mdObj.inTomo.getFileName()
-        if inTomoFName.endswith('.hdf'):
-            outFile = join(TOMOGRAMS_DIR, basename(inTomoFName))
-            createLink(inTomoFName, outFile)
-        else:
-            inFile = abspath(inTomoFName)
-            outFile = join(TOMOGRAMS_DIR, replaceBaseExt(inTomoFName, 'hdf'))
-            args = '%s %s --apix %i ' % (inFile, outFile, mdObj.inTomo.getSamplingRate())
-            self.runJob(program, args, cwd=self._getExtraPath())
+        inTsFName = mdObj.ts.getFirstItem().getFileName()
+        _ = self.convertOrLink(inTsFName)
+        outFile = self.convertOrLink(inTomoFName, isTS=False)
         # Store the tomoHdfName in the current mdObj
         mdObj.tomoHdfName = outFile
+
+    def convertOrLink(self, inFile, isTS=True):
+        program = Plugin.getProgram('e2proc3d.py')
+        if inFile.endswith('.hdf'):
+            outFile = join(TOMOGRAMS_DIR, basename(inFile))
+            createLink(inFile, outFile)
+        else:
+            inFile = abspath(inFile)
+            dirName = TS_DIR if isTS else TOMOGRAMS_DIR
+            outFile = join(dirName, replaceBaseExt(inFile, 'hdf'))
+            args = '%s %s ' % (inFile, outFile)
+            # args = '%s %s --apix %i ' % (inFile, outFile, mdObj.inTomo.getSamplingRate())
+            self.runJob(program, args, cwd=self._getExtraPath())
+        return outFile
 
     def writeData2JsonFileStep(self, mdObj):
         coords2Json(mdObj, self.emanDict, self.groupIds, getBoxSize(self))
         ts2Json(mdObj, mode='a')
-        # tltParams2Json([mdObj.jsonFile], mdObj.ts, mode="w")
-        # If CTF tomo series are introduced, the defocus data is read and added to the corresponding json file
-        if mdObj.ctf:
-            ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
+        ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
     def extractParticlesStep(self, mdObj):
         # TODO: update the command with the new parameters and considerations
@@ -210,8 +214,7 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         subtomoSet = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
         subtomoSet.setSamplingRate(sRate)
         subtomoSet.setCoordinates3D(self.inputCoordinates.get())
-        for tsId in self.presentTsIds:
-            mdObj = mdObjDict[tsId]
+        for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
             tomoFile = mdObj.inTomo.getFileName()
             subtomoFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId))
@@ -269,25 +272,26 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
             try:
                 getNonInterpolatedTsFromRelations(self.inputCoordinates.get(), self)
             except:
-                valMsg.append('Unable to go via relations from the introduced coordinates to the '
+                valMsg.append('Unable to go through the relations from the introduced coordinates to the '
                               'corresponding non-interpolated tilt series. Please introduce them using the '
-                              'advanced parameter "Tilt series with alignment..."')
+                              'advanced parameter "Tilt series with alignment, non-interpolated."')
         return valMsg
 
     # --------------------------- UTILS functions ----------------------------------
     def _genExtractArgs(self, mdObj):
         args = '%s ' % mdObj.tomoHdfName
-        args += '--rmbeadthr=%.2f ' % self.rmThr.get()
-        args += '--shrink=%.2f ' % self.downFactor.get()
         args += '--boxsz_unbin=%i ' % getBoxSize(self)
+        args += '--maxtilt=%i ' % self.maxTilt.get()
         args += '--tltkeep=%.2f ' % self.tltKeep.get()
         args += '--padtwod=%.2f ' % self.paddingFactor.get()
+        args += '--rmbeadthr=%.2f ' % self.rmThr.get()
         args += '--threads=%i ' % self.numberOfThreads.get()
+        args += '--newlabel=%s ' % mdObj.tsId
         args += '--append '
-        if self.doSkipCtfCorrection.get():
-            args += '--noctf '
-        if self.skip3dRec.get():
-            args += '--skip3d '
+        # if self.doSkipCtfCorrection.get():
+        #     args += '--noctf '
+        # if self.skip3dRec.get():
+        #     args += '--skip3d '
         return args
 
     def unstackParticles(self, stackList, outExt='mrc'):
@@ -299,3 +303,11 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
             args += ' %s' % abspath(hdfFile)
             args += ' %s' % join(outDir, replaceBaseExt(hdfFile, outExt))
             self.runJob(program, args, cwd=self._getExtraPath())
+
+    def getTS(self):
+        """If the user provides a set of tilt series, use them. If not (expected behaviour) Get the non-interpolated
+        tilt series from the introduced coordinates."""
+        tsSet = self.inputTS.get()
+        return tsSet if tsSet else getNonInterpolatedTsFromRelations(self.inputCoordinates.get(), self)
+
+
