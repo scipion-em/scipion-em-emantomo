@@ -123,7 +123,8 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
         for mdObj in mdObjDict.values():
-            self._insertFunctionStep(self.convertInputStep, mdObj)
+            self._insertFunctionStep(self.convertTsStep, mdObj)
+            self._insertFunctionStep(self.convertTomoStep, mdObj)
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.extractParticlesStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
@@ -168,27 +169,31 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
                                              )
         return mdObjDict
 
-    def convertInputStep(self, mdObj):
-        """Fill the simulated EMAN project directories with the expected data at this point of the pipeline.
-        Also convert the precedent tomograms into HDF files if they are not"""
-        inTomoFName = mdObj.inTomo.getFileName()
+    def convertTsStep(self, mdObj):
         inTsFName = mdObj.ts.getFirstItem().getFileName()
-        _ = self.convertOrLink(inTsFName)
-        outFile = self.convertOrLink(inTomoFName, isTS=False)
+        dirName = TS_DIR
+        sRate = mdObj.ts.getSamplingRate()
+        outFile = self.convertOrLink(inTsFName, dirName, sRate)
         # Store the tomoHdfName in the current mdObj
         mdObj.tomoHdfName = outFile
 
-    def convertOrLink(self, inFile, isTS=True):
+    def convertTomoStep(self, mdObj):
+        inTomoFName = mdObj.inTomo.getFileName()
+        dirName = TOMOGRAMS_DIR
+        sRate = mdObj.inTomo.getSamplingRate()
+        self.convertOrLink(inTomoFName, dirName, sRate)
+
+    def convertOrLink(self, inFile, dirName, sRate):
+        """Fill the simulated EMAN project directories with the expected data at this point of the pipeline.
+        Also convert the precedent tomograms into HDF files if they are not"""
         program = Plugin.getProgram('e2proc3d.py')
         if inFile.endswith('.hdf'):
             outFile = join(TOMOGRAMS_DIR, basename(inFile))
             createLink(inFile, outFile)
         else:
             inFile = abspath(inFile)
-            dirName = TS_DIR if isTS else TOMOGRAMS_DIR
             outFile = join(dirName, replaceBaseExt(inFile, 'hdf'))
-            args = '%s %s ' % (inFile, outFile)
-            # args = '%s %s --apix %i ' % (inFile, outFile, mdObj.inTomo.getSamplingRate())
+            args = '%s %s --apix %.2f ' % (inFile, outFile, sRate)
             self.runJob(program, args, cwd=self._getExtraPath())
         return outFile
 

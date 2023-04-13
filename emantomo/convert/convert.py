@@ -921,10 +921,11 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
     paths = []
     coords = []
     jsonFile = mdObj.jsonFile
+    tomoThk = 300  #TODO: just for testing --> REMOVE!
     for coord in mdObj.coords:
         coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
                        coord.getY(const.BOTTOM_LEFT_CORNER),
-                       coord.getZ(const.BOTTOM_LEFT_CORNER),
+                       tomoThk - coord.getZ(const.BOTTOM_LEFT_CORNER),
                        TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
 
     coordDict = {"boxes_3d": coords,
