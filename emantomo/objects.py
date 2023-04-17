@@ -32,13 +32,14 @@ from pyworkflow.object import String, Float
 
 class EmanMetaData:
 
-    def __init__(self, tsId=None, inTomo=None, tomoHdfName=None, ts=None, ctf=None, coords=None, particles=None,
-                 jsonFile=None, processingInd=None):
+    def __init__(self, tsId=None, inTomo=None, tomoHdfName=None, ts=None, tsHdfName=None, ctf=None, coords=None,
+                 particles=None, jsonFile=None, processingInd=None):
 
         self.tsId = tsId
         self.inTomo = inTomo
         self.tomoHdfName = tomoHdfName
         self.ts = ts
+        self.tsHdfName = tsHdfName
         self.ctf = ctf
         self.coords = coords
         self.particles = particles

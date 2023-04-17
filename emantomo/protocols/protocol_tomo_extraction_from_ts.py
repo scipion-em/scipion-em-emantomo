@@ -26,17 +26,17 @@
 # **************************************************************************
 import glob
 from enum import Enum
-from os.path import abspath, join, basename, realpath
+from os.path import abspath, join, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMO_ID, GROUP_ID, TS_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOGRAMS_DIR, \
     TS_DIR
-from emantomo.utils import getPresentPrecedents, getBoxSize, getFromPresentObjects, genEmanGrouping
+from emantomo.utils import getBoxSize, getFromPresentObjects, genEmanGrouping
 from emantomo.objects import EmanMetaData
 from pwem.objects import Transform
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import String
-from pyworkflow.protocol import PointerParam, FloatParam, BooleanParam, LEVEL_ADVANCED, GE, LE, GT, IntParam
+from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam
 from pyworkflow.utils import makePath, Message, replaceBaseExt, createLink
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
@@ -174,14 +174,16 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         dirName = TS_DIR
         sRate = mdObj.ts.getSamplingRate()
         outFile = self.convertOrLink(inTsFName, dirName, sRate)
-        # Store the tomoHdfName in the current mdObj
-        mdObj.tomoHdfName = outFile
+        # Store the tsHdfName in the current mdObj
+        mdObj.tsHdfName = outFile
 
     def convertTomoStep(self, mdObj):
         inTomoFName = mdObj.inTomo.getFileName()
         dirName = TOMOGRAMS_DIR
         sRate = mdObj.inTomo.getSamplingRate()
-        self.convertOrLink(inTomoFName, dirName, sRate)
+        outFile = self.convertOrLink(inTomoFName, dirName, sRate)
+        # Store the tomoHdfName in the current mdObj
+        mdObj.tomoHdfName = outFile
 
     def convertOrLink(self, inFile, dirName, sRate):
         """Fill the simulated EMAN project directories with the expected data at this point of the pipeline.
@@ -293,6 +295,8 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         args += '--threads=%i ' % self.numberOfThreads.get()
         args += '--newlabel=%s ' % mdObj.tsId
         args += '--append '
+        args += '--postxf=%s ' % 'postxf'
+        args += '--verbose=9'
         # if self.doSkipCtfCorrection.get():
         #     args += '--noctf '
         # if self.skip3dRec.get():

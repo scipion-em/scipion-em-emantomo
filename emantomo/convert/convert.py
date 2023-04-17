@@ -31,25 +31,18 @@
 import glob
 import itertools
 import json
-from os.path import join
-
+from os.path import join, abspath, splitext, dirname, isfile, basename
 import numpy as np
-
-import emantomo
 import numpy
-import os
 from ast import literal_eval
-
 import pwem.constants as emcts
 from pwem.objects import FSC
 import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
-
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms
 from tomo.constants import TR_EMAN
-
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX
 
@@ -226,7 +219,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         proc = Plugin.createEmanProcess(args='write')
 
         for subtomo in subtomogramSet.iterItems(orderBy=['_volId', 'id'], direction='ASC'):
-            volName, _ = os.path.splitext(os.path.basename(subtomo.getVolName()))
+            volName, _ = splitext(basename(subtomo.getVolName()))
 
             objDict = subtomo.getObjDict()
 
@@ -288,9 +281,9 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
 #     for index, fn in iterLstFile(lstFile):
 #         item = Particle()
 #         # set full path to particles stack file
-#         abspath = os.path.abspath(lstFile)
-#         fn = abspath.replace('sets/%s' % os.path.basename(lstFile), '') + fn
-#         newFn = pwutils.join(direc, os.path.basename(fn))
+#         abspath = abspath(lstFile)
+#         fn = abspath.replace('sets/%s' % basename(lstFile), '') + fn
+#         newFn = pwutils.join(direc, basename(fn))
 #         if not pwutils.exists(newFn):
 #             copyOrLink(fn, newFn)
 #
@@ -539,7 +532,7 @@ def getLastParticlesParams(directory):
     Value: Dict[{coverage: float, score: float, alignMatrix: list[float]}]
     """
     # JSON files with particles params: path/to/particle_parms_NN.json
-    particleParamsPaths = glob.glob(os.path.join(directory, 'particle_parms_*.json'))
+    particleParamsPaths = glob.glob(join(directory, 'particle_parms_*.json'))
     if not particleParamsPaths:
         raise Exception("Particle params files not found")
 
@@ -607,7 +600,7 @@ def jsonFilesFromSet(setScipion, path):
             if "__" in fileBasename:
                 fnInputCoor = '%s_info.json' % fileBasename.split("__")[0]
             else:
-                parentFolder = pwutils.removeBaseExt(os.path.dirname(file))
+                parentFolder = pwutils.removeBaseExt(dirname(file))
                 fnInputCoor = '%s-%s_info.json' % (parentFolder, fileBasename)
             pathInputCoor = pwutils.join(path, fnInputCoor)
             json_files.append(pathInputCoor)
@@ -616,8 +609,8 @@ def jsonFilesFromSet(setScipion, path):
     elif isinstance(setScipion, SetOfTiltSeries):
         tlt_files = []
         for tilt_serie in setScipion.iterItems(iterate=False):
-            json_file = os.path.join(path,
-                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
+            json_file = join(path,
+                                     basename(dirname(tilt_serie.getFirstItem().getFileName())) +
                                      '-' + tilt_serie.getTsId() + '_info.json')
             json_files.append(json_file)
             tlt_files.append(tilt_serie.getFirstItem().getFileName())
@@ -684,10 +677,10 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
     first = True
     for tomo in setTomograms.iterItems():
         outFile = '*%s_info.json' % pwutils.removeBaseExt(tomo.getFileName().split("__")[0])
-        pattern = os.path.join(outPath, outFile)
+        pattern = join(outPath, outFile)
         files = glob.glob(pattern)
 
-        if not files or not os.path.isfile(files[0]):
+        if not files or not isfile(files[0]):
             continue
 
         jsonFnbase = files[0]
@@ -718,14 +711,14 @@ def tltParams2Json(json_files, tltSeries, mode="w"):
         tilt_serie = tltSeries[idj + 1]
         tlt_params = []
         for idx, tiltImage in enumerate(tilt_serie.iterItems()):
-            paths.append(os.path.abspath(tiltImage.getFileName()))
+            paths.append(abspath(tiltImage.getFileName()))
             tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
             a1 = numpy.rad2deg(numpy.arccos(tr_matrix[0, 0]))
             a2 = tiltImage.getTiltAngle()
             a3 = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
             s1, s2 = tr_matrix[0, 2], tr_matrix[1, 2]
             tlt_params.append([s1, s2, a1, a2, a3])
-        tlt_files = os.path.abspath(tilt_serie[1].getFileName())
+        tlt_files = abspath(tilt_serie[1].getFileName())
         if tlt_params:
             tlt_dict = {"apix_unbin": sr,
                         "tlt_file": tlt_files,
@@ -775,7 +768,7 @@ def refinement2Json(protocol, subTomos, mode='w'):
 
     count = 0
     for subTomo in subTomos.iterSubtomos():
-        key = "('%s', %d)" % (os.path.abspath(lst_file), count)
+        key = "('%s', %d)" % (abspath(lst_file), count)
         count += 1
         coverage = getattr(subTomo, EMAN_COVERAGE, Float(0.0)).get()
         score = getattr(subTomo, EMAN_SCORE, Float(-0.0)).get()
@@ -840,7 +833,7 @@ def emanFSCsToScipion(fscSet, *fscFiles):
 
     for fscFile in fscFiles:
         res_inv, frc = _getFscValues(fscFile)
-        fsc = FSC(objLabel=os.path.basename(fscFile))
+        fsc = FSC(objLabel=basename(fscFile))
         fsc.setData(res_inv, frc)
         fscSet.append(fsc)
 
@@ -875,38 +868,21 @@ def ts2Json(mdObj, mode="w"):
     tltParams = []
     ts = mdObj.ts
     jsonFile = mdObj.jsonFile
+    tltFile = mdObj.tsHdfName
     for tiltImage in ts:
-        paths.append(os.path.abspath(tiltImage.getFileName()))
-        trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
-        rotAngle = -np.rad2deg(np.arccos(trMatrix[0, 0]))
+        paths.append(abspath(tiltImage.getFileName()))
         tiltAngle = tiltImage.getTiltAngle()
-        offTiltAngle = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
-        tx = trMatrix[0, 2]
-        ty = trMatrix[1, 2]
-        shiftsScipion = np.array([tx, ty])
-
-        emanRotMatrix = np.eye(2)
-        emanRotMatrix[0, 0] = emanRotMatrix[1, 1] = np.cos(rotAngle)
-        emanRotMatrix[0, 1] = np.sin(rotAngle)
-        emanRotMatrix[1, 0] = -np.sin(rotAngle)
-        shiftsEman = np.linalg.inv(emanRotMatrix).dot(shiftsScipion)
-
-
-        # Undo the rotation to express the shifts considering the EMAN transformation (first translated and then
-        # rotated) --> 1) Rotate minus angle, 2) Calculate the shifts in the un rotated reference system
-        # unRotMatrix[0, 0] = unRotMatrix[1, 1] = np.cos(rotAngleCorrected)
-        # unRotMatrix[0, 1] = np.sin(rotAngleCorrected)
-        # unRotMatrix[1, 0] = -np.sin(rotAngleCorrected)
-        # tx = trMatrix[0, 2]
-        # ty = trMatrix[1, 2]
-        # shiftsScipion = np.array([tx, ty])
-        # shiftsEman = unRotMatrix.dot(shiftsScipion)
-
-        tltParams.append([shiftsEman[0], shiftsEman[1], rotAngle, tiltAngle, offTiltAngle])
+        trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
+        trMatrixInv = np.linalg.inv(trMatrix)
+        sx = trMatrixInv[0, 2]
+        sy = trMatrixInv[1, 2]
+        rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
+        offTiltAngle = getattr(tiltImage, 'tiltAngleAxis', 0.0)
+        rotz = rotzCorrected - offTiltAngle
+        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
-    tltFiles = os.path.abspath(ts[1].getFileName())
     tltDict = {"apix_unbin": ts.getSamplingRate(),
-               "tlt_file": tltFiles,
+               "tlt_file": tltFile,
                "tlt_params": tltParams}
     if mode == "w":
         writeJson(tltDict, jsonFile)
@@ -918,22 +894,27 @@ def ts2Json(mdObj, mode="w"):
 
 
 def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
+    rotM = np.array([[-1, 0, 0], [-1, 0, 0], [0, 0, 1]])  # Ver jnotebook
     paths = []
     coords = []
     jsonFile = mdObj.jsonFile
-    tomoThk = 300  #TODO: just for testing --> REMOVE!
     for coord in mdObj.coords:
-        coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
-                       coord.getY(const.BOTTOM_LEFT_CORNER),
-                       tomoThk - coord.getZ(const.BOTTOM_LEFT_CORNER),
-                       TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+        iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
+                            coord.getY(const.BOTTOM_LEFT_CORNER),
+                            coord.getZ(const.BOTTOM_LEFT_CORNER)])
+        tCoords = rotM.dot(iCoords)
+        coords.append([tCoords[0], tCoords[1], tCoords[2], TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+        # coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
+        #                coord.getY(const.BOTTOM_LEFT_CORNER),
+        #                coord.getZ(const.BOTTOM_LEFT_CORNER),
+        #                TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
 
     coordDict = {"boxes_3d": coords,
                  "class_list": {}}
 
     for i, groupId in enumerate(groupIds):
         coordDict["class_list"]["%s" % emanDict[groupId]] = {"boxsize": boxSize,
-                                                             "name": TOMOBOX} #("class_%i" % i).zfill(3)}
+                                                             "name": TOMOBOX}  # ("class_%i" % i).zfill(3)}
     if mode == "w":
         writeJson(coordDict, jsonFile)
         paths.append(jsonFile)
@@ -942,3 +923,9 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
         paths.append(jsonFile)
 
     return paths
+
+
+def convertBetweenHdfAndMrc(prot, inFile, outFile, extraArgs=''):
+    program = Plugin.getProgram("e2proc3d.py")
+    args = '%s %s ' % (inFile, outFile)
+    prot.runJob(program, args + extraArgs)
