@@ -295,8 +295,7 @@ class EmanProtTSExtraction(EMProtocol, ProtTomoBase):
         args += '--threads=%i ' % self.numberOfThreads.get()
         args += '--newlabel=%s ' % mdObj.tsId
         args += '--append '
-        args += '--postxf=%s ' % 'postxf'
-        args += '--verbose=9'
+        args += '--verbose=9 '
         # if self.doSkipCtfCorrection.get():
         #     args += '--noctf '
         # if self.skip3dRec.get():

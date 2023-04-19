@@ -894,14 +894,49 @@ def ts2Json(mdObj, mode="w"):
 
 
 def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
-    rotM = np.array([[-1, 0, 0], [-1, 0, 0], [0, 0, 1]])  # Ver jnotebook
+    # rotM = np.array([[-1, 0, 0], [-1, 0, 0], [0, 0, 1]])  # Ver jnotebook
+    X = 928
+    Y = 960
+    Z = 300
+    ###EJE A MEDIA ALTURA###
+    # matriz para flip up-down
+    flip_up_down = np.array([[1, 0, 0, 0],
+                             [0, -1, 0, Y / 2],
+                             [0, 0, -1, Z / 2],
+                             [0, 0, 0, 1]])
+
+    # matriz para flip left-right
+    flip_left_right = np.array([[-1, 0, 0, X / 2],
+                                [0, 1, 0, 0],
+                                [0, 0, -1, Z / 2],
+                                [0, 0, 0, 1]])
+
+    # ###EJE EN LA ESQUINA ORIGEN DE EMAN
+    # # Transformación flip up-down en X con respecto al eje que Y=0 y Z=0
+    # flip_up_down = np.array([[1, 0, 0, 0],
+    #                          [0, -1, 0, Y],
+    #                          [0, 0, -1, Z],
+    #                          [0, 0, 0, 1]])
+    #
+    # # Transformación flip left-right en Y con respecto al eje que X=0 y Z=0
+    # flip_left_right = np.array([[-1, 0, 0, X],
+    #                             [0, 1, 0, 0],
+    #                             [0, 0, -1, Z],
+    #                             [0, 0, 0, 1]])
+
+    # # matriz para flip up-down seguido de flip left-right
+    # rotM = flip_left_right @ flip_up_down
+    # matriz para flip left-right seguido de flip up-down
+    rotM = flip_up_down @ flip_left_right
+
     paths = []
     coords = []
     jsonFile = mdObj.jsonFile
     for coord in mdObj.coords:
         iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
                             coord.getY(const.BOTTOM_LEFT_CORNER),
-                            coord.getZ(const.BOTTOM_LEFT_CORNER)])
+                            coord.getZ(const.BOTTOM_LEFT_CORNER),
+                            1])
         tCoords = rotM.dot(iCoords)
         coords.append([tCoords[0], tCoords[1], tCoords[2], TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
         # coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
