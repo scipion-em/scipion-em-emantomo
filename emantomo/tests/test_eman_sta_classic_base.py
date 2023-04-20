@@ -99,7 +99,7 @@ class TestEmantomoStaClassicBase(BaseTest):
                                              samplingRate=cls.origSRate, )
 
         cls.launchProtocol(protImportTomogram)
-        tomoImported = protImportTomogram.outputTomograms
+        tomoImported = protImportTomogram.Tomograms
         cls.assertIsNotNone(tomoImported, "There was a problem with tomogram output")
         return tomoImported
 
