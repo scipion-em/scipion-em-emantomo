@@ -610,8 +610,8 @@ def jsonFilesFromSet(setScipion, path):
         tlt_files = []
         for tilt_serie in setScipion.iterItems(iterate=False):
             json_file = join(path,
-                                     basename(dirname(tilt_serie.getFirstItem().getFileName())) +
-                                     '-' + tilt_serie.getTsId() + '_info.json')
+                             basename(dirname(tilt_serie.getFirstItem().getFileName())) +
+                             '-' + tilt_serie.getTsId() + '_info.json')
             json_files.append(json_file)
             tlt_files.append(tilt_serie.getFirstItem().getFileName())
         return json_files, tlt_files
@@ -898,18 +898,29 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
     X = 928
     Y = 960
     Z = 300
-    ###EJE A MEDIA ALTURA###
-    # matriz para flip up-down
-    flip_up_down = np.array([[1, 0, 0, 0],
-                             [0, -1, 0, Y / 2],
-                             [0, 0, -1, Z / 2],
-                             [0, 0, 0, 1]])
+    ###OTRO
+    Ref_x = np.array([[-1, 0, 0, 0],
+                      [0, 1, 0, Y/2],
+                      [0, 0, 1, Z/2],
+                      [0, 0, 0, 1]])
+    Ref_y = np.array([[1, 0, 0, X/2],
+                      [0, -1, 0, 0],
+                      [0, 0, 1, Z/2],
+                      [0, 0, 0, 1]])
+    rotM = Ref_y @ Ref_x
 
-    # matriz para flip left-right
-    flip_left_right = np.array([[-1, 0, 0, X / 2],
-                                [0, 1, 0, 0],
-                                [0, 0, -1, Z / 2],
-                                [0, 0, 0, 1]])
+    # ###EJE A MEDIA ALTURA###
+    # # matriz para flip up-down
+    # flip_up_down = np.array([[-1, 0, 0, 0],
+    #                          [0, 1, 0, Y / 2],
+    #                          [0, 0, 1, Z / 2],
+    #                          [0, 0, 0, 1]])
+    #
+    # # matriz para flip left-right
+    # flip_left_right = np.array([[1, 0, 0, X / 2],
+    #                             [0, -1, 0, 0],
+    #                             [0, 0, 1, Z / 2],
+    #                             [0, 0, 0, 1]])
 
     # ###EJE EN LA ESQUINA ORIGEN DE EMAN
     # # Transformación flip up-down en X con respecto al eje que Y=0 y Z=0
@@ -926,8 +937,8 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
 
     # # matriz para flip up-down seguido de flip left-right
     # rotM = flip_left_right @ flip_up_down
-    # matriz para flip left-right seguido de flip up-down
-    rotM = flip_up_down @ flip_left_right
+    # # matriz para flip left-right seguido de flip up-down
+    # rotM = flip_up_down @ flip_left_right
 
     paths = []
     coords = []
