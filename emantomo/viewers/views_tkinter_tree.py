@@ -27,12 +27,11 @@
 import glob
 import os
 import threading
-
+from os.path import abspath, join, exists
+from emantomo.constants import TOMOGRAMS_DIR
 from pyworkflow import utils as pwutils
 from pyworkflow.gui.dialog import ToolbarListDialog
-from pyworkflow.utils.path import moveFile, cleanPath, copyFile
 from pyworkflow.utils.process import runJob
-
 import emantomo
 from emantomo.convert import loadJson
 
@@ -44,6 +43,8 @@ class EmanDialog(ToolbarListDialog):
     """
 
     def __init__(self, parent, path, **kwargs):
+        self.proc = None
+        self.tomo = None
         self.path = path
         self.provider = kwargs.get("provider", None)
         ToolbarListDialog.__init__(self, parent,
@@ -57,36 +58,24 @@ class EmanDialog(ToolbarListDialog):
         if self.proc.is_alive():
             self.after(1000, self.refresh_gui)
         else:
-            outFile = '*%s_info.json' % pwutils.removeBaseExt(self.tomo.getFileName().split("__")[0])
+            outFile = '*%s_info*.json' % pwutils.removeBaseExt(self.tomo.getFileName().split("__")[0])
             jsonPath = os.path.join(self.path, "info", outFile)
             jsonPath = glob.glob(jsonPath)[0]
-
-            # moveFile((files[0]), os.path.join(self.path, os.path.basename(files[0])))
-            # cleanPath(os.path.join(self.path, "info"))
             jsonDict = loadJson(jsonPath)
             self.tomo.count = len(jsonDict["boxes_3d"])
             self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
         self.tomo = e
-        self.proc = threading.Thread(target=self.lanchEmanForTomogram, args=(self.tomo,))
+        self.proc = threading.Thread(target=self.launchEmanForTomogram, args=(self.tomo,))
         self.proc.start()
         self.after(1000, self.refresh_gui)
 
-    def lanchEmanForTomogram(self, tomo):
+    def launchEmanForTomogram(self, tomo):
         # self._moveCoordsToInfo(tomo)
-
+        tomoFile = join(TOMOGRAMS_DIR, tomo.getTsId() + '.hdf')  # PPPT --> use the HDF file generated in the convert
+        if not exists(join(self.path, tomoFile)):  # Any other case
+            tomoFile = abspath(tomo.getFileName)
         program = emantomo.Plugin.getProgram("e2spt_boxer.py")
-        arguments = "%s" % os.path.abspath(tomo.getFileName())
+        arguments = "%s --box3d" % tomoFile
         runJob(None, program, arguments, env=emantomo.Plugin.getEnviron(), cwd=self.path)
-
-    def _moveCoordsToInfo(self, tomo):
-        fnCoor = '*%s_info.json' % pwutils.removeBaseExt(tomo.getFileName().split("__")[0])
-        pattern = os.path.join(self.path, fnCoor)
-        files = glob.glob(pattern)
-
-        if files:
-            infoDir = pwutils.join(os.path.abspath(self.path), 'info')
-            pathCoor = os.path.join(infoDir, os.path.basename(files[0]))
-            pwutils.makePath(infoDir)
-            copyFile(files[0], pathCoor)

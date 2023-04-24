@@ -32,7 +32,8 @@ import emantomo
 from emantomo.constants import TS_ID, INFO_DIR, TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS
 from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData
-from emantomo.utils import getFromPresentObjects, genJsonFileName, getObjByName
+from emantomo.protocols.protocol_base import ProtEmantomoBase
+from emantomo.utils import getFromPresentObjects, genJsonFileName
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
@@ -60,7 +61,7 @@ class outputObjects(Enum):
     tomograms = SetOfTomograms()
 
 
-class EmanProtTsAlignTomoRec(EMProtocol):
+class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     """
     This protocol wraps *e2tomogram.py* EMAN2 program.
 
@@ -194,7 +195,7 @@ class EmanProtTsAlignTomoRec(EMProtocol):
                       condition=recCond,
                       help='Use extra padding for tilted reconstruction. It is slower and costs more memory, '
                            'but reduces the boundary artifacts when the sample is thick.')
-        form.addParallelSection(threads=4, mpi=1)
+        form.addParallelSection(threads=4, mpi=0)
 
     def _validateDim(self, obj1, obj2, errors, label1='Input 1', label2='Input 2'):
         super()._validateDim(obj1, obj2, errors, label1, label2)
@@ -204,7 +205,8 @@ class EmanProtTsAlignTomoRec(EMProtocol):
     def _insertAllSteps(self):
         mdObjList = self._initialize()
         for mdObj in mdObjList:
-            self._insertFunctionStep(self.convertInputStep, mdObj)
+            self._insertFunctionStep(self.convertTsStep, mdObj)
+            self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.emanStep, mdObj.tsId)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
             self._insertFunctionStep(self.createOutputStep, mdObj)
@@ -231,28 +233,16 @@ class EmanProtTsAlignTomoRec(EMProtocol):
             # Eman expects the TS origin on the center, while Scipion refers it to the corner
             mdObjList.append(EmanMetaData(tsId=tsId,
                                           ts=ts,
-                                          jsonFile=genJsonFileName(infoDir, tsId),
+                                          jsonFile=genJsonFileName(self.getInfoDir(), tsId),
                                           processingInd=counter))
             counter += 1
         return mdObjList
 
-    def convertInputStep(self, mdObj):
-        inFile = mdObj.ts.getFirstItem().getFileName()
-        if mdObj.ts.getFirstItem().getFileName().endswith('.hdf'):
-            outFile = self._getExtraPath(TS_DIR, mdObj.tsId + getExt(inFile))
-            createLink(inFile, outFile)
-        else:
-            # TS alignment and reconstruct must have the correct Apix values in their headers
-            # (e2tomogram.py description)
-            outFile = self._getExtraPath(TS_DIR, mdObj.tsId + '.hdf')
-            args = '--apix %.3f ' % mdObj.ts.getSamplingRate()
-            # args += '--resetxf '
-            convertBetweenHdfAndMrc(self, inFile, outFile, extraArgs=args)
-
-        # Generate initial json file required by EMAN
+    def writeData2JsonFileStep(self, mdObj):
+        # Generate initial json file required by EMAN for the reconstruction considering a previous alignment
         if self.doRec.get() and not self.doAlignment.get():
             # This only applies to the reconstruction
-            ts2Json(mdObj)
+            ts2Json(mdObj, mode='w')
 
     def emanStep(self, tsId):
         program = emantomo.Plugin.getProgram("e2tomogram.py")
@@ -354,8 +344,8 @@ class EmanProtTsAlignTomoRec(EMProtocol):
         return join(TS_DIR, basename(tsFile))
 
     def getTiltAxisAngle(self):
-        ts = self.inTiltSeries.get().getFirstItem()
         if not self._tiltAxisAngle:
+            ts = self.inTiltSeries.get().getFirstItem()
             if self.tiltAxisAngle.get():  # Value from form
                 self._tiltAxisAngle = self.tiltAxisAngle.get()
             elif ts.getAcquisition().getTiltAxisAngle():  # Value from the TS metadata
@@ -363,7 +353,8 @@ class EmanProtTsAlignTomoRec(EMProtocol):
         return -1 * self._tiltAxisAngle  # (From eman doc) Note the angle stored internally will have an opposite sign
 
     def _getAlignArgs(self, tsId):
-        tAx = self.getTiltAxisAngle()
+        # tAx = self.getTiltAxisAngle()
+        tAx = self.tiltAxisAngle.get()
         args = ''
         args += '--rawtlt=%s ' % join(TLT_DIR, tsId + '.tlt')
         args += '--npk=%i ' % self.nLandmarks.get()
@@ -402,9 +393,9 @@ class EmanProtTsAlignTomoRec(EMProtocol):
 
     def getTiltSeries(self, interpolated=False):
         if interpolated:
-            return getObjByName(self, outputObjects.tiltSeriesInterpolated.name)
+            return self.getObjByName(outputObjects.tiltSeriesInterpolated.name)
         else:
-            return getObjByName(self, outputObjects.tiltSeries.name)
+            return self.getObjByName(outputObjects.tiltSeries.name)
 
     def setTiltSeries(self, tsSet, interpolated=False):
         if interpolated:

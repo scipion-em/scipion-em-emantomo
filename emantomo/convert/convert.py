@@ -877,9 +877,11 @@ def ts2Json(mdObj, mode="w"):
         sx = trMatrixInv[0, 2]
         sy = trMatrixInv[1, 2]
         rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
-        offTiltAngle = getattr(tiltImage, 'tiltAngleAxis', 0.0)
+        offTiltAngle = getattr(tiltImage, 'tiltAngleAxis', Float(0.0)).get()
         rotz = rotzCorrected - offTiltAngle
-        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
+        # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
+        # opposite sign
+        tltParams.append([sx, sy, -rotz, tiltAngle, offTiltAngle])
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
     tltDict = {"apix_unbin": ts.getSamplingRate(),
                "tlt_file": tltFile,
@@ -895,19 +897,19 @@ def ts2Json(mdObj, mode="w"):
 
 def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
     # rotM = np.array([[-1, 0, 0], [-1, 0, 0], [0, 0, 1]])  # Ver jnotebook
-    X = 928
-    Y = 960
-    Z = 300
-    ###OTRO
-    Ref_x = np.array([[-1, 0, 0, 0],
-                      [0, 1, 0, Y/2],
-                      [0, 0, 1, Z/2],
-                      [0, 0, 0, 1]])
-    Ref_y = np.array([[1, 0, 0, X/2],
-                      [0, -1, 0, 0],
-                      [0, 0, 1, Z/2],
-                      [0, 0, 0, 1]])
-    rotM = Ref_y @ Ref_x
+    # X = 928
+    # Y = 960
+    # Z = 300
+    # ###OTRO
+    # Ref_x = np.array([[-1, 0, 0, 0],
+    #                   [0, 1, 0, Y/2],
+    #                   [0, 0, 1, Z/2],
+    #                   [0, 0, 0, 1]])
+    # Ref_y = np.array([[1, 0, 0, X/2],
+    #                   [0, -1, 0, 0],
+    #                   [0, 0, 1, Z/2],
+    #                   [0, 0, 0, 1]])
+    # rotM = Ref_y @ Ref_x
 
     # ###EJE A MEDIA ALTURA###
     # # matriz para flip up-down
@@ -944,16 +946,16 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
     coords = []
     jsonFile = mdObj.jsonFile
     for coord in mdObj.coords:
-        iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
-                            coord.getY(const.BOTTOM_LEFT_CORNER),
-                            coord.getZ(const.BOTTOM_LEFT_CORNER),
-                            1])
-        tCoords = rotM.dot(iCoords)
-        coords.append([tCoords[0], tCoords[1], tCoords[2], TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
-        # coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
-        #                coord.getY(const.BOTTOM_LEFT_CORNER),
-        #                coord.getZ(const.BOTTOM_LEFT_CORNER),
-        #                TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+        # iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
+        #                     coord.getY(const.BOTTOM_LEFT_CORNER),
+        #                     coord.getZ(const.BOTTOM_LEFT_CORNER),
+        #                     1])
+        # tCoords = rotM.dot(iCoords)
+        # coords.append([tCoords[0], tCoords[1], tCoords[2], TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+        coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
+                       coord.getY(const.BOTTOM_LEFT_CORNER),
+                       coord.getZ(const.BOTTOM_LEFT_CORNER),
+                       TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
 
     coordDict = {"boxes_3d": coords,
                  "class_list": {}}

@@ -25,7 +25,6 @@
 
 from os.path import join, abspath
 from emantomo.constants import TOMO_ID, TS_ID
-from pyworkflow.object import Pointer
 from pyworkflow.utils import removeBaseExt, getParentFolder
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms
 
@@ -45,11 +44,6 @@ def genTomoJsonFileName(tomoFileName, jsonOutDirName):
     return join(jsonOutDirName, '%s-%s_info.json' % (parentDir, fileBasename))
 
 
-def getBoxSize(prot):
-    boxSizeFromForm = getattr(prot, 'boxSize', None)
-    return boxSizeFromForm.get() if boxSizeFromForm else prot.inputSubtomos.get().getCoordinates3D().getBoxSize()
-
-
 def getFromPresentObjects(inSet, labelList):
     idLabel = TOMO_ID if type(inSet) in [SetOfCoordinates3D, SetOfSubTomograms] else TS_ID
     matches = inSet.aggregate(['COUNT'], idLabel, labelList)
@@ -59,6 +53,10 @@ def getFromPresentObjects(inSet, labelList):
         outDict[label] = list(uniqueValues)
 
     return outDict
+
+
+def getPresentTsIdsInSet(inSet):
+    return getFromPresentObjects(inSet, [TS_ID])[TS_ID]
 
 
 def genEmanGrouping(groupIds):
@@ -79,13 +77,22 @@ def genJsonFileName(infoDir, tomoId):
     return join(infoDir, '%s_info.json' % tomoId)
 
 
-def getObjByName(prot, name):
-    """Return an object, from a protocol, named 'name' instead of a pointer."""
-    obj = getattr(prot, name, None)
-    if obj and type(obj) == Pointer:
-        return obj.get()
-    else:
-        return obj
+# def getObjByName(prot, name):
+#     """Return an object, from a protocol, named 'name' instead of a pointer."""
+#     obj = getattr(prot, name, None)
+#     if obj and type(obj) == Pointer:
+#         return obj.get()
+#     else:
+#         return obj
+#
+#
+# def getTsFromProt(prot):
+#     """If the user provides a set of tilt series, use them. If not (expected behaviour) Get the non-interpolated
+#     tilt series from the introduced coordinates."""
+#     tsSet = prot.inputTS.get()
+#     return tsSet if tsSet else getNonInterpolatedTsFromRelations(prot.inputCoordinates.get(), prot)
+
+
 
 
 def genEmanTomoPrj(destDir):
