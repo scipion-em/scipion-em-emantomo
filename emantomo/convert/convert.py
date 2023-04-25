@@ -944,18 +944,32 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
 
     paths = []
     coords = []
+    tomo = mdObj.inTomo
+    apix = tomo.getSamplingRate()
+    apixUnbin = mdObj.ts.getSamplingRate()
+    nx, ny, nz = tomo.getDim()
+    sx = nx // 2
+    sy = ny // 2
+    sz = nz // 2
+    scaleFactor = apix / apixUnbin
     jsonFile = mdObj.jsonFile
     for coord in mdObj.coords:
+        x, y, z = coord.getPosition(const.BOTTOM_LEFT_CORNER)
+        x = (x - sx) * scaleFactor
+        y = (y - sy) * scaleFactor
+        z = (z - sz) * scaleFactor
+        coords.append([x, y, z, TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+
         # iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
         #                     coord.getY(const.BOTTOM_LEFT_CORNER),
         #                     coord.getZ(const.BOTTOM_LEFT_CORNER),
         #                     1])
         # tCoords = rotM.dot(iCoords)
         # coords.append([tCoords[0], tCoords[1], tCoords[2], TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
-        coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
-                       coord.getY(const.BOTTOM_LEFT_CORNER),
-                       coord.getZ(const.BOTTOM_LEFT_CORNER),
-                       TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+        # coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
+        #                coord.getY(const.BOTTOM_LEFT_CORNER),
+        #                coord.getZ(const.BOTTOM_LEFT_CORNER),
+        #                TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
 
     coordDict = {"boxes_3d": coords,
                  "class_list": {}}

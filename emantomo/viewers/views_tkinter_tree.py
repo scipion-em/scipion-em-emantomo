@@ -75,7 +75,7 @@ class EmanDialog(ToolbarListDialog):
         # self._moveCoordsToInfo(tomo)
         tomoFile = join(TOMOGRAMS_DIR, tomo.getTsId() + '.hdf')  # PPPT --> use the HDF file generated in the convert
         if not exists(join(self.path, tomoFile)):  # Any other case
-            tomoFile = abspath(tomo.getFileName)
+            tomoFile = abspath(tomo.getFileName())
         program = emantomo.Plugin.getProgram("e2spt_boxer.py")
         arguments = "%s --box3d" % tomoFile
         runJob(None, program, arguments, env=emantomo.Plugin.getEnviron(), cwd=self.path)

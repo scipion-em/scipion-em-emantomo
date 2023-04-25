@@ -26,19 +26,16 @@
 # **************************************************************************
 import glob
 from enum import Enum
-from os.path import abspath, join, basename, exists
+from os.path import abspath, join, exists
 from emantomo import Plugin
-from emantomo.constants import INFO_DIR, TOMO_ID, GROUP_ID, TS_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOGRAMS_DIR, \
-    TS_DIR
+from emantomo.constants import TOMO_ID, GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping
-from emantomo.objects import EmanMetaData
 from pwem.objects import Transform
-from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam
-from pyworkflow.utils import makePath, Message, replaceBaseExt, createLink
+from pyworkflow.utils import Message, replaceBaseExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
 from tomo.objects import SetOfSubTomograms, SubTomogram
