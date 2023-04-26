@@ -56,7 +56,13 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def convertTsStep(self, mdObj):
-        inTsFName = mdObj.ts.getFirstItem().getFileName()
+        # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why the
+        # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
+        # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
+        if mdObj.ctf:
+            inTsFName = mdObj.ctf.getTiltSeries().getFirstItem().getFileName()
+        else:
+            inTsFName = mdObj.ts.getFirstItem().getFileName()
         dirName = TS_DIR
         sRate = mdObj.ts.getSamplingRate()
         outFile = self.convertOrLink(inTsFName, mdObj.tsId, dirName, sRate)

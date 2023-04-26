@@ -39,7 +39,6 @@ from pyworkflow.utils import Message, replaceBaseExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
 from tomo.objects import SetOfSubTomograms, SubTomogram
-from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
 
 SAME_AS_PICKING = 0
@@ -81,7 +80,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
                       label='Tilt series with alignment, non-interpolated',
-                      expertLevel=LEVEL_ADVANCED,
+                      # expertLevel=LEVEL_ADVANCED,
                       allowsNull=True,
                       help='Tilt series with alignment (non interpolated) used in the tomograms reconstruction. '
                            'To be deprecated!!')

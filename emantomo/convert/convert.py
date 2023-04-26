@@ -867,15 +867,20 @@ def ts2Json(mdObj, mode="w"):
     paths = []
     tltParams = []
     ts = mdObj.ts
+    apixTs = ts.getSamplingRate()
     jsonFile = mdObj.jsonFile
     tltFile = mdObj.tsHdfName
+    # The alignment could have been calculated using a binned TS, while the CTF is usually estimated at the original
+    # size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to
+    apixUnbinned = getApixUnbinnedFromMd(mdObj)
+    shiftsScale = apixTs / apixUnbinned
     for tiltImage in ts:
         paths.append(abspath(tiltImage.getFileName()))
         tiltAngle = tiltImage.getTiltAngle()
         trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
         trMatrixInv = np.linalg.inv(trMatrix)
-        sx = trMatrixInv[0, 2]
-        sy = trMatrixInv[1, 2]
+        sx = trMatrixInv[0, 2] * shiftsScale
+        sy = trMatrixInv[1, 2] * shiftsScale
         rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
         offTiltAngle = getattr(tiltImage, 'tiltAngleAxis', Float(0.0)).get()
         rotz = rotzCorrected - offTiltAngle
@@ -883,7 +888,7 @@ def ts2Json(mdObj, mode="w"):
         # opposite sign
         tltParams.append([sx, sy, -rotz, tiltAngle, offTiltAngle])
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
-    tltDict = {"apix_unbin": ts.getSamplingRate(),
+    tltDict = {"apix_unbin": apixUnbinned,
                "tlt_file": tltFile,
                "tlt_params": tltParams}
     if mode == "w":
@@ -946,7 +951,7 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
     coords = []
     tomo = mdObj.inTomo
     apix = tomo.getSamplingRate()
-    apixUnbin = mdObj.ts.getSamplingRate()
+    apixUnbin = getApixUnbinnedFromMd(mdObj)
     nx, ny, nz = tomo.getDim()
     sx = nx // 2
     sy = ny // 2
@@ -958,7 +963,7 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
         x = (x - sx) * scaleFactor
         y = (y - sy) * scaleFactor
         z = (z - sz) * scaleFactor
-        coords.append([x, y, z, TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+        coords.append([x, y, -z, TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
 
         # iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
         #                     coord.getY(const.BOTTOM_LEFT_CORNER),
@@ -991,3 +996,13 @@ def convertBetweenHdfAndMrc(prot, inFile, outFile, extraArgs=''):
     program = Plugin.getProgram("e2proc3d.py")
     args = '%s %s ' % (inFile, outFile)
     prot.runJob(program, args + extraArgs)
+
+
+def getApixUnbinnedFromMd(mdObj):
+    """The alignment could have been calculated using a binned TS, while the CTF is usually estimated at the original
+    size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to"""
+    ts = mdObj.ts
+    apixTs = ts.getSamplingRate()
+    ctf = mdObj.ctf
+    apixCtf = ctf.getTiltSeries().getSamplingRate() if ctf else None
+    return apixCtf if apixCtf else apixTs
