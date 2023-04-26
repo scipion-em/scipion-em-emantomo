@@ -29,11 +29,11 @@ from os import remove
 from os.path import join, getctime, basename
 import numpy as np
 import emantomo
-from emantomo.constants import TS_ID, INFO_DIR, TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS
+from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS
 from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData
-from emantomo.protocols.protocol_base import ProtEmantomoBase
-from emantomo.utils import getFromPresentObjects, genJsonFileName
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
+from emantomo.utils import genJsonFileName, getPresentTsIdsInSet
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow import BETA
@@ -41,7 +41,7 @@ from pyworkflow.object import Set, Float
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, \
     EnumParam, StringParam
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import makePath, createLink, Message, getExt
+from pyworkflow.utils import makePath, createLink, Message
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, TiltImage, TiltSeries, Tomogram
 
 SIZE_1K = 0
@@ -72,12 +72,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     On a typical workstation reconstruction takes about 4-5 minutes per tomogram.
     """
 
-    _label = 'TS alignment & tomo reconstruction'
-    _devStatus = BETA
+    _label = 'TS align & tomo rec'
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
-        # self.stepsExecutionMode = STEPS_PARALLEL
         self._tiltAxisAngle = None
         self._finalSamplingRate = None
 
@@ -87,7 +85,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         recCond = 'doRec'
 
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam('inTiltSeries', PointerParam,
+        form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
                       label="Tilt Series", important=True,
                       help='Select the set of tilt series to be aligned and/or to reconstruct the corresponding '
@@ -197,9 +195,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                            'but reduces the boundary artifacts when the sample is thick.')
         form.addParallelSection(threads=4, mpi=0)
 
-    def _validateDim(self, obj1, obj2, errors, label1='Input 1', label2='Input 2'):
-        super()._validateDim(obj1, obj2, errors, label1, label2)
-
     # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
@@ -214,23 +209,17 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        inTsSet = self.inTiltSeries.get()
-        tsDir = self._getExtraPath(TS_DIR)
-        infoDir = self._getExtraPath(INFO_DIR)
+        inTsSet = getattr(self, IN_TS).get()
         tltDir = self._getExtraPath(TLT_DIR)
-        tomoDir = self._getExtraPath(TOMOGRAMS_DIR)
-        makePath(infoDir, tsDir, tltDir, tomoDir)
+        self.createInitEmanPrjDirs()
+        makePath(tltDir)
+
         mdObjList = []
-        uniqueValsDict = getFromPresentObjects(inTsSet, [TS_ID])
-        tsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet.iterItems()
-                  if ts.getTsId() in uniqueValsDict[TS_ID]}
+        presentTsIds = getPresentTsIdsInSet(inTsSet)
+        tsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
         counter = 0
         for tsId, ts in tsDict.items():
-            # fName = ts.getFirstItem().getFileName()
-            # tsLinkedName = self._getExtraPath(TS_DIR, tsId + getExt(fName))
-            # createLink(fName, tsLinkedName)
             ts.generateTltFile(join(tltDir, tsId + '.tlt'))
-            # Eman expects the TS origin on the center, while Scipion refers it to the corner
             mdObjList.append(EmanMetaData(tsId=tsId,
                                           ts=ts,
                                           jsonFile=genJsonFileName(self.getInfoDir(), tsId),
@@ -318,11 +307,11 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         # Define outputs and relations
         self._defineOutputs(**outPutDict)
         if self.doAlignment.get():
-            self._defineSourceRelation(self.inTiltSeries.get(), outTsSet)
+            self._defineSourceRelation(self.inputTS.get(), outTsSet)
             if self.genInterpolatedTs.get():
-                self._defineSourceRelation(self.inTiltSeries.get(), outTsSetInterp)
+                self._defineSourceRelation(self.inputTS.get(), outTsSetInterp)
         if self.doRec.get():
-            self._defineSourceRelation(self.inTiltSeries.get(), outTomoSet)
+            self._defineSourceRelation(self.inputTS.get(), outTomoSet)
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
@@ -344,17 +333,19 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return join(TS_DIR, basename(tsFile))
 
     def getTiltAxisAngle(self):
+        """The tilt axis angles is expected to be in the metadata at this point, but the user can introduce it manually
+        if necessary. The hierarchy to choose the tilt axis angle value is: if no tilt axis value is introduced, it
+        will be read from the tilt series metadata. If it is not contained in the metadata, it will be estimated by EMAN"""
         if not self._tiltAxisAngle:
-            ts = self.inTiltSeries.get().getFirstItem()
+            ts = getattr(self, IN_TS).get().getFirstItem()
             if self.tiltAxisAngle.get():  # Value from form
                 self._tiltAxisAngle = self.tiltAxisAngle.get()
             elif ts.getAcquisition().getTiltAxisAngle():  # Value from the TS metadata
                 self._tiltAxisAngle = ts.getAcquisition().getTiltAxisAngle()
-        return -1 * self._tiltAxisAngle  # (From eman doc) Note the angle stored internally will have an opposite sign
+        return self._tiltAxisAngle
 
     def _getAlignArgs(self, tsId):
-        # tAx = self.getTiltAxisAngle()
-        tAx = self.tiltAxisAngle.get()
+        tAx = self.getTiltAxisAngle()
         args = ''
         args += '--rawtlt=%s ' % join(TLT_DIR, tsId + '.tlt')
         args += '--npk=%i ' % self.nLandmarks.get()
@@ -368,7 +359,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return args
 
     def getOutputSetOfTs(self, interpolated=False):
-        inTs = self.inTiltSeries.get()
+        inTs = self.inputTS.get()
         outTs = self.getTiltSeries(interpolated=interpolated)
         if outTs:
             outTs.enableAppend()
@@ -383,7 +374,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 dims = inTs.getDim()
 
             tiltSeries = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
-            tiltSeries.copyInfo(self.inTiltSeries.get())
+            tiltSeries.copyInfo(self.inputTS.get())
             tiltSeries.setDim(dims)
             tiltSeries.setSamplingRate(inTs.getSamplingRate())
             tiltSeries.setStreamState(Set.STREAM_OPEN)
@@ -407,46 +398,13 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         outTsSet = self.getOutputSetOfTs()
         tiltSeries = self._createCurrentOutTs(mdObj.ts)
         outTsSet.append(tiltSeries)
-        matrix = np.eye(3)
-        rotMatrix = np.eye(2)
         for idx, ti in enumerate(mdObj.ts.iterItems()):
             outTi = TiltImage()
-            transform = Transform()
             outTi.copyInfo(ti, copyId=True)
             outTi.setIndex(ti.getIndex())
             outTi.setFileName(self._getExtraPath(TS_DIR, mdObj.tsId + '.mrc'))
-            # tlt_params: (N, 5) list, where N is the number of tilt in the tilt series. The columns are translation
-            # along x,y axis, and rotation around z, y, x axis in the EMAN coordinates. The translation is in unbinned
-            # pixels, and rotation is in degrees
-            rotAngle = -np.deg2rad(alignParams[idx][2])
-            tiltAngleRefined = alignParams[idx][3]
-            offTiltAngle = alignParams[idx][4]
-            tx = -alignParams[idx][0]
-            ty = -alignParams[idx][1]
-            # rotAngle = 0
-            # tx = 0
-            # ty = 0
-            rotAngleCorrected = rotAngle + np.deg2rad(offTiltAngle)
-            rotMatrix[0, 0] = rotMatrix[1, 1] = np.cos(rotAngleCorrected)
-            rotMatrix[0, 1] = np.sin(rotAngleCorrected)
-            rotMatrix[1, 0] = -np.sin(rotAngleCorrected)
-            shiftsEman = np.array([tx, ty])
-            shiftsImod = rotMatrix.dot(shiftsEman)
-            matrix[0, 0] = matrix[1, 1] = rotMatrix[0, 0]
-            matrix[0, 1] = rotMatrix[0, 1]
-            matrix[1, 0] = rotMatrix[1, 0]
-            matrix[0, 2] = shiftsImod[0]
-            matrix[1, 2] = shiftsImod[1]
-
-            # matrix[0, 0] = matrix[1, 1] = np.cos(rotAngle)
-            # matrix[0, 1] = np.sin(rotAngle)
-            # matrix[1, 0] = -np.sin(rotAngle)
-            # matrix[0, 2] = tx
-            # matrix[1, 2] = ty
-            transform.setMatrix(matrix)
-            outTi.setTransform(transform)
-            outTi.setTiltAngle(tiltAngleRefined)
-            outTi.tiltAngleAxis = Float(offTiltAngle)  # Extended parameter
+            curerntAlignParams = alignParams[idx]
+            self._genTrMatrixFromEmanAlign(outTi, curerntAlignParams)
             # Append the current tilt image to the corresponding tilt series
             tiltSeries.append(outTi)
 
@@ -456,10 +414,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         outTsSet = self.getOutputSetOfTs(interpolated=True)
         tiltSeries = self._createCurrentOutTs(mdObj.ts, interpolated=True)
         outTsSet.append(tiltSeries)
-        # matrix = np.eye(3)
         for idx, ti in enumerate(mdObj.ts.iterItems()):
             outTi = TiltImage()
-            # transform = Transform()
             finalName = self.getTsInterpFinalLoc(mdObj.tsId).replace('.hdf', '.mrc')
             outTi.copyInfo(ti, copyId=True)
             outTi.setTsId(outTi.getTsId() + '_interp')
@@ -467,8 +423,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setFileName(finalName)
             outTi.tiltAngleAxis = Float(alignParams[idx][4])  # Off tilt axis angle, extended parameter
             outTi.setTiltAngle(alignParams[idx][3])  # Refined tilt angle
-            # transform.setMatrix(matrix)
-            # outTi.setTransform(transform)
             tiltSeries.append(outTi)
 
         return outTsSet
@@ -529,7 +483,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     def getFinalSampligRate(self):
         # It has to be recalculated due to EMAN size management
         if not self._finalSamplingRate:
-            tsSet = self.inTiltSeries.get()
+            tsSet = self.inputTS.get()
             sizeX = tsSet.getDimensions()[0]
             exponent = np.ceil(np.log2(sizeX / RESOLUTION[OUT_TOMO_SIZE_CHOICES[self.outsize.get()]]).clip(min=0))
             binning = 2 ** exponent
@@ -546,7 +500,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tomograms = outTomograms
         else:
             tomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
-            tomograms.copyInfo(self.inTiltSeries.get())
+            tomograms.copyInfo(self.inputTS.get())
             tomograms.setSamplingRate(self.getFinalSampligRate())
             tomograms.setStreamState(Set.STREAM_OPEN)
             self.setTomograms(tomograms)
@@ -565,7 +519,31 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     def getTsInterpFinalLoc(self, tsId):
         return self._getExtraPath(TS_DIR, tsId + '_interp.hdf')
 
-    # def getZeroId(self):
-    #
-    #     for ti in self.iterItems(orderBy="_tiltAngle"):
-    #         angleList.append(ti.getTiltAngle())
+    @staticmethod
+    def _genTrMatrixFromEmanAlign(outTi, alignParams):
+        transform = Transform()
+        matrix = np.eye(3)
+        rotMatrix = np.eye(2)
+        # tlt_params: (N, 5) list, where N is the number of tilt in the tilt series. The columns are translation
+        # along x,y axis, and rotation around z, y, x axis in the EMAN coordinates. The translation is in unbinned
+        # pixels, and rotation is in degrees
+        rotAngle = -np.deg2rad(alignParams[2])
+        tiltAngleRefined = alignParams[3]
+        offTiltAngle = alignParams[4]
+        tx = -alignParams[0]
+        ty = -alignParams[1]
+        rotAngleCorrected = rotAngle + np.deg2rad(offTiltAngle)
+        rotMatrix[0, 0] = rotMatrix[1, 1] = np.cos(rotAngleCorrected)
+        rotMatrix[0, 1] = np.sin(rotAngleCorrected)
+        rotMatrix[1, 0] = -np.sin(rotAngleCorrected)
+        shiftsEman = np.array([tx, ty])
+        shiftsImod = rotMatrix.dot(shiftsEman)
+        matrix[0, 0] = matrix[1, 1] = rotMatrix[0, 0]
+        matrix[0, 1] = rotMatrix[0, 1]
+        matrix[1, 0] = rotMatrix[1, 0]
+        matrix[0, 2] = shiftsImod[0]
+        matrix[1, 2] = shiftsImod[1]
+        transform.setMatrix(matrix)
+        outTi.setTransform(transform)
+        outTi.setTiltAngle(tiltAngleRefined)
+        outTi.tiltAngleAxis = Float(offTiltAngle)  # Extended parameter

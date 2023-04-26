@@ -900,55 +900,24 @@ def ts2Json(mdObj, mode="w"):
     return
 
 
-def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
-    # rotM = np.array([[-1, 0, 0], [-1, 0, 0], [0, 0, 1]])  # Ver jnotebook
-    # X = 928
-    # Y = 960
-    # Z = 300
-    # ###OTRO
-    # Ref_x = np.array([[-1, 0, 0, 0],
-    #                   [0, 1, 0, Y/2],
-    #                   [0, 0, 1, Z/2],
-    #                   [0, 0, 0, 1]])
-    # Ref_y = np.array([[1, 0, 0, X/2],
-    #                   [0, -1, 0, 0],
-    #                   [0, 0, 1, Z/2],
-    #                   [0, 0, 0, 1]])
-    # rotM = Ref_y @ Ref_x
-
-    # ###EJE A MEDIA ALTURA###
-    # # matriz para flip up-down
-    # flip_up_down = np.array([[-1, 0, 0, 0],
-    #                          [0, 1, 0, Y / 2],
-    #                          [0, 0, 1, Z / 2],
-    #                          [0, 0, 0, 1]])
-    #
-    # # matriz para flip left-right
-    # flip_left_right = np.array([[1, 0, 0, X / 2],
-    #                             [0, -1, 0, 0],
-    #                             [0, 0, 1, Z / 2],
-    #                             [0, 0, 0, 1]])
-
-    # ###EJE EN LA ESQUINA ORIGEN DE EMAN
-    # # Transformación flip up-down en X con respecto al eje que Y=0 y Z=0
-    # flip_up_down = np.array([[1, 0, 0, 0],
-    #                          [0, -1, 0, Y],
-    #                          [0, 0, -1, Z],
-    #                          [0, 0, 0, 1]])
-    #
-    # # Transformación flip left-right en Y con respecto al eje que X=0 y Z=0
-    # flip_left_right = np.array([[-1, 0, 0, X],
-    #                             [0, 1, 0, 0],
-    #                             [0, 0, -1, Z],
-    #                             [0, 0, 0, 1]])
-
-    # # matriz para flip up-down seguido de flip left-right
-    # rotM = flip_left_right @ flip_up_down
-    # # matriz para flip left-right seguido de flip up-down
-    # rotM = flip_up_down @ flip_left_right
-
+def coords2Json(mdObj, emanDict, groupIds, boxSize, doFlipZ=True, mode='w'):
     paths = []
     coords = []
+    ###########################################################################################
+    # From EMAN's e2spt_boxer (this is how it stores the coordinates picked):
+    # def SaveJson(self):
+    #
+    #     info = js_open_dict(self.jsonfile)
+    #     sx, sy, sz = (self.data["nx"] // 2, self.data["ny"] // 2, self.data["nz"] // 2)
+    #     if "apix_unbin" in info:
+    #         bxs = []
+    #         for b0 in self.boxes:
+    #             b = [(b0[0] - sx) * self.apix_cur / self.apix_unbin,
+    #                  (b0[1] - sy) * self.apix_cur / self.apix_unbin,
+    #                  (b0[2] - sz) * self.apix_cur / self.apix_unbin,
+    #                  b0[3], b0[4], b0[5]]
+    #             bxs.append(b)
+    ###########################################################################################
     tomo = mdObj.inTomo
     apix = tomo.getSamplingRate()
     apixUnbin = getApixUnbinnedFromMd(mdObj)
@@ -958,24 +927,13 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, mode='w'):
     sz = nz // 2
     scaleFactor = apix / apixUnbin
     jsonFile = mdObj.jsonFile
+    zInvertFactor = -1 if doFlipZ else 1
     for coord in mdObj.coords:
         x, y, z = coord.getPosition(const.BOTTOM_LEFT_CORNER)
         x = (x - sx) * scaleFactor
         y = (y - sy) * scaleFactor
-        z = (z - sz) * scaleFactor
-        coords.append([x, y, -z, TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
-
-        # iCoords = np.array([coord.getX(const.BOTTOM_LEFT_CORNER),
-        #                     coord.getY(const.BOTTOM_LEFT_CORNER),
-        #                     coord.getZ(const.BOTTOM_LEFT_CORNER),
-        #                     1])
-        # tCoords = rotM.dot(iCoords)
-        # coords.append([tCoords[0], tCoords[1], tCoords[2], TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
-        # coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
-        #                coord.getY(const.BOTTOM_LEFT_CORNER),
-        #                coord.getZ(const.BOTTOM_LEFT_CORNER),
-        #                TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
-
+        z = (z - sz) * scaleFactor * zInvertFactor  # The Z is inverted if the reconstruction wasn't made with EMAN
+        coords.append([x, y, z, TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
     coordDict = {"boxes_3d": coords,
                  "class_list": {}}
 

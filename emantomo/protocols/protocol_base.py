@@ -157,3 +157,8 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             args = '%s %s --apix %.2f ' % (abspath(inFile), outFile, sRate)
             self.runJob(program, args, cwd=self._getExtraPath())
         return outFile
+
+    def convertBetweenHdfAndMrc(self, inFile, outFile, extraArgs=''):
+        program = Plugin.getProgram("e2proc3d.py")
+        args = '%s %s ' % (inFile, outFile)
+        self.runJob(program, args + extraArgs, cwd=self._getExtraPath())

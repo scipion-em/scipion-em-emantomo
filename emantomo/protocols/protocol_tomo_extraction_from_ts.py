@@ -26,24 +26,19 @@
 # **************************************************************************
 import glob
 from enum import Enum
-from os.path import abspath, join, exists
+from os.path import abspath, join, exists, basename
 from emantomo import Plugin
-from emantomo.constants import TOMO_ID, GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR
+from emantomo.constants import TOMO_ID, GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow.object import String
-from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam
-from pyworkflow.utils import Message, replaceBaseExt
+from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
+from pyworkflow.utils import Message, replaceBaseExt, replaceExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
 from tomo.objects import SetOfSubTomograms, SubTomogram
-from tomo.utils import getNonInterpolatedTsFromRelations
-
-SAME_AS_PICKING = 0
-OTHER = 1
-
 
 class outputObjects(Enum):
     subtomograms = SetOfSubTomograms
@@ -81,9 +76,13 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       pointerClass='SetOfTiltSeries',
                       label='Tilt series with alignment, non-interpolated',
                       # expertLevel=LEVEL_ADVANCED,
-                      allowsNull=True,
-                      help='Tilt series with alignment (non interpolated) used in the tomograms reconstruction. '
-                           'To be deprecated!!')
+                      important=True,
+                      help='Tilt series with alignment (non interpolated) used in the tomograms reconstruction.')
+        form.addParam('doFlipZInTomo', BooleanParam,
+                      default=True,
+                      important=True,
+                      label='Flip Z axis in tomogram?',
+                      help='If the reconstruction was carried out with EMAN, it would be set to No.')
         form.addParam(IN_BOXSIZE, FloatParam,
                       label='Box size unbinned (pix.)',
                       help='The subtomograms are extracted as a cubic box of this size. The wizard selects same '
@@ -144,27 +143,33 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     def writeData2JsonFileStep(self, mdObj):
         mode = 'a' if exists(mdObj.jsonFile) else 'w'
-        coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), mode=mode)
+        coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(), mode=mode)
         ts2Json(mdObj, mode='a')
         ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
     def extractParticlesStep(self, mdObj):
-        # TODO: update the command with the new parameters and considerations
         program = Plugin.getProgram('e2spt_extract.py')
         self.runJob(program, self._genExtractArgs(mdObj), cwd=self._getExtraPath())
 
     def convertOutputStep(self, mdObj):
-        # stacks2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '*.hdf'))
-        stacks3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % mdObj.inTomo.getTsId()))
-        # self.unstackParticles(stacks2d)
-        self.unstackParticles(stacks3d)
+        tsId = mdObj.tsId
+        fName = tsId + '__%s.hdf' % TOMOBOX
+        # Unstack the 3d particles HDF stack into individual MRC files
+        stack3d = join(PARTICLES_3D_DIR, fName)
+        self.unstackParticles(stack3d)
+        # Convert the 2d particles HDF stack into MRC for visualization purposes (compatibility with viewers)
+        stack2d = join(PARTICLES_DIR, fName)
+        inFile = join(PARTICLES_DIR, basename(stack2d))
+        outFile = replaceExt(inFile, 'mrc')
+        self.convertBetweenHdfAndMrc(inFile, outFile)
         # cleanPattern(hdfFile)
 
     def createOutputStep(self, mdObjDict):
-        sRate = self.inputCoordinates.get().getSamplingRate()
+        inCoords = getattr(self, IN_COORDS)
+        sRate = inCoords.get().getSamplingRate()
         subtomoSet = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
         subtomoSet.setSamplingRate(sRate)
-        subtomoSet.setCoordinates3D(self.inputCoordinates.get())
+        subtomoSet.setCoordinates3D(inCoords.get())
         for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
             tomoFile = mdObj.inTomo.getFileName()
@@ -191,22 +196,21 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomoSet.append(subtomogram)
 
         self._defineOutputs(**{outputObjects.subtomograms.name: subtomoSet})
-        self._defineSourceRelation(self.inputCoordinates.get(), subtomoSet)
-        self._defineSourceRelation(self.inputCTF.get(), subtomoSet)
-        if self.inputTS.get():
-            self._defineSourceRelation(self.inputTS.get(), subtomoSet)
+        self._defineSourceRelation(inCoords, subtomoSet)
+        self._defineSourceRelation(getattr(self, IN_CTF), subtomoSet)
+        self._defineSourceRelation(getattr(self, IN_TS), subtomoSet)
 
     # --------------------------- INFO functions --------------------------------
-    def _validate(self):
-        valMsg = []
-        if not self.inputTS.get():
-            try:
-                getNonInterpolatedTsFromRelations(self.inputCoordinates.get(), self)
-            except:
-                valMsg.append('Unable to go through the relations from the introduced coordinates to the '
-                              'corresponding non-interpolated tilt series. Please introduce them using the '
-                              'advanced parameter "Tilt series with alignment, non-interpolated."')
-        return valMsg
+    # def _validate(self):
+    #     valMsg = []
+    #     if not self.inputTS.get():
+    #         try:
+    #             getNonInterpolatedTsFromRelations(self.inputCoordinates.get(), self)
+    #         except:
+    #             valMsg.append('Unable to go through the relations from the introduced coordinates to the '
+    #                           'corresponding non-interpolated tilt series. Please introduce them using the '
+    #                           'advanced parameter "Tilt series with alignment, non-interpolated."')
+    #     return valMsg
 
     # --------------------------- UTILS functions ----------------------------------
     def _genExtractArgs(self, mdObj):
@@ -217,7 +221,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         args += '--padtwod=%.2f ' % self.paddingFactor.get()
         args += '--rmbeadthr=%.2f ' % self.rmThr.get()
         args += '--threads=%i ' % self.numberOfThreads.get()
-        args += '--newlabel=%s ' % mdObj.tsId
+        # args += '--newlabel=%s ' % mdObj.tsId
         args += '--append '
         args += '--verbose=9 '
         # if self.doSkipCtfCorrection.get():
@@ -226,14 +230,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         #     args += '--skip3d '
         return args
 
-    def unstackParticles(self, stackList, outExt='mrc'):
+    def unstackParticles(self, stackFile, outExt='mrc'):
         """Unstacks and coverts a list of stack files into separate particles"""
         program = Plugin.getProgram('e2proc3d.py')
-        outDir = PARTICLES_3D_DIR if PARTICLES_3D_DIR in stackList[0] else PARTICLES_DIR
-        for hdfFile in stackList:
-            args = ' --unstacking'
-            args += ' %s' % abspath(hdfFile)
-            args += ' %s' % join(outDir, replaceBaseExt(hdfFile, outExt))
-            self.runJob(program, args, cwd=self._getExtraPath())
+        args = ' --unstacking'
+        args += ' %s' % stackFile
+        args += ' %s' % replaceExt(stackFile, outExt)
+        self.runJob(program, args, cwd=self._getExtraPath())
 
 
