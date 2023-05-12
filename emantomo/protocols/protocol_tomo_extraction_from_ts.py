@@ -26,22 +26,25 @@
 # **************************************************************************
 import glob
 from enum import Enum
-from os.path import abspath, join, exists, basename
+from os.path import join, exists, basename, abspath
 from emantomo import Plugin
 from emantomo.constants import TOMO_ID, GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
+from emantomo.objects import EmanHdf5Handler
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
-from pyworkflow.utils import Message, replaceBaseExt, replaceExt
+from pyworkflow.utils import Message, replaceExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfSubTomograms, SubTomogram
+from tomo.objects import SetOfSubTomograms, SubTomogram, SetOfLandmarkModels, LandmarkModel
+
 
 class outputObjects(Enum):
     subtomograms = SetOfSubTomograms
+    projected2DCoordinates = SetOfLandmarkModels
 
 
 class EmanProtTSExtraction(ProtEmantomoBase):
@@ -57,6 +60,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.sphAb = None
         self.voltage = None
         self.scaleFactor = None
+        self.projectionsDict = {}
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -124,6 +128,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.extractParticlesStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
+            self._insertFunctionStep(self.getProjectionsStep, mdObj)
         self._insertFunctionStep(self.createOutputStep, mdObjDict)
 
     # --------------------------- STEPS functions -----------------------------
@@ -152,8 +157,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.runJob(program, self._genExtractArgs(mdObj), cwd=self._getExtraPath())
 
     def convertOutputStep(self, mdObj):
-        tsId = mdObj.tsId
-        fName = tsId + '__%s.hdf' % TOMOBOX
+        fName = self._getEmanFName(mdObj.tsId)
         # Unstack the 3d particles HDF stack into individual MRC files
         stack3d = join(PARTICLES_3D_DIR, fName)
         self.unstackParticles(stack3d)
@@ -164,12 +168,28 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.convertBetweenHdfAndMrc(inFile, outFile)
         # cleanPattern(hdfFile)
 
+    def getProjectionsStep(self, mdObj):
+        """load the corresponding HDF 2d stack file and read from the header the required data to create later a
+        landmark model. To do that, the h5py module is used.
+        """
+        tsId = mdObj.tsId
+        stack2dHdf = abspath(self._getExtraPath(PARTICLES_DIR, self._getEmanFName(mdObj.tsId)))
+        eh = EmanHdf5Handler(stack2dHdf)
+        projList = eh.getProjsFrom2dStack()
+        # Add the required tsId as the first element of each sublist
+        list(map(lambda sublist: sublist.insert(0, tsId), projList))  # More efficient than comprehension for huge
+        # lists of lists, as expected
+        self.projectionsDict[tsId] = projList
+
     def createOutputStep(self, mdObjDict):
-        inCoords = getattr(self, IN_COORDS)
-        sRate = inCoords.get().getSamplingRate()
+        inCoordsPointer = getattr(self, IN_COORDS)
+        inCoords = inCoordsPointer.get()
+        sRate = inCoords.getSamplingRate()
+        inTsPointer = getattr(self, IN_TS)
+        inTs = inTsPointer.get()
         subtomoSet = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
         subtomoSet.setSamplingRate(sRate)
-        subtomoSet.setCoordinates3D(inCoords.get())
+        subtomoSet.setCoordinates3D(inCoords)
         for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
             tomoFile = mdObj.inTomo.getFileName()
@@ -195,10 +215,38 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram._tsSubStack = String(tsSubStack)
                 subtomoSet.append(subtomogram)
 
-        self._defineOutputs(**{outputObjects.subtomograms.name: subtomoSet})
-        self._defineSourceRelation(inCoords, subtomoSet)
+        # Generate the fiducial model (for data visualization purpose)
+        fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
+        fiducialModelGaps.copyInfo(inTs)
+        fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
+
+        fiducialSize = round((inCoords.getBoxSize() / 2 * sRate) / 10)  # Box size is too large, a tenth of the radius
+        for ts in inTs:
+            tsId = ts.getTsId()
+            landmarkModelGapsFilePath = self._getExtraPath(str(tsId) + "_gaps.sfid")
+            landmarkModelGaps = LandmarkModel(tsId=tsId,
+                                              tiltSeriesPointer=ts,
+                                              fileName=landmarkModelGapsFilePath,
+                                              modelName=None,
+                                              size=fiducialSize,
+                                              applyTSTransformation=False)
+            landmarkModelGaps.setTiltSeries(ts)
+            tsProjections = self.projectionsDict[tsId]
+            for projection in tsProjections:
+                tiltId = projection[1] + 1
+                partId = projection[2] + 1
+                xCoord = round(projection[3])
+                yCoord = round(projection[4])
+                landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
+            fiducialModelGaps.append(landmarkModelGaps)
+
+        # Define outputs and relations
+        self._defineOutputs(**{outputObjects.subtomograms.name: subtomoSet,
+                               outputObjects.projected2DCoordinates.name: fiducialModelGaps})
+        self._defineSourceRelation(inCoordsPointer, subtomoSet)
         self._defineSourceRelation(getattr(self, IN_CTF), subtomoSet)
-        self._defineSourceRelation(getattr(self, IN_TS), subtomoSet)
+        self._defineSourceRelation(inTsPointer, subtomoSet)
+        self._defineSourceRelation(inTsPointer, fiducialModelGaps)
 
     # --------------------------- INFO functions --------------------------------
     # def _validate(self):
@@ -238,4 +286,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         args += ' %s' % replaceExt(stackFile, outExt)
         self.runJob(program, args, cwd=self._getExtraPath())
 
-
+    @staticmethod
+    def _getEmanFName(tsId):
+        return tsId + '__%s.hdf' % TOMOBOX

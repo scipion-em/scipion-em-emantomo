@@ -77,24 +77,3 @@ def genJsonFileName(infoDir, tomoId):
     return join(infoDir, '%s_info.json' % tomoId)
 
 
-# def getObjByName(prot, name):
-#     """Return an object, from a protocol, named 'name' instead of a pointer."""
-#     obj = getattr(prot, name, None)
-#     if obj and type(obj) == Pointer:
-#         return obj.get()
-#     else:
-#         return obj
-#
-#
-# def getTsFromProt(prot):
-#     """If the user provides a set of tilt series, use them. If not (expected behaviour) Get the non-interpolated
-#     tilt series from the introduced coordinates."""
-#     tsSet = prot.inputTS.get()
-#     return tsSet if tsSet else getNonInterpolatedTsFromRelations(prot.inputCoordinates.get(), prot)
-
-
-
-
-def genEmanTomoPrj(destDir):
-    pass
-

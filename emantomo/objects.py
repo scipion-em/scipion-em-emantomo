@@ -47,6 +47,37 @@ class EmanMetaData:
         self.processingInd = processingInd
 
 
+class EmanHdf5Handler:
+
+    def __init__(self, fileName):
+        self._imgObjList = None
+        self.fileName = fileName
+
+    @property
+    def fileName(self):
+        return self._fileName
+
+    @fileName.setter
+    def fileName(self, fileName):
+        try:
+            f = h5py.File(fileName, 'r')
+            self._imgObjList = f['MDF']['images']
+            self._fileName = fileName
+        except FileNotFoundError as e:
+            raise e
+
+    def getProjsFrom2dStack(self):
+        """Generate a list of elements in which each element is a list containing the following data:
+         [tiltId, particleId, xCoord, yCoord]. In a 2d stack, each image corresponds to a particle cropped
+         in a tilt image"""
+        projsList = []
+        for particleId in range(len(self._imgObjList)):
+            img = self._imgObjList[str(particleId)]
+            projsList.append([img.attrs['EMAN.tilt_id'][0], particleId] +
+                             img.attrs['EMAN.ptcl_source_coord'][:-1].tolist())
+        return projsList
+
+
 class EmanProject(EMObject):
 
     def __init__(self, scipionPrjPath=None, emanProjName=None, samplingRate=None, **kwargs):
