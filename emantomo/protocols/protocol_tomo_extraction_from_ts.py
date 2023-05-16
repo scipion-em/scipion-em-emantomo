@@ -29,21 +29,19 @@ from enum import Enum
 from os.path import join, exists, basename, abspath
 from emantomo import Plugin
 from emantomo.constants import TOMO_ID, GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
-from emantomo.objects import EmanHdf5Handler
+from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping
 from pwem.objects import Transform
-from pyworkflow import BETA
-from pyworkflow.object import String
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
 from pyworkflow.utils import Message, replaceExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfSubTomograms, SubTomogram, SetOfLandmarkModels, LandmarkModel
+from tomo.objects import SetOfLandmarkModels, LandmarkModel
 
 
 class outputObjects(Enum):
-    subtomograms = SetOfSubTomograms
+    subtomograms = EmanSetOfParticles
     projected2DCoordinates = SetOfLandmarkModels
 
 
@@ -51,7 +49,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     """Extract 2D subtilt particles from the tilt series, and reconstruct 3D subvolumes."""
 
     _label = 'particles extraction from TS'
-    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -187,16 +184,18 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         sRate = inCoords.getSamplingRate()
         inTsPointer = getattr(self, IN_TS)
         inTs = inTsPointer.get()
-        subtomoSet = SetOfSubTomograms.create(self._getPath(), template='subtomograms%s.sqlite')
+        subtomoSet = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
         subtomoSet.setSamplingRate(sRate)
         subtomoSet.setCoordinates3D(inCoords)
         for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
             tomoFile = mdObj.inTomo.getFileName()
             subtomoFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId))
-            tsSubStack = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
+            stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
+            stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
+
             for coord, subtomoFile in zip(coords, subtomoFiles):
-                subtomogram = SubTomogram()
+                subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setLocation(subtomoFile)
@@ -212,7 +211,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                     self.scaleFactor * shift_z)
                 subtomogram.setTransform(transform, convention=TR_EMAN)
                 subtomogram.setVolName(tomoFile)
-                subtomogram._tsSubStack = String(tsSubStack)
+                # Fill EmanParticle own attributes
+                subtomogram.setInfoJson(mdObj.jsonFile)
+                subtomogram.setTsHdf(mdObj.tsHdfName)
+                subtomogram.setTomoHdf(mdObj.tomoHdfName)
+                subtomogram.setStack2dHdf(stack2d)
+                subtomogram.setStack3dHdf(stack3d)
                 subtomoSet.append(subtomogram)
 
         # Generate the fiducial model (for data visualization purpose)

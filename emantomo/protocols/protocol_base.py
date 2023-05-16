@@ -23,16 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import join, basename, abspath
+from os.path import join, abspath
 
 from emantomo import Plugin
-from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, TS_ID
+from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR
 from emantomo.objects import EmanMetaData
-from emantomo.utils import getFromPresentObjects, getPresentTsIdsInSet, genJsonFileName
+from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer
-from pyworkflow.utils import makePath, createLink, replaceBaseExt
+from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
 
@@ -46,6 +46,7 @@ IN_TOMOS = 'inputTomograms'
 
 
 class ProtEmantomoBase(EMProtocol, ProtTomoBase):
+
     _devStatus = BETA
     
     def __init__(self, **kwargs):
@@ -111,6 +112,15 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def getTsDir(self):
         return self._getExtraPath(TS_DIR)
+
+    def getStack2dDir(self):
+        return self._getExtraPath(PARTICLES_DIR)
+
+    def getStack3dDir(self):
+        return self._getExtraPath(PARTICLES_3D_DIR)
+
+    def getSetsDir(self):
+        return self._getExtraPath(SETS_DIR)
 
     def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
         self.createInitEmanPrjDirs()

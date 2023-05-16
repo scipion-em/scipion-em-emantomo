@@ -262,6 +262,7 @@ INIT_MODEL_NAME = 'output_cls0.hdf'
 INIR_MODEL_NAME_OLD = 'output.hdf'
 SPT_00_DIR = 'spt_00'
 REFS_DIR = 'references'
+PARTICLES_LST_FILE = '%s.lst' % TOMOBOX
 INPUT_PTCLS_LST = 'input_ptcls.lst'
 THREED_01 = 'threed_01'
 SPTCLS_00_DIR = 'sptcls_00'
