@@ -28,7 +28,6 @@ import enum
 import glob
 from os.path import abspath, basename, join
 from emantomo import Plugin
-from emantomo.constants import PROC_NORMALIZE
 from pwem.objects import Transform
 from pyworkflow import BETA
 from pyworkflow import utils as pwutils
@@ -44,6 +43,8 @@ from tomo.utils import scaleTrMatrixShifts
 
 SAME_AS_PICKING = 0
 OTHER = 1
+
+PROC_NORMALIZE = 0
 
 
 class OutputExtraction(enum.Enum):

@@ -28,7 +28,7 @@ import glob
 from enum import Enum
 from os.path import join, exists, basename, abspath
 from emantomo import Plugin
-from emantomo.constants import TOMO_ID, GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
+from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping
@@ -37,7 +37,7 @@ from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE
 from pyworkflow.utils import Message, replaceExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfLandmarkModels, LandmarkModel
+from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D
 
 
 class outputObjects(Enum):
@@ -120,8 +120,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
         for mdObj in mdObjDict.values():
-            self._insertFunctionStep(self.convertTsStep, mdObj)
-            self._insertFunctionStep(self.convertTomoStep, mdObj)
+            self._insertFunctionStep(super().convertTsStep, mdObj)
+            self._insertFunctionStep(super().convertTomoStep, mdObj)
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.extractParticlesStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
@@ -135,7 +135,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         inTsSet = self.getTs()
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
-        uniqueTomoValsDict = getFromPresentObjects(coords, [TOMO_ID, GROUP_ID])
+        uniqueTomoValsDict = getFromPresentObjects(coords, [Coordinate3D.TOMO_ID_ATTR, GROUP_ID])
         self.groupIds = uniqueTomoValsDict[GROUP_ID]
         self.emanDict = genEmanGrouping(self.groupIds)
         # Calculate the scale factor

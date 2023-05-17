@@ -24,14 +24,15 @@
 # *
 # **************************************************************************
 from enum import Enum
-from os.path import join, basename
+from os.path import join
 from emantomo import Plugin
-from emantomo.constants import PARTICLES_LST_FILE, SETS_DIR
-from emantomo.objects import EmanParticle
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS
+from emantomo.constants import PARTICLES_LST_FILE, SETS_DIR, INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, \
+    SYMMETRY_HELP_MSG, REFERENCE_NAME
+from emantomo.convert import convertBetweenHdfAndMrc
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
+from pwem.convert.headers import fixVolume
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
-from pyworkflow.utils.path import makePath, createLink
 from tomo.objects import AverageSubTomogram
 
 
@@ -46,10 +47,11 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
     """
 
     _label = 'New initial model'
+    _possibleOutputs = OutputsInitModelNew
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._possibleOutputs = OutputsInitModelNew
+        self.inSamplingRate = -1
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -59,11 +61,10 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
                       label='Particles',
                       important=True,
                       help='Select the set of subtomograms to build an initial model')
-        form.addParam('refVol', PointerParam,
+        form.addParam(REF_VOL, PointerParam,
                       pointerClass='Volume',
                       allowsNull=True,
-                      label="Reference volume (opt.)",
-                      help='Specify a 3D volume')
+                      label="Reference volume (opt.)")
         form.addParam('shrink', IntParam,
                       default=1,
                       expertLevel=LEVEL_ADVANCED,
@@ -78,13 +79,10 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         form.addParam('symmetry', StringParam,
                       default='c1',
                       label='Symmetry',
-                      help='Specify the symmetry.\nChoices are: c(n), d(n), '
-                           'h(n), tet, oct, icos.\n'
-                           'See http://blake.bcm.edu/emanwiki/EMAN2/Symmetry\n'
-                           'for a detailed description of symmetry in Eman.')
+                      help=SYMMETRY_HELP_MSG)
         form.addParam('targetRes', FloatParam,
                       default=50,
-                      label='Target resolution')
+                      label='Target resolution (Å)')
         form.addParam('batchSize', IntParam,
                       default=12,
                       label='Batch Size',
@@ -119,45 +117,14 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.createEmanPrjStep)
-        if self.refVol.get():
-            self._insertFunctionStep(self.convertRefVolStep)
+        self._insertFunctionStep(super().createEmanPrjPostExtractionStep)
+        self._insertFunctionStep(super().convertRefVolStep)
         self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.createInitialModelStep)
+        self._insertFunctionStep(self.convertOutputStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-    def createEmanPrjStep(self):
-        inSubtomos = getattr(self, IN_SUBTOMOS).get()
-        # Create project dir structure
-        self.createInitEmanPrjDirs()
-        infoDir = self.getInfoDir()
-        tsDir = self.getTsDir()
-        tomoDir = self.getTomogramsDir()
-        stack2dDir = self.getStack2dDir()
-        stack3dDir = self.getStack3dDir()
-        makePath(self.getSetsDir(), stack2dDir, stack3dDir)
-        # Get the unique values of the files to be linked
-        dataDict = inSubtomos.getUniqueValues([EmanParticle.INFO_JSON,
-                                               EmanParticle.TS_HDF,
-                                               EmanParticle.TOMO_HDF,
-                                               EmanParticle.STACK_2D_HDF,
-                                               EmanParticle.STACK_3D_HDF])
-        # Link the files
-        for infoJson, tsFile, tomoFile, stack2d, stack3d in zip(dataDict[EmanParticle.INFO_JSON],
-                                                                dataDict[EmanParticle.TS_HDF],
-                                                                dataDict[EmanParticle.TOMO_HDF],
-                                                                dataDict[EmanParticle.STACK_2D_HDF],
-                                                                dataDict[EmanParticle.STACK_3D_HDF]):
-            createLink(infoJson, join(infoDir, basename(infoJson)))
-            createLink(tsFile, join(tsDir, basename(tsFile)))
-            createLink(tomoFile, join(tomoDir, basename(tomoFile)))
-            createLink(stack2d, join(stack2dDir, basename(stack2d)))
-            createLink(stack3d, join(stack3dDir, basename(stack3d)))
-
-    def convertRefVolStep(self):
-        inRef = self.refVol.get()
-        self.convertOrLink(inRef.getFileName(), 'reference', self._getExtraPath(), inRef.getSamplingRate())
-
     def buildEmanSetsStep(self):
         program = Plugin.getProgram("e2spt_buildsets.py")
         args = '--allparticles '
@@ -167,11 +134,27 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         program = Plugin.getProgram("e2spt_sgd_new.py")
         self.runJob(program, self._genIniModelArgs(), cwd=self._getExtraPath())
 
+    def convertOutputStep(self):
+        initModelFile = self.getInitialModelHdfFile()
+        outFile = self.getInitialModelMrcFile()
+        args = '--apix %d' % self.inSamplingRate
+        convertBetweenHdfAndMrc(self, initModelFile, outFile, args)
+
+    def createOutputStep(self):
+        averageSubTomogram = AverageSubTomogram()
+        iniModelFileName = self.getInitialModelMrcFile()
+        fixVolume(iniModelFileName)  # Fix header to make it interpreted as volume instead of a stack by xmipp
+        averageSubTomogram.setFileName(iniModelFileName)
+        averageSubTomogram.setSamplingRate(self.inSamplingRate)
+        # Define outputs and relations
+        self._defineOutputs(**{self._possibleOutputs.average.name: averageSubTomogram})
+        self._defineSourceRelation(getattr(self, IN_SUBTOMOS), averageSubTomogram)
+
     # --------------------------- UTILS functions -----------------------------
     def _genIniModelArgs(self):
         args = ' %s ' % join(SETS_DIR, PARTICLES_LST_FILE)
         if self.refVol.get():
-            args += '--ref %s ' % self.getRefVolName()
+            args += '--ref %s ' % (REFERENCE_NAME + '.hdf')
         args += '--shrink %i ' % self.shrink.get()
         args += '--niter %i ' % self.nIters.get()
         args += '--sym %s ' % self.symmetry.get()
@@ -183,7 +166,10 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         args += '--verbose 9 '
         return args
 
-    def getRefVolName(self):
-        return self._getExtraPath('reference.hdf')
+    def getInitialModelHdfFile(self):
+        return self._getExtraPath(INIT_MODEL_DIR, INIT_MODEL_NAME)
+
+    def getInitialModelMrcFile(self):
+        return self._getExtraPath(INIT_MODEL_MRC)
 
     # -------------------------- INFO functions -------------------------------

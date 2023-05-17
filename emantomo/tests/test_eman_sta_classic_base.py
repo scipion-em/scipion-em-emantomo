@@ -32,7 +32,7 @@ from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_G
 
 from emantomo.protocols import EmanProtTomoExtraction, EmanProtSubTomoAverage
 from emantomo.protocols.protocol_average_subtomos import OutputsAverageSubtomos
-from emantomo.protocols.protocol_tomo_extraction_from_tomo import SAME_AS_PICKING, OutputExtraction, OTHER
+from emantomo.protocols.protocol_extraction_from_tomo import SAME_AS_PICKING, OutputExtraction, OTHER
 from imod.protocols import ProtImodTomoNormalization
 from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
 from pyworkflow.tests import BaseTest, DataSet, setupTestProject

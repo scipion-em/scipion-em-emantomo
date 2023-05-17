@@ -36,7 +36,6 @@ from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName, getPresentTsIdsInSet
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
-from pyworkflow import BETA
 from pyworkflow.object import Set, Float
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, \
     EnumParam, StringParam

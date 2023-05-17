@@ -23,11 +23,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import join, abspath
-
+from os.path import join, abspath, basename
 from emantomo import Plugin
-from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR
-from emantomo.objects import EmanMetaData
+from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
+    REFERENCE_NAME
+from emantomo.objects import EmanMetaData, EmanParticle
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
@@ -36,19 +36,18 @@ from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
 
-
 IN_TS = 'inputTS'
 IN_COORDS = 'inputCoordinates'
 IN_CTF = 'inputCTF'
 IN_SUBTOMOS = 'inputSubtomos'
 IN_BOXSIZE = 'boxSize'
 IN_TOMOS = 'inputTomograms'
+REF_VOL = 'refVol'
 
 
 class ProtEmantomoBase(EMProtocol, ProtTomoBase):
-
     _devStatus = BETA
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.scaleFactor = 1
@@ -78,6 +77,40 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         # Store the tomoHdfName in the current mdObj
         mdObj.tomoHdfName = outFile
 
+    def createEmanPrjPostExtractionStep(self):
+        inSubtomos = getattr(self, IN_SUBTOMOS).get()
+        self.inSamplingRate = inSubtomos.getSamplingRate()
+        # Create project dir structure
+        self.createInitEmanPrjDirs()
+        infoDir = self.getInfoDir()
+        tsDir = self.getTsDir()
+        tomoDir = self.getTomogramsDir()
+        stack2dDir = self.getStack2dDir()
+        stack3dDir = self.getStack3dDir()
+        makePath(self.getSetsDir(), stack2dDir, stack3dDir)
+        # Get the unique values of the files to be linked
+        dataDict = inSubtomos.getUniqueValues([EmanParticle.INFO_JSON,
+                                               EmanParticle.TS_HDF,
+                                               EmanParticle.TOMO_HDF,
+                                               EmanParticle.STACK_2D_HDF,
+                                               EmanParticle.STACK_3D_HDF])
+        # Link the files
+        for infoJson, tsFile, tomoFile, stack2d, stack3d in zip(dataDict[EmanParticle.INFO_JSON],
+                                                                dataDict[EmanParticle.TS_HDF],
+                                                                dataDict[EmanParticle.TOMO_HDF],
+                                                                dataDict[EmanParticle.STACK_2D_HDF],
+                                                                dataDict[EmanParticle.STACK_3D_HDF]):
+            createLink(infoJson, join(infoDir, basename(infoJson)))
+            createLink(tsFile, join(tsDir, basename(tsFile)))
+            createLink(tomoFile, join(tomoDir, basename(tomoFile)))
+            createLink(stack2d, join(stack2dDir, basename(stack2d)))
+            createLink(stack3d, join(stack3dDir, basename(stack3d)))
+
+    def convertRefVolStep(self):
+        inRef = self.getRefVol()
+        if inRef:
+            self.convertOrLink(inRef.getFileName(), REFERENCE_NAME, '', inRef.getSamplingRate())
+
     # --------------------------- UTILS functions ----------------------------------
     def getObjByName(self, name):
         """Return an object, from a protocol, named 'name' instead of a pointer."""
@@ -98,6 +131,10 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         introduced."""
         boxSizeFromForm = getattr(self, IN_BOXSIZE).get()
         return boxSizeFromForm if boxSizeFromForm else getattr(self, IN_SUBTOMOS).get().getCoordinates3D().getBoxSize()
+
+    def getRefVol(self):
+        refVol = getattr(self, REF_VOL, None)
+        return refVol.get() if refVol else None
 
     def createInitEmanPrjDirs(self):
         """Create in the current protocol's extra path the initial directory structure of an EMAN tomo project: info,
@@ -150,7 +187,8 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                                              inTomo=tomo,
                                              ts=ts,
                                              ctf=ctfIdsDict[tomoId],
-                                             coords=[coord.clone() for coord in coords.iterCoordinates(volume=tomo)] if coords else None,
+                                             coords=[coord.clone() for coord in
+                                                     coords.iterCoordinates(volume=tomo)] if coords else None,
                                              jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
         return mdObjDict
 

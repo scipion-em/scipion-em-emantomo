@@ -22,11 +22,10 @@
 # *  e-mail address 'scipion-users@lists.sourceforge.net'
 # *
 # **************************************************************************
-
 from os.path import join, abspath
-from emantomo.constants import TOMO_ID, TS_ID
+from emantomo.constants import TS_ID
 from pyworkflow.utils import removeBaseExt, getParentFolder
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, Coordinate3D
 
 
 def getPresentPrecedents(coordSet, tomoIdsList):
@@ -45,7 +44,7 @@ def genTomoJsonFileName(tomoFileName, jsonOutDirName):
 
 
 def getFromPresentObjects(inSet, labelList):
-    idLabel = TOMO_ID if type(inSet) in [SetOfCoordinates3D, SetOfSubTomograms] else TS_ID
+    idLabel = Coordinate3D.TOMO_ID_ATTR if type(inSet) in [SetOfCoordinates3D, SetOfSubTomograms] else TS_ID
     matches = inSet.aggregate(['COUNT'], idLabel, labelList)
     outDict = {}
     for label in labelList:
