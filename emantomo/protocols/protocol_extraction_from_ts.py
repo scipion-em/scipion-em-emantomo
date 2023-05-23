@@ -29,9 +29,9 @@ from enum import Enum
 from os.path import join, exists, basename, abspath
 from emantomo import Plugin
 from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
-from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle
+from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
-from emantomo.utils import getFromPresentObjects, genEmanGrouping
+from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
 from pyworkflow.utils import Message, replaceExt
@@ -48,7 +48,8 @@ class outputObjects(Enum):
 class EmanProtTSExtraction(ProtEmantomoBase):
     """Extract 2D subtilt particles from the tilt series, and reconstruct 3D subvolumes."""
 
-    _label = 'particles extraction from TS'
+    _label = 'particle extraction from TS'
+    _possibleOutputs = outputObjects
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -245,8 +246,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             fiducialModelGaps.append(landmarkModelGaps)
 
         # Define outputs and relations
-        self._defineOutputs(**{outputObjects.subtomograms.name: subtomoSet,
-                               outputObjects.projected2DCoordinates.name: fiducialModelGaps})
+        self._defineOutputs(**{self._possibleOutputs.subtomograms.name: subtomoSet,
+                               self._possibleOutputs.projected2DCoordinates.name: fiducialModelGaps})
         self._defineSourceRelation(inCoordsPointer, subtomoSet)
         self._defineSourceRelation(getattr(self, IN_CTF), subtomoSet)
         self._defineSourceRelation(inTsPointer, subtomoSet)
@@ -265,6 +266,39 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     #     return valMsg
 
     # --------------------------- UTILS functions ----------------------------------
+    def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
+        self.createInitEmanPrjDirs()
+
+        # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
+        # which means the intersection of the tsId lists
+        tomograms = tomograms if tomograms and not coords else coords.getPrecedents()
+        presentCtfTsIds = set(getPresentTsIdsInSet(inCtfSet))
+        presentTsSetTsIds = set(getPresentTsIdsInSet(inTsSet))
+        presentTomoSetTsIds = set(getPresentTsIdsInSet(tomograms))
+        presentTsIds = presentCtfTsIds & presentTsSetTsIds & presentTomoSetTsIds
+
+        # Manage the TS, CTF tomo Series and tomograms
+        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
+        ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet if ctf.getTsId() in presentTsIds}
+        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in tomograms if tomo.getTsId() in presentTsIds}
+
+        # Get the required acquisition data
+        self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
+        self.voltage = inTsSet.getAcquisition().getVoltage()
+
+        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
+        mdObjDict = {}
+        for tomoId, ts in tsIdsDict.items():
+            tomo = tomoIdsDict[tomoId]
+            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
+                                             inTomo=tomo,
+                                             ts=ts,
+                                             ctf=ctfIdsDict[tomoId],
+                                             coords=[coord.clone() for coord in
+                                                     coords.iterCoordinates(volume=tomo)] if coords else None,
+                                             jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
+        return mdObjDict
+
     def _genExtractArgs(self, mdObj):
         args = '%s ' % mdObj.tomoHdfName
         args += '--boxsz_unbin=%i ' % self.getBoxSize()

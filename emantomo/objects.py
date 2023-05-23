@@ -125,4 +125,29 @@ class EmanParticle(SubTomogram):
 class EmanSetOfParticles(SetOfSubTomograms):
 
     ITEM_TYPE = EmanParticle
+    ALI_2D = '_ali2d'
+    ALI_3D = '_ali3d'
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._ali2d = String()
+        self._ali3d = String()
+
+    def setAli2d(self, val):
+        self._ali2d.set(val)
+
+    def setAli3d(self, val):
+        self._ali3d.set(val)
+
+    def getAli2d(self):
+        return self._ali2d.get()
+
+    def getAli3d(self):
+        return self._ali3d.get()
+
+    def copyInfo(self, other):
+        super().copyInfo(other)
+        moreAttrs2Copy = [self.ALI_2D, self.ALI_3D]
+        for attr in moreAttrs2Copy:
+            if hasattr(other, attr):
+                self.copyAttributes(other, attr)

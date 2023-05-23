@@ -27,8 +27,7 @@ from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME
-from emantomo.objects import EmanMetaData, EmanParticle
-from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
+from emantomo.objects import EmanParticle
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer
@@ -50,6 +49,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.inSamplingRate = -1
         self.scaleFactor = 1
         self.voltage = 300
         self.sphAb = 2.7
@@ -111,6 +111,11 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         if inRef:
             self.convertOrLink(inRef.getFileName(), REFERENCE_NAME, '', inRef.getSamplingRate())
 
+    def buildEmanSetsStep(self):
+        program = Plugin.getProgram("e2spt_buildsets.py")
+        args = '--allparticles '
+        self.runJob(program, args, cwd=self._getExtraPath())
+
     # --------------------------- UTILS functions ----------------------------------
     def getObjByName(self, name):
         """Return an object, from a protocol, named 'name' instead of a pointer."""
@@ -159,39 +164,6 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def getSetsDir(self):
         return self._getExtraPath(SETS_DIR)
 
-    def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
-        self.createInitEmanPrjDirs()
-
-        # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
-        # which means the intersection of the tsId lists
-        tomograms = tomograms if tomograms and not coords else coords.getPrecedents()
-        presentCtfTsIds = set(getPresentTsIdsInSet(inCtfSet))
-        presentTsSetTsIds = set(getPresentTsIdsInSet(inTsSet))
-        presentTomoSetTsIds = set(getPresentTsIdsInSet(tomograms))
-        presentTsIds = presentCtfTsIds & presentTsSetTsIds & presentTomoSetTsIds
-
-        # Manage the TS, CTF tomo Series and tomograms
-        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
-        ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet if ctf.getTsId() in presentTsIds}
-        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in tomograms if tomo.getTsId() in presentTsIds}
-
-        # Get the required acquisition data
-        self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
-        self.voltage = inTsSet.getAcquisition().getVoltage()
-
-        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
-        mdObjDict = {}
-        for tomoId, ts in tsIdsDict.items():
-            tomo = tomoIdsDict[tomoId]
-            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
-                                             inTomo=tomo,
-                                             ts=ts,
-                                             ctf=ctfIdsDict[tomoId],
-                                             coords=[coord.clone() for coord in
-                                                     coords.iterCoordinates(volume=tomo)] if coords else None,
-                                             jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
-        return mdObjDict
-
     def convertOrLink(self, inFile, tsId, outDir, sRate):
         """Fill the simulated EMAN project directories with the expected data at this point of the pipeline.
         Also convert the precedent tomograms into HDF files if they are not. The converted filename will be the tsId,
@@ -200,7 +172,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         outFile = join(outDir, tsId + hdf)
         program = Plugin.getProgram('e2proc3d.py')
         if inFile.endswith(hdf):
-            createLink(inFile, outFile)
+            createLink(inFile, self._getExtraPath(outFile))
         else:
             args = '%s %s --apix %.2f ' % (abspath(inFile), outFile, sRate)
             self.runJob(program, args, cwd=self._getExtraPath())

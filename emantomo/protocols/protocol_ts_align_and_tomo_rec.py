@@ -38,7 +38,7 @@ from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Set, Float
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, \
-    EnumParam, StringParam
+    EnumParam, StringParam, GT, LE
 from pwem.protocols import EMProtocol
 from pyworkflow.utils import makePath, createLink, Message
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, TiltImage, TiltSeries, Tomogram
@@ -111,6 +111,11 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       default=20,
                       condition=alignCond,
                       label='Number of landmarks to use')
+        form.addParam('pkKeep', FloatParam,
+                      default=0.9,
+                      label='Fraction of landmarks to keep in the tracking',
+                      validators=[GT(0), LE(1)],
+                      expertLevel=LEVEL_ADVANCED)
         form.addParam('patchTrack', EnumParam,
                       display=EnumParam.DISPLAY_HLIST,
                       choices=['0', '1', '2'],
@@ -161,7 +166,14 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addParam('bytile', BooleanParam,
                       default=True,
                       condition=recCond,
+                      expertLevel=LEVEL_ADVANCED,
                       label='Make final tomogram by tiles?')
+        form.addParam('moreTile', BooleanParam,
+                      default=False,
+                      label='Sample more tiles during rec.?',
+                      expertLevel=LEVEL_ADVANCED,
+                      help='If set to Yes, the processing time will be greater, but it can be useful to reduce the '
+                           'boundary artifacts when the sample is thick.')
         form.addParam('autoclipxy', BooleanParam,
                       default=True,
                       condition='%s and bytile' % recCond,
@@ -348,6 +360,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         args = ''
         args += '--rawtlt=%s ' % join(TLT_DIR, tsId + '.tlt')
         args += '--npk=%i ' % self.nLandmarks.get()
+        args += '--pkkeep=%.2f ' % self.pkKeep.get()
         args += '--bxsz=%i ' % self.boxSizeTrk.get()
         args += '--patchtrack=%i ' % self.patchTrack.get()
         if not self.writeIntermediateRes.get() and not self.genInterpolatedTs.get():
@@ -473,6 +486,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             args += '--bytile '
             if self.autoclipxy.get():
                 args += '--autoclipxy '
+        if self.moreTile.get():
+            args += '--moretile '
         if self.correctrot.get():
             args += '--correctrot '
         if self.extrapad.get():

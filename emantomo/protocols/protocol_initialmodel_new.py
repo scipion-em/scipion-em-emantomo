@@ -51,7 +51,6 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.inSamplingRate = -1
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -119,17 +118,12 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
     def _insertAllSteps(self):
         self._insertFunctionStep(super().createEmanPrjPostExtractionStep)
         self._insertFunctionStep(super().convertRefVolStep)
-        self._insertFunctionStep(self.buildEmanSetsStep)
+        self._insertFunctionStep(super().buildEmanSetsStep)
         self._insertFunctionStep(self.createInitialModelStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-    def buildEmanSetsStep(self):
-        program = Plugin.getProgram("e2spt_buildsets.py")
-        args = '--allparticles '
-        self.runJob(program, args, cwd=self._getExtraPath())
-
     def createInitialModelStep(self):
         program = Plugin.getProgram("e2spt_sgd_new.py")
         self.runJob(program, self._genIniModelArgs(), cwd=self._getExtraPath())
@@ -153,7 +147,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
     # --------------------------- UTILS functions -----------------------------
     def _genIniModelArgs(self):
         args = ' %s ' % join(SETS_DIR, PARTICLES_LST_FILE)
-        if self.refVol.get():
+        if self.getRefVol():
             args += '--ref %s ' % (REFERENCE_NAME + '.hdf')
         args += '--shrink %i ' % self.shrink.get()
         args += '--niter %i ' % self.nIters.get()
