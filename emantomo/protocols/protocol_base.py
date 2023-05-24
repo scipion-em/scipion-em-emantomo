@@ -23,10 +23,11 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import glob
 from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
-    REFERENCE_NAME
+    REFERENCE_NAME, TOMOBOX
 from emantomo.objects import EmanParticle
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
@@ -182,3 +183,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         program = Plugin.getProgram("e2proc3d.py")
         args = '%s %s ' % (inFile, outFile)
         self.runJob(program, args + extraArgs, cwd=self._getExtraPath())
+
+    def _getLstFile(self):
+        lstFile = glob.glob(join(self.getSetsDir(), TOMOBOX + '*.lst'))[0]
+        return join(SETS_DIR, basename(lstFile))

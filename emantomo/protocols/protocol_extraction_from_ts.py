@@ -85,10 +85,14 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       important=True,
                       label='Flip Z axis in tomogram?',
                       help='If the reconstruction was carried out with EMAN, it would be set to No.')
-        form.addParam(IN_BOXSIZE, FloatParam,
+        form.addParam(IN_BOXSIZE, IntParam,
+                      allowsNull=False,
                       label='Box size unbinned (pix.)',
                       help='The subtomograms are extracted as a cubic box of this size. The wizard selects same '
                            'box size as picking')
+        form.addParam('shrink', FloatParam,
+                      default=1,
+                      label='Shrink factor')
         form.addParam('maxTilt', IntParam,
                       default=100,
                       label='Max tilt',
@@ -173,7 +177,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         tsId = mdObj.tsId
         stack2dHdf = abspath(self._getExtraPath(PARTICLES_DIR, self._getEmanFName(mdObj.tsId)))
         eh = EmanHdf5Handler(stack2dHdf)
-        projList = eh.getProjsFrom2dStack()
+        projList = eh.getProjsFrom2dStack(shrink=self.shrink.get())
         # Add the required tsId as the first element of each sublist
         list(map(lambda sublist: sublist.insert(0, tsId), projList))  # More efficient than comprehension for huge
         # lists of lists, as expected
@@ -300,30 +304,31 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         return mdObjDict
 
     def _genExtractArgs(self, mdObj):
-        args = '%s ' % mdObj.tomoHdfName
-        args += '--boxsz_unbin=%i ' % self.getBoxSize()
-        args += '--maxtilt=%i ' % self.maxTilt.get()
-        args += '--tltkeep=%.2f ' % self.tltKeep.get()
-        args += '--padtwod=%.2f ' % self.paddingFactor.get()
-        args += '--rmbeadthr=%.2f ' % self.rmThr.get()
-        args += '--threads=%i ' % self.numberOfThreads.get()
-        # args += '--newlabel=%s ' % mdObj.tsId
-        args += '--append '
-        args += '--verbose=9 '
-        # if self.doSkipCtfCorrection.get():
-        #     args += '--noctf '
-        # if self.skip3dRec.get():
-        #     args += '--skip3d '
-        return args
+        args = [
+            f'{mdObj.tomoHdfName}',
+            f'--boxsz_unbin={self.getBoxSize()}',
+            f'--shrink={self.shrink.get():.2f}',
+            f'--maxtilt={self.maxTilt.get()}',
+            f'--tltkeep={self.tltKeep.get():.2f}',
+            f'--padtwod={self.paddingFactor.get():.2f}',
+            f'--rmbeadthr={self.rmThr.get():.2f}',
+            f'--threads={self.numberOfThreads.get()}',
+            '--append',
+            '--verbose=9'
+        ]
+        return ' '.join(args)
 
     def unstackParticles(self, stackFile, outExt='mrc'):
         """Unstacks and coverts a list of stack files into separate particles"""
         program = Plugin.getProgram('e2proc3d.py')
-        args = ' --unstacking'
-        args += ' %s' % stackFile
-        args += ' %s' % replaceExt(stackFile, outExt)
-        self.runJob(program, args, cwd=self._getExtraPath())
+        args = [
+            '--unstacking',
+            f'{stackFile}',
+            f'{replaceExt(stackFile, outExt)}'
+        ]
+        self.runJob(program, ' '.join(args), cwd=self._getExtraPath())
 
-    @staticmethod
-    def _getEmanFName(tsId):
-        return tsId + '__%s.hdf' % TOMOBOX
+    def _getEmanFName(self, tsId):
+        shrink = self.shrink.get()
+        pattern = f'__{TOMOBOX}_bin{int(self.shrink.get())}.hdf' if shrink else f'__{TOMOBOX}.hdf'
+        return tsId + pattern

@@ -33,7 +33,7 @@ from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, SETS_DIR, PARTICLES_LST_FILE, REFERENCE_NAME
+from emantomo.constants import SYMMETRY_HELP_MSG, SETS_DIR, REFERENCE_NAME
 
 # 3D maps filtering options
 WIENER = 'wiener'
@@ -187,7 +187,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     def _genRefineCmd(self):
         inParticles = getattr(self, IN_SUBTOMOS).get()
         # Input params
-        args = '--ptcls %s ' % join(SETS_DIR, PARTICLES_LST_FILE)
+        args = '--ptcls %s ' % self._getLstFile()
         if self.getRefVol():
             args += '--ref %s ' % (REFERENCE_NAME + '.hdf')
         args += '--startres %.2f ' % self.startRes.get()

@@ -24,9 +24,8 @@
 # *
 # **************************************************************************
 from enum import Enum
-from os.path import join
 from emantomo import Plugin
-from emantomo.constants import PARTICLES_LST_FILE, SETS_DIR, INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, \
+from emantomo.constants import INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, \
     SYMMETRY_HELP_MSG, REFERENCE_NAME
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
@@ -146,19 +145,19 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
 
     # --------------------------- UTILS functions -----------------------------
     def _genIniModelArgs(self):
-        args = ' %s ' % join(SETS_DIR, PARTICLES_LST_FILE)
+        args = [f" {self._getLstFile()} "]
         if self.getRefVol():
-            args += '--ref %s ' % (REFERENCE_NAME + '.hdf')
-        args += '--shrink %i ' % self.shrink.get()
-        args += '--niter %i ' % self.nIters.get()
-        args += '--sym %s ' % self.symmetry.get()
-        args += '--res  %.2f ' % self.targetRes.get()
-        args += '--batch %i ' % self.batchSize.get()
-        args += '--keep %.2f ' % self.keptParticles.get()
-        args += '--learnrate %.2f ' % self.learningRate.get()
-        args += '--parallel thread:%i ' % self.numberOfThreads.get()
-        args += '--verbose 9 '
-        return args
+            args.append(f"--ref {REFERENCE_NAME}.hdf ")
+        args.append(f"--shrink {self.shrink.get()} ")
+        args.append(f"--niter {self.nIters.get()} ")
+        args.append(f"--sym {self.symmetry.get()} ")
+        args.append(f"--res {self.targetRes.get():.2f} ")
+        args.append(f"--batch {self.batchSize.get()} ")
+        args.append(f"--keep {self.keptParticles.get():.2f} ")
+        args.append(f"--learnrate {self.learningRate.get():.2f} ")
+        args.append(f"--parallel thread:{self.numberOfThreads.get()} ")
+        args.append("--verbose 9 ")
+        return ''.join(args)
 
     def getInitialModelHdfFile(self):
         return self._getExtraPath(INIT_MODEL_DIR, INIT_MODEL_NAME)

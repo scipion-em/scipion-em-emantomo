@@ -63,7 +63,7 @@ class EmanHdf5Handler:
         except FileNotFoundError as e:
             raise e
 
-    def getProjsFrom2dStack(self):
+    def getProjsFrom2dStack(self, shrink=1):
         """Generate a list of elements in which each element is a list containing the following data:
          [tiltId, particleId, xCoord, yCoord]. In a 2d stack, each image corresponds to a particle cropped
          in a tilt image"""
@@ -71,7 +71,7 @@ class EmanHdf5Handler:
         for particleId in range(len(self._imgObjList)):
             img = self._imgObjList[str(particleId)]
             projsList.append([img.attrs['EMAN.tilt_id'][0], particleId] +
-                             img.attrs['EMAN.ptcl_source_coord'][:-1].tolist())
+                             (shrink * img.attrs['EMAN.ptcl_source_coord'][:-1]).tolist())
         return projsList
 
 

@@ -25,6 +25,7 @@
 # **************************************************************************
 # from .protocol_mra_refinement import EmanMraClassifySubtomos
 from .protocol_refine_new import EmanProtTomoRefinementNew
+from .protocol_template_matching import EmanProtTemplateMatching
 from .protocol_tomo_boxing import EmanProtTomoBoxing
 # from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet   # TODO: check this
 # from .protocol_tomo_template_match import EmanProtTomoTempMatch
@@ -42,6 +43,7 @@ from .protocol_estimate_ctf import EmanProtEstimateCTF
 from .protocol_resize_tomograms import EmanProtTomoResize
 from .protocol_average_subtomos import EmanProtSubTomoAverage
 from .protocol_ts_align_and_tomo_rec import EmanProtTsAlignTomoRec
+
 
 
 

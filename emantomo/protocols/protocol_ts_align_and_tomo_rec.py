@@ -43,6 +43,7 @@ from pwem.protocols import EMProtocol
 from pyworkflow.utils import makePath, createLink, Message
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, TiltImage, TiltSeries, Tomogram
 
+# Tomo size choices
 SIZE_1K = 0
 SIZE_2K = 1
 SIZE_4K = 2
@@ -50,7 +51,6 @@ R1K = '1k'
 R2K = '2k'
 R4K = '4k'
 OUT_TOMO_SIZE_CHOICES = [R1K, R2K, R4K]
-# Out tomograms size modes
 RESOLUTION = {R1K: 1024, R2K: 2048, R4K: 4096}
 
 
@@ -77,6 +77,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         EMProtocol.__init__(self, **kwargs)
         self._tiltAxisAngle = None
         self._finalSamplingRate = None
+        self.inTsSet = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -115,7 +116,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       default=0.9,
                       label='Fraction of landmarks to keep in the tracking',
                       validators=[GT(0), LE(1)],
-                      expertLevel=LEVEL_ADVANCED)
+                      expertLevel=LEVEL_ADVANCED,
+                      condition=alignCond)
         form.addParam('patchTrack', EnumParam,
                       display=EnumParam.DISPLAY_HLIST,
                       choices=['0', '1', '2'],
@@ -130,6 +132,21 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       label='Box size of the particles for tracking (pix.)',
                       condition=alignCond,
                       help='It may be helpful to use a larger one for fiducial-less cases.')
+        form.addParam('letEmanEstimateTilts', BooleanParam,
+                      default=True,
+                      label='Should Eman estimate the tilt angles?',
+                      condition=alignCond,
+                      help='If set to No, a .tlt file will be generated containing the tilt angles read from Scipion '
+                           'imported tilt series metadata and passed to Eman. Default=True will let Eman to estimate '
+                           'the tilt angles, following the Eman original default behavior.')
+        form.addParam('tltStep', FloatParam,
+                      default=2,
+                      label='Step between tilts',
+                      condition=f'{alignCond} and letEmanEstimateTilts')
+        form.addParam('zeroId', IntParam,
+                      default=-1,
+                      label='Index of the center tilt',
+                      condition=f'{alignCond} and letEmanEstimateTilts')
         form.addParam('tiltAxisAngle', FloatParam,
                       allowsNull=True,
                       label='Tilt axis angle',
@@ -171,16 +188,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addParam('moreTile', BooleanParam,
                       default=False,
                       label='Sample more tiles during rec.?',
+                      condition=recCond,
                       expertLevel=LEVEL_ADVANCED,
                       help='If set to Yes, the processing time will be greater, but it can be useful to reduce the '
                            'boundary artifacts when the sample is thick.')
-        form.addParam('autoclipxy', BooleanParam,
-                      default=True,
-                      condition='%s and bytile' % recCond,
-                      label='Fit the tomograms XY in the TS?',
-                      help='Optimize the x-y shape of the tomogram to fit in the tilt images. '
-                           'Only works in bytile reconstruction. '
-                           'Useful for non square cameras.')
         form.addParam('correctrot', BooleanParam,
                       default=False,
                       label='Correct rotation',
@@ -220,17 +231,19 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        inTsSet = getattr(self, IN_TS).get()
+        self.inTsSet = getattr(self, IN_TS).get()
         tltDir = self._getExtraPath(TLT_DIR)
         self.createInitEmanPrjDirs()
         makePath(tltDir)
 
         mdObjList = []
-        presentTsIds = getPresentTsIdsInSet(inTsSet)
-        tsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
+        presentTsIds = getPresentTsIdsInSet(self.inTsSet)
+        tsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in self.inTsSet if ts.getTsId() in presentTsIds}
         counter = 0
         for tsId, ts in tsDict.items():
-            ts.generateTltFile(join(tltDir, tsId + '.tlt'))
+            if not self.letEmanEstimateTilts.get():
+                # Generate tlt file depending on the user choice about the tilt angles
+                ts.generateTltFile(join(tltDir, tsId + '.tlt'))
             mdObjList.append(EmanMetaData(tsId=tsId,
                                           ts=ts,
                                           jsonFile=genJsonFileName(self.getInfoDir(), tsId),
@@ -246,14 +259,12 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def emanStep(self, tsId):
         program = emantomo.Plugin.getProgram("e2tomogram.py")
-        cmd = self.getCommonArgs(tsId)
-        if self.doAlignment.get() and self.doRec.get():  # TS alignment and tomo rec
-            cmd += self._getAlignArgs(tsId) + self._getRecArgs(tsId)
-        elif self.doAlignment.get():  # Only TS alignment
-            cmd += self._getAlignArgs(tsId)
-        else:  # Only tomo rec
-            cmd += self._getRecArgs(tsId)
-        self.runJob(program, cmd, cwd=self._getExtraPath())
+        cmd = [self.getCommonArgs(tsId)]
+        if self.doAlignment.get():
+            cmd.append(self._getAlignArgs(tsId))
+        if self.doRec.get():
+            cmd.append(self._getRecArgs())
+        self.runJob(program, ' '.join(cmd), cwd=self._getExtraPath())
 
     def convertOutputStep(self, mdObj):
         tsId = mdObj.tsId
@@ -348,7 +359,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         if necessary. The hierarchy to choose the tilt axis angle value is: if no tilt axis value is introduced, it
         will be read from the tilt series metadata. If it is not contained in the metadata, it will be estimated by EMAN"""
         if not self._tiltAxisAngle:
-            ts = getattr(self, IN_TS).get().getFirstItem()
+            ts = self.inTsSet.getFirstItem()
             if self.tiltAxisAngle.get():  # Value from form
                 self._tiltAxisAngle = self.tiltAxisAngle.get()
             elif ts.getAcquisition().getTiltAxisAngle():  # Value from the TS metadata
@@ -357,18 +368,24 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def _getAlignArgs(self, tsId):
         tAx = self.getTiltAxisAngle()
-        args = ''
-        args += '--rawtlt=%s ' % join(TLT_DIR, tsId + '.tlt')
-        args += '--npk=%i ' % self.nLandmarks.get()
-        args += '--pkkeep=%.2f ' % self.pkKeep.get()
-        args += '--bxsz=%i ' % self.boxSizeTrk.get()
-        args += '--patchtrack=%i ' % self.patchTrack.get()
+        args = [
+            f'--npk={self.nLandmarks.get()}',
+            f'--pkkeep={self.pkKeep.get():.2f}',
+            f'--bxsz={self.boxSizeTrk.get()}',
+            f'--patchtrack={self.patchTrack.get()}'
+        ]
+        if self.letEmanEstimateTilts.get():
+            # Introduce angular step and zero id
+            args.append(f'--tltstep={self.tltStep.get():.2f}')
+            args.append(f'--zeroid={self.zeroId.get()}')
+        else:
+            args.append(f'--rawtlt={join(TLT_DIR, tsId + ".tlt")}')
         if not self.writeIntermediateRes.get() and not self.genInterpolatedTs.get():
-            args += '--notmp '
+            args.append('--notmp')
         if tAx:
-            args += '--tltax=%.2f ' % tAx
-        args += '--verbose=9 '
-        return args
+            args.append(f'--tltax={tAx:.2f}')
+        args.append('--verbose=9')
+        return ' '.join(args)
 
     def getOutputSetOfTs(self, interpolated=False):
         inTs = self.inputTS.get()
@@ -472,27 +489,32 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
         # --------------------------- reconstruct tomograms UTILS functions ----------------------------
 
-    def _getRecArgs(self, tsId):
-        args = ''
+    def _getRecArgs(self):
+        args = [f'--outsize={OUT_TOMO_SIZE_CHOICES[self.outsize.get()]}',
+                f'--niter={self.nIters.get()}',
+                f'--clipz={self.clipz.get()}',
+                f'--filterres={self.filterres.get():.2f}',
+                f'--rmbeadthr={self.rmbeadthr.get():.2f}']
+
         if self.doRec.get() and not self.doAlignment.get():
-            args = '--load '  # Load existing tilt parameters
-            args += '--noali '  # Skip initial alignment
-        args += '--outsize=%s ' % OUT_TOMO_SIZE_CHOICES[self.outsize.get()]
-        args += '--niter=%s ' % self.nIters.get()
-        args += '--clipz=%i ' % self.clipz.get()
-        args += '--filterres=%.2f ' % self.filterres.get()
-        args += '--rmbeadthr=%.2f ' % self.rmbeadthr.get()
+            args.append('--load')  # Load existing tilt parameters
+            args.append('--noali')  # Skip initial alignment
+
         if self.bytile.get():
-            args += '--bytile '
-            if self.autoclipxy.get():
-                args += '--autoclipxy '
+            args.append('--bytile')
+            if self.doAutoclipXY():
+                args.append('--autoclipxy')
+
         if self.moreTile.get():
-            args += '--moretile '
+            args.append('--moretile')
+
         if self.correctrot.get():
-            args += '--correctrot '
+            args.append('--correctrot')
+
         if self.extrapad.get():
-            args += '--extrapad '
-        return args
+            args.append('--extrapad')
+
+        return ' '.join(args)
 
     def getFinalSampligRate(self):
         # It has to be recalculated due to EMAN size management
@@ -561,3 +583,11 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         outTi.setTransform(transform)
         outTi.setTiltAngle(tiltAngleRefined)
         outTi.tiltAngleAxis = Float(offTiltAngle)  # Extended parameter
+
+    def doAutoclipXY(self):
+        """Code behavior expected for EMAN's option autoclipxy to be automatic.
+        From EMAN tutorial https://blake.bcm.edu/emanwiki/EMAN2/e2tomo_p22:
+        'Always check --autoclipxy for non-square micrographs'."""
+        ih = ImageHandler()
+        x, y, _, _ = ih.getDimensions(self.inTsSet.getFirstItem().getFirstItem().getFileName())
+        return True if x != y else False
