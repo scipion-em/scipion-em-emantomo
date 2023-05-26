@@ -26,14 +26,11 @@
 import glob
 from enum import Enum
 from os.path import basename, join
-
 from emantomo import Plugin
-from emantomo.constants import INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, \
-    SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
-from emantomo.convert import convertBetweenHdfAndMrc, jsons2SetCoords3D
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL, IN_TOMOS
-from pwem.convert.headers import fixVolume
-from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE, BooleanParam
+from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
+from emantomo.convert import jsons2SetCoords3D
+from emantomo.protocols.protocol_base import ProtEmantomoBase, REF_VOL, IN_TOMOS
+from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam
 from pyworkflow.utils import Message, createLink
 from tomo.objects import AverageSubTomogram
 

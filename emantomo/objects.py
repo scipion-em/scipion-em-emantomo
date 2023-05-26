@@ -83,28 +83,28 @@ class EmanParticle(SubTomogram):
     STACK_2D_HDF = '_stack2dHdf'
     STACK_3D_HDF = '_stack3dHdf'
 
-    def __init__(self, **kwargs):
+    def __init__(self, infoJson=None, tsHdf=None, tomoHdf=None, stack2dHdf=None, stack3dHdf=None, **kwargs):
         super().__init__(**kwargs)
-        self._infoJson = None
-        self._tsHdf = None
-        self._tomoHdf = None
-        self._stack2dHdf = None
-        self._stack3dHdf = None
+        self._infoJson = String(infoJson)
+        self._tsHdf = String(tsHdf)
+        self._tomoHdf = String(tomoHdf)
+        self._stack2dHdf = String(stack2dHdf)
+        self._stack3dHdf = String(stack3dHdf)
 
     def setInfoJson(self, val):
-        self._infoJson = String(val)
+        self._infoJson.set(val)
 
     def setTsHdf(self, val):
-        self._tsHdf = String(val)
+        self._tsHdf.set(val)
 
     def setTomoHdf(self, val):
-        self._tomoHdf = String(val)
+        self._tomoHdf.set(val)
 
     def setStack2dHdf(self, val):
-        self._stack2dHdf = String(val)
+        self._stack2dHdf.set(val)
 
     def setStack3dHdf(self, val):
-        self._stack3dHdf = String(val)
+        self._stack3dHdf.set(val)
 
     def getInfoJson(self):
         return self._infoJson.get()
@@ -123,7 +123,6 @@ class EmanParticle(SubTomogram):
 
 
 class EmanSetOfParticles(SetOfSubTomograms):
-
     ITEM_TYPE = EmanParticle
     ALI_2D = '_ali2d'
     ALI_3D = '_ali3d'

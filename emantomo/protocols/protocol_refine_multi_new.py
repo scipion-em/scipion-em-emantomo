@@ -28,7 +28,6 @@ from enum import Enum
 from os.path import join
 
 from emantomo import Plugin
-from emantomo.convert import getLastParticlesParams
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
@@ -36,13 +35,13 @@ from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
 from emantomo.constants import SYMMETRY_HELP_MSG, SETS_DIR, REFERENCE_NAME
 
-# 3D maps filtering options
-WIENER = 'wiener'
-GLOBAL = 'global'
-LOCAL_WIENER = 'localwiener'
-LOCAL = 'local'
-filteringKeys = [WIENER, GLOBAL, LOCAL_WIENER, LOCAL]
-mapFilterDict = dict(zip(filteringKeys, range(len(filteringKeys))))
+# # 3D maps filtering options
+# WIENER = 'wiener'
+# GLOBAL = 'global'
+# LOCAL_WIENER = 'localwiener'
+# LOCAL = 'local'
+# filteringKeys = [WIENER, GLOBAL, LOCAL_WIENER, LOCAL]
+# mapFilterDict = dict(zip(filteringKeys, range(len(filteringKeys))))
 
 
 class EmanRefineNewOutputs(Enum):
@@ -64,7 +63,6 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.inParticles = None
 
     # --------------- DEFINE param functions ---------------
 
@@ -175,51 +173,19 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
-        self._initialize()
         self._insertFunctionStep(super().createEmanPrjPostExtractionStep)
         self._insertFunctionStep(super().convertRefVolStep)
         self._insertFunctionStep(super().buildEmanSetsStep)
         self._insertFunctionStep(self.refineStep)
-        self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
-    def _initialize(self):
-        self.inParticles = self.getAttrib(IN_SUBTOMOS)
-    
     def refineStep(self):
         program = Plugin.getProgram("e2spt_refine_new.py")
         self.runJob(program, self._genRefineCmd(), cwd=self._getExtraPath())
-        
-    def createOutputStep(self):
-        pass
-        # # Output 1: AverageSubTomogram
-        # averageSubTomogram = AverageSubTomogram()
-        # averageSubTomogram.setFileName(self.getAverageFn())
-        # averageSubTomogram.setHalfMaps([self.getEvenFn(), self.getOddFn()])
-        # averageSubTomogram.setSamplingRate(self.inParticles.getSamplingRate())
-        # # Output 2: setOfSubTomograms
-        # particleParams = getLastParticlesParams(self.getRefineDir())
-        # outputSetOfSubTomograms = self._createSet(SetOfSubTomograms, 'subtomograms%s.sqlite', "particles")
-        # outputSetOfSubTomograms.copyInfo(self.inParticles)
-        # outputSetOfSubTomograms.setCoordinates3D(self.inParticles.getCoordinates3D())
-        # updateSetOfSubTomograms(self.inParticles, outputSetOfSubTomograms, particleParams)
-        # # Output 3: FSCs
-        # fscs = self._createSet(SetOfFSCs, 'fsc%s.sqlite', "")
-        # fscMasked = self.getLastFromOutputPath('fsc_masked_\d+.txt')
-        # fscUnmasked = self.getLastFromOutputPath('fsc_unmasked_\d+.txt')
-        # fscTight = self.getLastFromOutputPath('fsc_maskedtight_\d+.txt')
-        #
-        # emanFSCsToScipion(fscs, fscMasked, fscUnmasked, fscTight)
-        # outputs = {EmanTomoRefinementOutputs.subtomogramAverage.name: averageSubTomogram,
-        #            EmanTomoRefinementOutputs.subtomograms.name: outputSetOfSubTomograms,
-        #            EmanTomoRefinementOutputs.FSCs.name: fscs}
-        #
-        # self._defineOutputs(**outputs)
-        # self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)
-        # self._defineSourceRelation(self.inputSetOfSubTomogram, outputSetOfSubTomograms)
 
     # --------------------------- UTILS functions ------------------------------
     def _genRefineCmd(self):
+        inParticles = getattr(self, IN_SUBTOMOS).get()
         # Input params
         args = '--ptcls %s ' % self._getLstFile()
         if self.getRefVol():
@@ -236,8 +202,8 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
             args += '--goldstandard '
         else:
             args += '--goldcontinue '
-            args += '--loadali2d %s ' % self.inParticles.getAli2d()
-            args += '--loadali3d %s ' % self.inParticles.getAli3d()
+            args += '--loadali2d %s ' % inParticles.getAli2d()
+            args += '--loadali3d %s ' % inParticles.getAli3d()
         # Local refinement params
         if self.doLocalRefine.get():
             args += '--localrefine '
@@ -265,6 +231,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         Thus, we'll apply it if it is the first refinement, which means that the set of particles introduced do not
         contain an ali2d nor ali3d files in the corresponding attributes.
         """
-        return True if not self.inParticles.getAli2d() and not self.inParticles.getAli3d() else False
+        inParticles = getattr(self, IN_SUBTOMOS).get()
+        return True if not inParticles.getAli2d() and not inParticles.getAli3d() else False
 
     # --------------------------- INFO functions --------------------------------

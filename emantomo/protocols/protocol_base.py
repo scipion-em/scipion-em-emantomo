@@ -24,10 +24,11 @@
 # *
 # **************************************************************************
 import glob
+import re
 from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
-    REFERENCE_NAME, TOMOBOX
+    REFERENCE_NAME, TOMOBOX, SPT_00_DIR
 from emantomo.objects import EmanParticle
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
@@ -165,6 +166,13 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def getSetsDir(self):
         return self._getExtraPath(SETS_DIR)
 
+    def getRefineDir(self):
+        return self._getExtraPath(SPT_00_DIR)
+
+    def getAttrib(self, attribName, getPointer=False):
+        attribPointer = getattr(self, attribName)
+        return attribPointer if getPointer else attribPointer.get()
+
     def convertOrLink(self, inFile, tsId, outDir, sRate):
         """Fill the simulated EMAN project directories with the expected data at this point of the pipeline.
         Also convert the precedent tomograms into HDF files if they are not. The converted filename will be the tsId,
@@ -187,3 +195,20 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def _getLstFile(self):
         lstFile = glob.glob(join(self.getSetsDir(), TOMOBOX + '*.lst'))[0]
         return join(SETS_DIR, basename(lstFile))
+
+    def getAverageFn(self):
+        return self._getExtraPath("Average_refined.mrc")
+
+    def getEvenFn(self):
+        return self._getExtraPath("even.mrc")
+
+    def getOddFn(self):
+        return self._getExtraPath("odd.mrc")
+
+    def getLastFromOutputPath(self, pattern):
+        threedPaths = glob.glob(join(self.getRefineDir(), '*'))
+        imagePaths = sorted(path for path in threedPaths if re.match(pattern, basename(path)))
+        if not imagePaths:
+            raise Exception("No file in output directory matches pattern: %s" % pattern)
+        else:
+            return imagePaths[-1]

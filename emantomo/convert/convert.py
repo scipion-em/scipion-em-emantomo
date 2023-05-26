@@ -883,10 +883,10 @@ def ts2Json(mdObj, mode="w"):
         sy = trMatrixInv[1, 2] * shiftsScale
         rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
         offTiltAngle = getattr(tiltImage, 'tiltAngleAxis', Float(0.0)).get()
-        rotz = rotzCorrected - offTiltAngle
+        rotz = rotzCorrected + offTiltAngle
         # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
         # opposite sign
-        tltParams.append([sx, sy, -rotz, tiltAngle, offTiltAngle])
+        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
     tltDict = {"apix_unbin": apixUnbinned,
                "tlt_file": tltFile,
