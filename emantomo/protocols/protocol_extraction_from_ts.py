@@ -330,5 +330,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     def _getEmanFName(self, tsId):
         shrink = self.shrink.get()
-        pattern = f'__{TOMOBOX}_bin{int(self.shrink.get())}.hdf' if shrink else f'__{TOMOBOX}.hdf'
+        pattern = f'__{TOMOBOX}.hdf'
+        if shrink:
+            if shrink > 1:
+                pattern = f'__{TOMOBOX}_bin{int(self.shrink.get())}.hdf'
         return tsId + pattern
