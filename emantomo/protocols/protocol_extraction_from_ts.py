@@ -88,8 +88,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         form.addParam(IN_BOXSIZE, IntParam,
                       allowsNull=False,
                       label='Box size unbinned (pix.)',
-                      help='The subtomograms are extracted as a cubic box of this size. The wizard selects same '
-                           'box size as picking')
+                      help='The subtomograms are extracted as a cubic box of this size.')
         form.addParam('shrink', FloatParam,
                       default=1,
                       label='Shrink factor')

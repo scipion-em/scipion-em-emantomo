@@ -28,7 +28,7 @@ import re
 from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
-    REFERENCE_NAME, TOMOBOX, SPT_00_DIR
+    REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME
 from emantomo.objects import EmanParticle
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
@@ -196,14 +196,24 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         lstFile = glob.glob(join(self.getSetsDir(), TOMOBOX + '*.lst'))[0]
         return join(SETS_DIR, basename(lstFile))
 
-    def getAverageFn(self):
-        return self._getExtraPath("Average_refined.mrc")
+    def getRefinedAverageFn(self, iterNumber, ext='hdf', half=None):
+        # Example, for 9 iterations, the resulting file would be called threed_09.hdf
+        pattern = self._getExtraPath(SPT_00_DIR, THREED + f'_{iterNumber:02d}')
+        return pattern + f'_{half}.{ext}' if half else pattern + f'.{ext}'
 
-    def getEvenFn(self):
-        return self._getExtraPath("even.mrc")
+    def getRefineEvenFn(self, iterNumber):
+        # Example, for 9 iterations, the resulting file would be called threed_09_even.hdf
+        return self.getRefinedAverageFn(iterNumber, half='even')
 
-    def getOddFn(self):
-        return self._getExtraPath("odd.mrc")
+    def getRefineOddFn(self, iterNumber):
+        # Example, for 9 iterations, the resulting file would be called threed_09_odd.hdf
+        return self.getRefinedAverageFn(iterNumber, half='odd')
+
+    def getAli3dFile(self, iterNum):
+        return self._getExtraPath(SPT_00_DIR, f'{ALI3D_BASENAME}{iterNum:02d}.lst')
+
+    def getAli2dFile(self, iterNum):
+        return self._getExtraPath(SPT_00_DIR, f'{ALI2D_BASENAME}{iterNum:02d}.lst')
 
     def getLastFromOutputPath(self, pattern):
         threedPaths = glob.glob(join(self.getRefineDir(), '*'))

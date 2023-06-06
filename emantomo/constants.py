@@ -25,8 +25,8 @@
 # *
 # **************************************************************************
 # Extra attributes for refinement
-EMAN_SCORE = 'eman_score'
-EMAN_COVERAGE = 'eman_coverage'
+EMAN_SCORE = '_eman_score'
+EMAN_COVERAGE = '_eman_coverage'
 
 # Default label for picking with eman
 TOMOBOX = 'tomobox'
@@ -34,6 +34,19 @@ TOMOBOX = 'tomobox'
 # SQLITE labels to manage the present objects in the input sets
 TS_ID = "_tsId"
 GROUP_ID = "_groupId"
+
+# EMAN alignment LST files data
+PARTICLE_IND = 'particleInd'
+PARTICLE_FILE = 'particleFile'
+SCORE = 'score'
+MATRIX = 'matrix'
+CLASS = 'class'
+DEFOCUS = 'defocus'
+PART3D_ID = 'ptcl3d_id'
+TILT_ID = 'tilt_id'
+PROJ_MATRIX = 'xform.projection'
+ROT_TR_MATRIX = 'xform.align3d'
+TR_MATRIX = 'translationMatrix'
 
 # Directories and files of an EMAN project
 INFO_DIR = 'info'
@@ -53,8 +66,11 @@ SPT_00_DIR = 'spt_00'
 REFS_DIR = 'references'
 REFERENCE_NAME = 'reference'
 INPUT_PTCLS_LST = 'input_ptcls.lst'
+THREED = 'threed'
 THREED_01 = 'threed_01'
 SPTCLS_00_DIR = 'sptcls_00'
+ALI2D_BASENAME = 'aliptcls2d_'
+ALI3D_BASENAME = 'aliptcls3d_'
 
 SYMMETRY_HELP_MSG = 'Supported symmetries are :\n\n' \
                     'Cn - single rotational n-fold symmetry axis\n' \

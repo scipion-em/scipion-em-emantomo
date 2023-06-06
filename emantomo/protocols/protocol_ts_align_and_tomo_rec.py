@@ -583,6 +583,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         outTi.setTransform(transform)
         outTi.setTiltAngle(tiltAngleRefined)
         outTi.tiltAngleAxis = Float(offTiltAngle)  # Extended parameter
+        # TODO: rename the extended param to _emanOffTiltAxis
 
     def doAutoclipXY(self):
         """Code behavior expected for EMAN's option autoclipxy to be automatic.

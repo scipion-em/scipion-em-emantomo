@@ -24,17 +24,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import ast
+import json
 from enum import Enum
-from os.path import join
-
+import numpy as np
 from emantomo import Plugin
-from emantomo.convert import getLastParticlesParams
-from pwem.objects import SetOfFSCs
+from emantomo.convert import convertBetweenHdfAndMrc
+from emantomo.objects import EmanSetOfParticles
+from pwem.objects import SetOfFSCs, Transform
+from pyworkflow.object import Float
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
+from tomo.constants import TR_EMAN
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, SETS_DIR, REFERENCE_NAME
+from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, PARTICLE_FILE, SCORE, MATRIX, PARTICLE_IND, \
+    DEFOCUS, CLASS, PROJ_MATRIX, PART3D_ID, TILT_ID, ROT_TR_MATRIX, TR_MATRIX, EMAN_SCORE
 
 # 3D maps filtering options
 WIENER = 'wiener'
@@ -65,6 +70,9 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.inParticles = None
+        self.avgHdf = None
+        self.evenHdf = None
+        self.oddFnHdf = None
 
     # --------------- DEFINE param functions ---------------
 
@@ -180,27 +188,51 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         self._insertFunctionStep(super().convertRefVolStep)
         self._insertFunctionStep(super().buildEmanSetsStep)
         self._insertFunctionStep(self.refineStep)
+        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
     def _initialize(self):
         self.inParticles = self.getAttrib(IN_SUBTOMOS)
-    
+        self.inSamplingRate = self.inParticles.getSamplingRate()
+        noIters = self._getNoIters()
+        self.avgHdf = self.getRefinedAverageFn(noIters)
+        self.evenHdf = self.getRefineEvenFn(noIters)
+        self.oddFnHdf = self.getRefineOddFn(noIters)
+        self.ali2dLst = self.getAli2dFile(noIters)
+        self.ali3dLst = self.getAli3dFile(self._getNoPIters())
+
     def refineStep(self):
         program = Plugin.getProgram("e2spt_refine_new.py")
         self.runJob(program, self._genRefineCmd(), cwd=self._getExtraPath())
-        
+
+    def convertOutputStep(self):
+        # Average and halves
+        inFiles = [self.avgHdf, self.evenHdf, self.oddFnHdf]
+        args = '--apix %d' % self.inSamplingRate
+        for inFile in inFiles:
+            outFile = inFile.replace('.hdf', '.mrc')
+            convertBetweenHdfAndMrc(self, inFile, outFile, args)
+
     def createOutputStep(self):
-        pass
-        # # Output 1: AverageSubTomogram
-        # averageSubTomogram = AverageSubTomogram()
-        # averageSubTomogram.setFileName(self.getAverageFn())
-        # averageSubTomogram.setHalfMaps([self.getEvenFn(), self.getOddFn()])
-        # averageSubTomogram.setSamplingRate(self.inParticles.getSamplingRate())
-        # # Output 2: setOfSubTomograms
-        # particleParams = getLastParticlesParams(self.getRefineDir())
-        # outputSetOfSubTomograms = self._createSet(SetOfSubTomograms, 'subtomograms%s.sqlite', "particles")
-        # outputSetOfSubTomograms.copyInfo(self.inParticles)
+        HDF = '.hdf'
+        MRC = '.mrc'
+        # Output 1: average with halves
+        averageSubTomogram = AverageSubTomogram()
+        averageSubTomogram.setFileName(self.avgHdf.replace(HDF, MRC))
+        averageSubTomogram.setHalfMaps([self.evenHdf.replace(HDF, MRC), self.oddFnHdf.replace(HDF, MRC)])
+        averageSubTomogram.setSamplingRate(self.inParticles.getSamplingRate())
+        # # Output 2: aligned particles
+        outParticles = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
+        outParticles.copyInfo(self.inParticles)
+        align3dData = self.parse3dAlignFile()
+        for particle, alignDict in zip(self.inParticles, align3dData):
+            outParticle = particle.clone()
+            setattr(outParticle, EMAN_SCORE, Float(alignDict[SCORE]))
+            outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
+            outParticles.append(outParticle)
+
+
         # outputSetOfSubTomograms.setCoordinates3D(self.inParticles.getCoordinates3D())
         # updateSetOfSubTomograms(self.inParticles, outputSetOfSubTomograms, particleParams)
         # # Output 3: FSCs
@@ -210,13 +242,13 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         # fscTight = self.getLastFromOutputPath('fsc_maskedtight_\d+.txt')
         #
         # emanFSCsToScipion(fscs, fscMasked, fscUnmasked, fscTight)
-        # outputs = {EmanTomoRefinementOutputs.subtomogramAverage.name: averageSubTomogram,
-        #            EmanTomoRefinementOutputs.subtomograms.name: outputSetOfSubTomograms,
+        outputs = {self._possibleOutputs.subtomogramAverage.name: averageSubTomogram,
+                   self._possibleOutputs.subtomograms.name: outParticles}#,
         #            EmanTomoRefinementOutputs.FSCs.name: fscs}
         #
-        # self._defineOutputs(**outputs)
-        # self._defineSourceRelation(self.inputSetOfSubTomogram, averageSubTomogram)
-        # self._defineSourceRelation(self.inputSetOfSubTomogram, outputSetOfSubTomograms)
+        self._defineOutputs(**outputs)
+        self._defineSourceRelation(self.inParticles, averageSubTomogram)
+        self._defineSourceRelation(self.inParticles, outParticles)
 
     # --------------------------- UTILS functions ------------------------------
     def _genRefineCmd(self):
@@ -266,5 +298,75 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         contain an ali2d nor ali3d files in the corresponding attributes.
         """
         return True if not self.inParticles.getAli2d() and not self.inParticles.getAli3d() else False
+
+    def _getNoIters(self):
+        """From Eman doc: Default is p,p,p,t,p,p,t,r,d. Character followed by number is also acceptable. p3 = p,p,p."""
+        iterStr = self.iters.get()
+        itersList = iterStr.split(',')
+        noIters = 0
+        for i in itersList:
+            if len(i) > 1:
+                noIters += int(i[1:])
+            else:
+                noIters += 1
+        return noIters
+
+    def _getNoPIters(self):
+        """From Eman doc: aliptcls3d files are only produced for 'p' iterations"""
+        iterStr = self.iters.get()
+        itersList = iterStr.split(',')
+        return len(itersList) - itersList[::-1].index("p")
+
+    def parse3dAlignFile(self):
+        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, ROT_TR_MATRIX]
+        list_of_lists = []
+        lastRow = np.array([0, 0, 0, 1])
+
+        with open(self.ali3dLst, 'r') as f:
+            for line in f:
+                lineContentsList = line.split('\t')
+                if len(lineContentsList) > 1:  # There are some explicative lines at the beginning
+                    jsonData = json.loads(lineContentsList[2])
+                    matrixAsList = ast.literal_eval(jsonData[ROT_TR_MATRIX][MATRIX])
+                    matrix = np.array(matrixAsList).reshape(3, 4)
+                    matrix = np.vstack([matrix, lastRow])
+                    list_of_lists.append([
+                        lineContentsList[0],
+                        lineContentsList[1],
+                        jsonData[SCORE],
+                        matrix])
+
+        # Create a list of dictionaries based on the lists filled before
+        return [dict(zip(keys, values)) for values in list_of_lists]
+
+    def parse2dAlignFile(self):
+        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, CLASS, DEFOCUS,
+                PART3D_ID, TILT_ID, TR_MATRIX, PROJ_MATRIX]
+        list_of_lists = []
+        lastRow = np.array([0, 0, 0, 1])
+
+        with open(self.ali2dLst, 'r') as f:
+            for line in f:
+                lineContentsList = line.split('\t')
+                if len(lineContentsList) > 1:
+                    jsonData = json.loads(lineContentsList[2])
+                    particleInd = lineContentsList[0]
+                    particleFile = lineContentsList[1]
+                    nClass = jsonData[CLASS]
+                    defocus = jsonData[DEFOCUS]
+                    trMatrix = ast.literal_eval(jsonData['dxf'][MATRIX])
+                    trMatrix = np.array(trMatrix).reshape(3, 4)
+                    trMatrix = np.vstack([trMatrix, lastRow])
+                    ptcl3dId = jsonData[PART3D_ID]
+                    score = jsonData[SCORE]
+                    tiltId = jsonData[TILT_ID]
+                    projMatrix = ast.literal_eval(jsonData[PROJ_MATRIX][MATRIX])
+                    projMatrix = np.array(projMatrix).reshape(3, 4)
+                    projMatrix = np.vstack([projMatrix, lastRow])
+                    list_of_lists.append(
+                        [particleInd, particleFile, score, nClass, defocus, ptcl3dId, tiltId, trMatrix, projMatrix])
+
+        # Create a list of dictionarys based on the lists filled before
+        return [dict(zip(keys, values)) for values in list_of_lists]
 
     # --------------------------- INFO functions --------------------------------
