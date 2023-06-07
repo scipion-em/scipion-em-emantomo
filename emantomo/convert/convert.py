@@ -766,6 +766,7 @@ def ts2Json(mdObj, mode="w"):
     paths = []
     tltParams = []
     ts = mdObj.ts
+    tiltAxisAngle = ts.getAcquisition().getTiltAxisAngle()
     apixTs = ts.getSamplingRate()
     jsonFile = mdObj.jsonFile
     tltFile = mdObj.tsHdfName
@@ -785,7 +786,9 @@ def ts2Json(mdObj, mode="w"):
         rotz = rotzCorrected + offTiltAngle
         # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
         # opposite sign
-        tltParams.append([sx, sy, -rotz, tiltAngle, offTiltAngle])
+        if tiltAxisAngle <= 0:
+            rotz = -rotz
+        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
     tltDict = {"apix_unbin": apixUnbinned,
                "tlt_file": tltFile,

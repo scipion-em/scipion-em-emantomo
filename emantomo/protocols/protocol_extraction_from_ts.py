@@ -48,7 +48,7 @@ class outputObjects(Enum):
 class EmanProtTSExtraction(ProtEmantomoBase):
     """Extract 2D subtilt particles from the tilt series, and reconstruct 3D subvolumes."""
 
-    _label = 'particle extraction from TS'
+    _label = 'Extraction from TS'
     _possibleOutputs = outputObjects
 
     def __init__(self, **kwargs):

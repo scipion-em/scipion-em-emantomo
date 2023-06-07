@@ -115,14 +115,19 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(super().createEmanPrjPostExtractionStep)
-        self._insertFunctionStep(super().convertRefVolStep)
-        self._insertFunctionStep(super().buildEmanSetsStep)
+        self._initialize()
+        self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
+        self._insertFunctionStep(self.convertRefVolStep)
+        self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.createInitialModelStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
+    def _initialize(self):
+        self.inParticles = self.getAttrib(IN_SUBTOMOS)
+        self.inSamplingRate = self.inParticles.getSamplingRate()
+
     def createInitialModelStep(self):
         program = Plugin.getProgram("e2spt_sgd_new.py")
         self.runJob(program, self._genIniModelArgs(), cwd=self._getExtraPath())

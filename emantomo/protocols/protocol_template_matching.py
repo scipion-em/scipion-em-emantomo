@@ -142,11 +142,11 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         args = [f" {self._genTomolist()}",
                 f"--ref {REFERENCE_NAME}.hdf ",
                 f"--nptcl {self.nptcl.get()}",
-                f"--dthr {self.dthr.get():2f}",
-                f"--vthr {self.vthr.get():2f}",
+                f"--dthr {self.dthr.get():.2f}",
+                f"--vthr {self.vthr.get():.2f}",
                 f"--minvol {self.minvol.get()}",
                 f"--maxvol {self.maxvol.get()}",
-                f"--delta {self.delta.get():2f}",
+                f"--delta {self.delta.get():.2f}",
                 f"--sym {self.symmetry.get()}",
                 f"--threads {self.numberOfThreads.get()}"]
         if self.rmedge.get():

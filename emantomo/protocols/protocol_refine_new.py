@@ -184,9 +184,9 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep(super().createEmanPrjPostExtractionStep)
-        self._insertFunctionStep(super().convertRefVolStep)
-        self._insertFunctionStep(super().buildEmanSetsStep)
+        self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
+        self._insertFunctionStep(self.convertRefVolStep)
+        self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -195,11 +195,11 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     def _initialize(self):
         self.inParticles = self.getAttrib(IN_SUBTOMOS)
         self.inSamplingRate = self.inParticles.getSamplingRate()
-        noIters = self._getNoIters()
-        self.avgHdf = self.getRefinedAverageFn(noIters)
-        self.evenHdf = self.getRefineEvenFn(noIters)
-        self.oddFnHdf = self.getRefineOddFn(noIters)
-        self.ali2dLst = self.getAli2dFile(noIters)
+        self.noIters = self._getNoIters()
+        self.avgHdf = self.getRefinedAverageFn(self.noIters)
+        self.evenHdf = self.getRefineEvenFn(self.noIters)
+        self.oddFnHdf = self.getRefineOddFn(self.noIters)
+        self.ali2dLst = self.getAli2dFile(self.noIters)
         self.ali3dLst = self.getAli3dFile(self._getNoPIters())
 
     def refineStep(self):
@@ -222,7 +222,8 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         averageSubTomogram.setFileName(self.avgHdf.replace(HDF, MRC))
         averageSubTomogram.setHalfMaps([self.evenHdf.replace(HDF, MRC), self.oddFnHdf.replace(HDF, MRC)])
         averageSubTomogram.setSamplingRate(self.inParticles.getSamplingRate())
-        # # Output 2: aligned particles
+
+        # Output 2: aligned particles
         outParticles = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
         outParticles.copyInfo(self.inParticles)
         align3dData = self.parse3dAlignFile()
@@ -232,23 +233,17 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
             outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
             outParticles.append(outParticle)
 
+        # Output 3: FSCs
+        fscs = self.genFscs(self.noIters)
 
-        # outputSetOfSubTomograms.setCoordinates3D(self.inParticles.getCoordinates3D())
-        # updateSetOfSubTomograms(self.inParticles, outputSetOfSubTomograms, particleParams)
-        # # Output 3: FSCs
-        # fscs = self._createSet(SetOfFSCs, 'fsc%s.sqlite', "")
-        # fscMasked = self.getLastFromOutputPath('fsc_masked_\d+.txt')
-        # fscUnmasked = self.getLastFromOutputPath('fsc_unmasked_\d+.txt')
-        # fscTight = self.getLastFromOutputPath('fsc_maskedtight_\d+.txt')
-        #
-        # emanFSCsToScipion(fscs, fscMasked, fscUnmasked, fscTight)
         outputs = {self._possibleOutputs.subtomogramAverage.name: averageSubTomogram,
-                   self._possibleOutputs.subtomograms.name: outParticles}#,
-        #            EmanTomoRefinementOutputs.FSCs.name: fscs}
+                   self._possibleOutputs.subtomograms.name: outParticles,
+                   self._possibleOutputs.FSCs.name: fscs}
         #
         self._defineOutputs(**outputs)
         self._defineSourceRelation(self.inParticles, averageSubTomogram)
         self._defineSourceRelation(self.inParticles, outParticles)
+        self._defineSourceRelation(self.inParticles, fscs)
 
     # --------------------------- UTILS functions ------------------------------
     def _genRefineCmd(self):

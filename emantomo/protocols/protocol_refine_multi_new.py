@@ -50,15 +50,13 @@ class EmanRefineNewOutputs(Enum):
     FSCs = SetOfFSCs
 
 
-class EmanProtTomoRefinementNew(ProtEmantomoBase):
+class EmanProtMultiRefinementNew(ProtEmantomoBase):
     """
-    This protocol wraps *e2spt_refine_new.py* EMAN2 program.
-    This refinement protocol performs subtomogram, subtilt and defocus refinement. The 2D subtilt particles are used
-    instead of 3D subvolumes in the subtomogram refinement step. Moreover, this program now can model the localized 2D
-    particle motion by considering the motion trajectory of each particle along with its neighbor.
+    This protocol wraps *e2spt_refinemulti_new.py* EMAN2 program.
+    Multi-reference classification for the new (2021) SPT refinement protocol.
     """
 
-    _label = 'subtomogram refinement new'
+    _label = 'Multi-reference classification'
     _possibleOutputs = EmanRefineNewOutputs
 
     def __init__(self, **kwargs):
@@ -72,89 +70,59 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
                       pointerClass='EmanSetOfParticles',
                       label='Particles',
                       important=True)
-        form.addParam(REF_VOL, PointerParam,
-                      pointerClass='Volume',
-                      allowsNull=True,
-                      label="Reference volume (opt.)")
-        form.addParam('startRes', FloatParam,
-                      default=50,
-                      label='Refinement initial resolution (Å)',
-                      help='This will be the maximum resolution considered for the first iteration. In later '
-                           'iterations, the maximum resolution is calculated from the FSC of the previous iteration '
-                           '(unless the parameter max. resolution is specified).')
+        form.addParam('maskRef', PointerParam,
+                      pointerClass='VolumeMask',
+                      label='Mask the references prior to to classif. (opt.)',
+                      allowsNull=True)
 
-        form.addSection(label='Refinement')
-        form.addParam('iters', StringParam,
-                      default='p3,t2,p,t,r,d',
-                      label='Iteration information',
-                      important=True,
-                      help='Input types of refinement separated by comma:\n\n'
-                           '\t- *p*: 3d particle translation-rotation.\n'
-                           '\t- *t*: subtilt translation.\n'
-                           '\t- *r*: subtilt translation-rotation.\n'
-                           '\t- *d*: subtilt defocus.\n\n'
-                           'Default is p,p,p,t,p,p,t,r,d. Character followed by number is also acceptable. p3 = p,p,p.')
+        form.addSection(label='Classification')
+        form.addParam('nClasses', IntParam,
+                      default=1,
+                      label="Number of classes",
+                      important=True)
+        form.addParam('nIter', IntParam,
+                      default=5,
+                      label='No. iterations')
         form.addParam('symmetry', StringParam,
                       default='c1',
-                      label='Symmetry',
+                      label='Sym. to apply to the average',
                       help=SYMMETRY_HELP_MSG)
-        form.addParam('pkeep', FloatParam,
-                      default=0.95,
-                      label='Particle keep',
-                      help='Fraction of particles to keep. Note that this is controlled at three separate steps.\n'
-                           'When default = 0.95, it removes:\n\n'
-                           '\t- The worst 5% 3D particles.\n'
-                           '\t- The 5% 2D subtilt with the worst score.\n'
-                           '\t- The 5% of subtilt with the largest drift.\n\n'
-                           'Also accept comma separated values 0.9,0.5,0.5 to set different keep thresholds for the '
-                           'three removal operations described before.')
-        form.addParam('topHat', EnumParam,
-                      choices=list(mapFilterDict.keys()),
-                      display=EnumParam.DISPLAY_COMBO,
-                      default=mapFilterDict[WIENER],
-                      label='3D map filtering',
-                      help='Options to to filter the 3D maps:\n\n'
-                           '\t- wiener: wiener filter based on FSC curve. default mode in most programs.\n'
-                           '\t- global: tophat filter across the map at the resolution cutoff 0.143 from '
-                           'fsc_masked_xx.txt.\n'
-                           '\t- localwiener: wiener filter based on the fsc curve of local regions from the even/odd '
-                           'maps.\n'
-                           '\t- local: tophat filter based on local resolution calculated from the even/odd maps at '
-                           '0.143 cutoff.')
-        form.addParam('maxResAli', FloatParam,
-                      default=0,
-                      label='Max. resolution in alignment (Å)',
-                      help='The program will determine maximum resolution each round from the FSC of the previous '
-                           'round by default.')
-        form.addParam('minResAli', FloatParam,
-                      default=0,
-                      label='Min. resolution in alignment (Å)')
+        form.addParam('breakSym', StringParam,
+                      allowsEmpty=True,
+                      label='Break specified symmetry',
+                      help='If empty, no symmetry will be broken.')
 
-        form.addSection(label='Local refine')
-        form.addParam('doLocalRefine', BooleanParam,
-                      default=False,
-                      label='Do local refine?',
-                      help='Perform only local search around the solution from the last iteration.')
+        form.addSection(label='Alignment')
+        form.addParam('doAlignment', BooleanParam,
+                      default=True,
+                      label='Do alignment?')
+        form.addParam('maskAlign', PointerParam,
+                      pointerClass='VolumeMask',
+                      label='Apply mask to the 3D alignment ref. in each iter. (opt.)',
+                      allowsNull=True,
+                      help="Not applied to the average, which will follow normal EMAN's masking routine.")
+        form.addParam('maxRes', FloatParam,
+                      default=20,
+                      condition='doAlignment',
+                      important=True,
+                      label='Max. resolution (Å)',
+                      help='Maximum resolution (the smaller number) to consider in alignment (in Å).\n'
+                           'Since gold-standard validation is not used here, setting this parameter is mandatory.')
+        form.addParam('minRes', FloatParam,
+                      default=0,
+                      condition='doAlignment',
+                      label='Min. resolution (Å)',
+                      help='Minimum resolution (the larger number) to consider in alignment (in Å).')
         form.addParam('maxAng', IntParam,
-                      default=30,
-                      condition='doLocalRefine',
+                      default=-1,
+                      condition='doAlignment',
                       label='Maximum angular diff. (deg.)',
-                      help='maximum angle difference from starting point for local refine (in degrees)')
+                      help='maximum angle difference for local alignment (in degrees)')
         form.addParam('maxShift', IntParam,
                       default=-1,
-                      condition='doLocalRefine',
+                      condition='doAlignment',
                       label='Maximum shift (pix.)',
-                      help='If set to -1, it will be estimated as maxShift= boxSize/6.')
-        group = form.addGroup('Motion correction', condition='doLocalRefine')
-        group.addParam('smooth', IntParam,
-                       default=100,
-                       label='Smooth motion factor',
-                       help='Controls how many of its neighbors are considered to model the local motion. '
-                            'Smoother local motion with larger numbers.')
-        group.addParam('smoothN', IntParam,
-                       default=15,
-                       label='No. neighboring particles used for smoothing',
-                       help='Used to control how many of its neighbors are considered to model the local motion.')
+                      help='If set to -1, it will be estimated as maxShift=boxSize/6.')
 
         form.addSection(label='Extra params')
         form.addParam('threadsPostProc', IntParam,

@@ -28,8 +28,11 @@ import re
 from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
-    REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME
+    REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
+    FSC_MASKED_TIGHT_BNAME
+from emantomo.convert import emanFSCsToScipion
 from emantomo.objects import EmanParticle
+from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer
@@ -58,7 +61,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def convertTsStep(self, mdObj):
-        # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why the
+        # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
         if mdObj.ctf:
@@ -81,7 +84,6 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def createEmanPrjPostExtractionStep(self):
         inSubtomos = getattr(self, IN_SUBTOMOS).get()
-        self.inSamplingRate = inSubtomos.getSamplingRate()
         # Create project dir structure
         self.createInitEmanPrjDirs()
         infoDir = self.getInfoDir()
@@ -214,6 +216,15 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def getAli2dFile(self, iterNum):
         return self._getExtraPath(SPT_00_DIR, f'{ALI2D_BASENAME}{iterNum:02d}.lst')
+
+    def genFscs(self, iterNum):
+        sptPath = self._getExtraPath(SPT_00_DIR)
+        fscs = SetOfFSCs.create(self._getPath(), 'fsc%s.sqlite')
+        fscMasked = join(sptPath, f'{FSC_MASKED_BNAME}{iterNum:02d}.txt')
+        fscUnmasked = join(sptPath, f'{FSC_UNMASKED_BNAME}{iterNum:02d}.txt')
+        fscTight = join(sptPath, f'{FSC_MASKED_TIGHT_BNAME}{iterNum:02d}.txt')
+        emanFSCsToScipion(fscs, fscMasked, fscUnmasked, fscTight)
+        return fscs
 
     def getLastFromOutputPath(self, pattern):
         threedPaths = glob.glob(join(self.getRefineDir(), '*'))

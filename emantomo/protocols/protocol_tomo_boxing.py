@@ -40,7 +40,7 @@ from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 class EmanProtTomoBoxing(ProtTomoPicking):
     """ Manual picker for Tomo. Uses EMAN2 e2spt_boxer.py.
     """
-    _label = 'Subtomograms manual picking'
+    _label = 'Manual picking'
     _devStatus = BETA
 
     def __init__(self, **kwargs):

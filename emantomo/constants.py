@@ -71,6 +71,9 @@ THREED_01 = 'threed_01'
 SPTCLS_00_DIR = 'sptcls_00'
 ALI2D_BASENAME = 'aliptcls2d_'
 ALI3D_BASENAME = 'aliptcls3d_'
+FSC_MASKED_BNAME = 'fsc_masked_'
+FSC_UNMASKED_BNAME = 'fsc_unmasked_'
+FSC_MASKED_TIGHT_BNAME = 'fsc_maskedtight_'
 
 SYMMETRY_HELP_MSG = 'Supported symmetries are :\n\n' \
                     'Cn - single rotational n-fold symmetry axis\n' \
