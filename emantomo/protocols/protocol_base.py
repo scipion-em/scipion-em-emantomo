@@ -25,7 +25,7 @@
 # **************************************************************************
 import glob
 import re
-from os.path import join, abspath, basename
+from os.path import join, abspath, basename, realpath, relpath
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
@@ -54,6 +54,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.inParticles = None
         self.inSamplingRate = -1
         self.scaleFactor = 1
         self.voltage = 300
@@ -116,9 +117,56 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             self.convertOrLink(inRef.getFileName(), REFERENCE_NAME, '', inRef.getSamplingRate())
 
     def buildEmanSetsStep(self):
-        program = Plugin.getProgram("e2spt_buildsets.py")
-        args = '--allparticles '
-        self.runJob(program, args, cwd=self._getExtraPath())
+        # Prevent sub-setting: only the 3d HDF stacks are linked when initializing the corresponding protocols,
+        # covering partially the sub-setting functionality (as the stacks from which no particles are present in
+        # the subset won't appear in the EMAN project simulated in the current protocol). But, some particles can
+        # have been removed from the present stacks. Thus, a lst file is generated for all the stacks removing then
+        # the lines corresponding to non-present particle indices
+        present3dStacks = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '*.hdf'))
+        presentParticlesDict = {}
+        for i, stack3d in enumerate(present3dStacks):
+            stack3dRealPath = relpath(realpath(stack3d))
+            pathKey = join(PARTICLES_3D_DIR, basename(stack3d))
+            indList = []
+            for particle in self.inParticles.iterItems(where=f'_stack3dHdf="{stack3dRealPath}"'):
+                indList.append(str(particle.getIndex()))
+            presentParticlesDict[pathKey] = indList
+
+        buildSetProgram = Plugin.getProgram("e2spt_buildsets.py")
+        self.runJob(buildSetProgram, '--allparticles', cwd=self._getExtraPath())
+        particlesFile = join(self.getSetsDir(), f'{TOMOBOX}.lst')
+        with open(particlesFile, 'r') as inLst:
+            lines = inLst.readlines()
+
+        with open(particlesFile, 'w') as outLst:
+            for line in lines:
+                if line[0] == '#':
+                    outLst.write(line)
+                else:
+                    lineContentsList = line.strip().split('\t')
+                    particleInd = lineContentsList[0]
+                    filePath = lineContentsList[1]
+                    if particleInd in presentParticlesDict[filePath]:
+                        outLst.write(line)
+
+        # present3dStacks = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '*.hdf'))
+        # inLstFile = join(SETS_DIR, f'{TOMOBOX}.lst')
+        # lstFile2Merge = []
+        # for i, stack3d in enumerate(present3dStacks):
+        #     outLst = join(SETS_DIR, removeBaseExt(stack3d) + '.lst')
+        #     lstFile2Merge.append(outLst)
+        #     stack3dRealPath = relpath(realpath(stack3d))
+        #     self.runJob(buildSetProgram, join(PARTICLES_3D_DIR, basename(stack3d)), cwd=self._getExtraPath())
+        #     indList = []
+        #     for particle in self.inParticles.iterItems(where=f'_stack3dHdf="{stack3dRealPath}"'):
+        #         indList.append(str(particle.getIndex()))
+        #     args = f'{inLstFile} --create {outLst} --include {",".join(indList)}' #--inplace'
+        #     self.runJob(listProgram, args, cwd=self._getExtraPath())
+        #
+        # # Finally, merge all the lst files containing only the present particles into one file
+        # remove(self._getExtraPath(inLstFile))
+        # args = f'{" ".join(lstFile2Merge)} --merge {inLstFile}'
+        # self.runJob(listProgram, args, cwd=self._getExtraPath())
 
     # --------------------------- UTILS functions ----------------------------------
     def getObjByName(self, name):
@@ -219,7 +267,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def genFscs(self, iterNum):
         sptPath = self._getExtraPath(SPT_00_DIR)
-        fscs = SetOfFSCs.create(self._getPath(), 'fsc%s.sqlite')
+        fscs = SetOfFSCs.create(self._getPath(), template='fscs%s.sqlite')
         fscMasked = join(sptPath, f'{FSC_MASKED_BNAME}{iterNum:02d}.txt')
         fscUnmasked = join(sptPath, f'{FSC_UNMASKED_BNAME}{iterNum:02d}.txt')
         fscTight = join(sptPath, f'{FSC_MASKED_TIGHT_BNAME}{iterNum:02d}.txt')

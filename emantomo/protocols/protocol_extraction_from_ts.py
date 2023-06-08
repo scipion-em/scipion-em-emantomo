@@ -129,7 +129,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.extractParticlesStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
-            self._insertFunctionStep(self.getProjectionsStep, mdObj)
         self._insertFunctionStep(self.createOutputStep, mdObjDict)
 
     # --------------------------- STEPS functions -----------------------------
@@ -167,9 +166,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         inFile = join(PARTICLES_DIR, basename(stack2d))
         outFile = replaceExt(inFile, 'mrc')
         self.convertBetweenHdfAndMrc(inFile, outFile)
-        # cleanPattern(hdfFile)
 
-    def getProjectionsStep(self, mdObj):
+    def getProjections(self, mdObj):
         """load the corresponding HDF 2d stack file and read from the header the required data to create later a
         landmark model. To do that, the h5py module is used.
         """
@@ -180,7 +178,25 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # Add the required tsId as the first element of each sublist
         list(map(lambda sublist: sublist.insert(0, tsId), projList))  # More efficient than comprehension for huge
         # lists of lists, as expected
-        self.projectionsDict[tsId] = projList
+        return projList
+
+    def createLandmarkModelGaps(self, ts, tsProjections, fiducialSize):
+        tsId = ts.getTsId()
+        landmarkModelGapsFilePath = self._getExtraPath(str(tsId) + "_gaps.sfid")
+        landmarkModelGaps = LandmarkModel(tsId=tsId,
+                                          tiltSeriesPointer=ts,
+                                          fileName=landmarkModelGapsFilePath,
+                                          modelName=None,
+                                          size=fiducialSize,
+                                          applyTSTransformation=False)
+        landmarkModelGaps.setTiltSeries(ts)
+        for projection in tsProjections:
+            tiltId = projection[1] + 1
+            partId = projection[2] + 1
+            xCoord = round(projection[3])
+            yCoord = round(projection[4])
+            landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
+        return landmarkModelGaps
 
     def createOutputStep(self, mdObjDict):
         inCoordsPointer = getattr(self, IN_COORDS)
@@ -191,18 +207,30 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         subtomoSet = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
         subtomoSet.setSamplingRate(sRate)
         subtomoSet.setCoordinates3D(inCoords)
+
+        # Generate the fiducial model (for data visualization purpose)
+        fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
+        fiducialModelGaps.copyInfo(inTs)
+        fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
+        fiducialSize = round((inCoords.getBoxSize() / 2 * sRate) / 10)  # Box size is too large, a tenth of the radius
+
         for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
             tomoFile = mdObj.inTomo.getFileName()
             subtomoFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId))
             stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
             stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
+            # Get the projections
+            tsProjections = self.getProjections(mdObj)
+            landmarkModelGaps = self.createLandmarkModelGaps(mdObj.ts, tsProjections, fiducialSize)
+            fiducialModelGaps.append(landmarkModelGaps)
 
+            particleCounter = 0
             for coord, subtomoFile in zip(coords, subtomoFiles):
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
-                subtomogram.setLocation(subtomoFile)
+                subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
                 subtomogram.setSamplingRate(sRate)
                 subtomogram.setCoordinate3D(coord)
                 M = coord.getMatrix()
@@ -222,31 +250,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram.setStack2dHdf(stack2d)
                 subtomogram.setStack3dHdf(stack3d)
                 subtomoSet.append(subtomogram)
-
-        # Generate the fiducial model (for data visualization purpose)
-        fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
-        fiducialModelGaps.copyInfo(inTs)
-        fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
-
-        fiducialSize = round((inCoords.getBoxSize() / 2 * sRate) / 10)  # Box size is too large, a tenth of the radius
-        for ts in inTs:
-            tsId = ts.getTsId()
-            landmarkModelGapsFilePath = self._getExtraPath(str(tsId) + "_gaps.sfid")
-            landmarkModelGaps = LandmarkModel(tsId=tsId,
-                                              tiltSeriesPointer=ts,
-                                              fileName=landmarkModelGapsFilePath,
-                                              modelName=None,
-                                              size=fiducialSize,
-                                              applyTSTransformation=False)
-            landmarkModelGaps.setTiltSeries(ts)
-            tsProjections = self.projectionsDict[tsId]
-            for projection in tsProjections:
-                tiltId = projection[1] + 1
-                partId = projection[2] + 1
-                xCoord = round(projection[3])
-                yCoord = round(projection[4])
-                landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
-            fiducialModelGaps.append(landmarkModelGaps)
+                particleCounter += 1
 
         # Define outputs and relations
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: subtomoSet,

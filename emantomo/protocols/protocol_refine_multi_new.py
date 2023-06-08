@@ -149,7 +149,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     # --------------- STEPS functions -----------------------
     def refineStep(self):
-        program = Plugin.getProgram("e2spt_refine_new.py")
+        program = Plugin.getProgram("e2spt_refinemulti_new.py")
         self.runJob(program, self._genRefineCmd(), cwd=self._getExtraPath())
 
     # --------------------------- UTILS functions ------------------------------
