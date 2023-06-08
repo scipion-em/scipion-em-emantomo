@@ -1,8 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
-# *              Laura del Cano (ldelcano@cnb.csic.es) [1]
-# *              Josue Gomez Blanco (josue.gomez-blanco@mcgill.ca) [1]
+# * Authors:     Scipion Team (scipion@cnb.csic.es) [1]
 # *              Grigory Sharov (gsharov@mrc-lmb.cam.ac.uk) [2]
 # *
 # * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
@@ -107,47 +105,6 @@ def setWrongDefocus(ctfModel):
     ctfModel.setDefocusAngle(-999)
 
 
-def writeCTFModel(ctfObj, filename):
-    """ Write a CTFModel object as Xmipp .ctfparam"""
-    pass
-
-
-def jsonToCtfModel(ctfJsonFn, ctfModel):
-    """ Create a CTFModel from a json file """
-    mdFn = str(ctfJsonFn).replace('particles', 'info')
-    mdFn = mdFn.split('__ctf_flip')[0] + '_info.json'
-    if pwutils.exists(mdFn):
-        readCTFModel(ctfModel, mdFn)
-
-
-# def readSetOfCoordinates(workDir, micSet, coordSet, invertY=False, newBoxer=False):
-#     """ Read from Eman .json files.
-#     Params:
-#         workDir: where the Eman boxer output files are located.
-#         micSet: the SetOfMicrographs to associate the .json, which
-#             name should be the same of the micrographs.
-#         coordSet: the SetOfCoordinates that will be populated.
-#     """
-#     if newBoxer:
-#         # read boxSize from info/project.json
-#         jsonFnbase = pwutils.join(workDir, 'info', 'project.json')
-#         jsonBoxDict = loadJson(jsonFnbase)
-#         size = int(jsonBoxDict["global.boxsize"])
-#     else:
-#         # read boxSize from e2boxercache/base.json
-#         jsonFnbase = pwutils.join(workDir, 'e2boxercache', 'base.json')
-#         jsonBoxDict = loadJson(jsonFnbase)
-#         size = int(jsonBoxDict["box_size"])
-#
-#     jsonFninfo = pwutils.join(workDir, 'info/')
-#
-#     for mic in micSet:
-#         micBase = pwutils.removeBaseExt(mic.getFileName())
-#         micPosFn = ''.join(glob.glob(jsonFninfo + '*' + micBase + '_info.json'))
-#         readCoordinates(mic, micPosFn, coordSet, invertY)
-#     coordSet.setBoxSize(size)
-
-
 def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None,
                            origin=const.BOTTOM_LEFT_CORNER, scale=1, groupId=None):
     if "boxes_3d" in jsonBoxDict.keys():
@@ -169,25 +126,6 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
                 updateItem(newCoord)
 
             coord3DSet.append(newCoord)
-
-
-# def readCoordinates(mic, fileName, coordsSet, invertY=False):
-#     if pwutils.exists(fileName):
-#         jsonPosDict = loadJson(fileName)
-#
-#         if "boxes" in jsonPosDict:
-#             boxes = jsonPosDict["boxes"]
-#
-#             for box in boxes:
-#                 x, y = box[:2]
-#
-#                 if invertY:
-#                     y = mic.getYDim() - y
-#
-#                 coord = Coordinate()
-#                 coord.setPosition(x, y)
-#                 coord.setMicrograph(mic)
-#                 coordsSet.append(coord)
 
 
 def readCoordinate3D(box, inputTomo, origin=const.BOTTOM_LEFT_CORNER, scale=1):
@@ -254,15 +192,6 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         proc.kill()
 
 
-def getImageDimensions(imageFile):
-    """ This function will allow us to use EMAN2 to read some formats
-     not currently supported by the native image library (Xmipp).
-     Underneath, it will call a script to do the job.
-    """
-    proc = Plugin.createEmanProcess('e2ih.py', args=imageFile)
-    return tuple(map(int, proc.stdout.readline().split()))
-
-
 def convertImage(inputLoc, outputLoc):
     """ This function will allow us to use EMAN2 to write some formats
      not currently supported by the native image library (Xmipp).
@@ -283,15 +212,6 @@ def convertImage(inputLoc, outputLoc):
     proc = Plugin.createEmanProcess('e2ih.py', args='%s %s' % (_getFn(inputLoc),
                                                                _getFn(outputLoc)))
     proc.wait()
-
-
-def iterLstFile(filename):
-    with open(filename) as f:
-        for line in f:
-            if '#' not in line:
-                # Decompose Eman filename
-                index, filename = int(line.split()[0]) + 1, line.split()[1]
-                yield index, filename
 
 
 def geometryFromMatrix(matrix, inverseTransform, axes='szyz'):
@@ -365,49 +285,6 @@ def rowToAlignment(alignmentList, alignType):
     alignment.setMatrix(matrix)
 
     return alignment
-
-
-# def iterParticlesByMic(partSet):
-#     """ Iterate the particles ordered by micrograph """
-#     for i, part in enumerate(partSet.iterItems(orderBy=['_micId', 'id'],
-#                                                direction='ASC')):
-#         yield i, part
-
-
-def iterSubtomogramsByVol(subtomogramSet):
-    """ Iterate subtomograms ordered by tomogram """
-    items = [subtomo.clone() for subtomo in subtomogramSet.iterItems(orderBy=['_volId', 'id'], direction='ASC')]
-    for i, part in enumerate(items):
-        yield i, part
-
-
-def convertReferences(refSet, outputFn):
-    """ Simplified version of writeSetOfParticles function.
-    Writes out an hdf stack.
-    """
-    fileName = ""
-    a = 0
-    proc = Plugin.createEmanProcess(args='write')
-
-    for part in refSet:
-        objDict = part.getObjDict()
-        objDict['hdfFn'] = outputFn
-        objDict['_itemId'] = part.getObjId()
-
-        # the index in EMAN begins with 0
-        if fileName != objDict['_filename']:
-            fileName = objDict['_filename']
-            if objDict['_index'] == 0:
-                a = 0
-            else:
-                a = 1
-        objDict['_index'] = int(objDict['_index'] - a)
-
-        # Write the e2converter.py process from where to read the image
-        print(json.dumps(objDict), file=proc.stdin)
-        proc.stdin.flush()
-        proc.stdout.readline()
-    proc.kill()
 
 
 def calculatePhaseShift(ampcont):

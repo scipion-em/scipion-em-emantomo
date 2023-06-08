@@ -98,6 +98,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
                       label='Do alignment?')
         form.addParam('maskAlign', PointerParam,
                       pointerClass='VolumeMask',
+                      condition='doAlignment',
                       label='Apply mask to the 3D alignment ref. in each iter. (opt.)',
                       allowsNull=True,
                       help="Not applied to the average, which will follow normal EMAN's masking routine.")
