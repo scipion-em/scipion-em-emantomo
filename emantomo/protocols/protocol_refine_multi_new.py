@@ -171,8 +171,8 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             args += '--goldstandard '
         else:
             args += '--goldcontinue '
-            args += '--loadali2d %s ' % inParticles.getAli2d()
-            args += '--loadali3d %s ' % inParticles.getAli3d()
+            args += '--loadali2d %s ' % inParticles.getAli2dLstFile()
+            args += '--loadali3d %s ' % inParticles.getAli3dLstFile()
         # Local refinement params
         if self.doLocalRefine.get():
             args += '--localrefine '
@@ -201,6 +201,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         contain an ali2d nor ali3d files in the corresponding attributes.
         """
         inParticles = getattr(self, IN_SUBTOMOS).get()
-        return True if not inParticles.getAli2d() and not inParticles.getAli3d() else False
+        return True if not inParticles.getAli2dLstFile() and not inParticles.getAli3dLstFile() else False
 
     # --------------------------- INFO functions --------------------------------

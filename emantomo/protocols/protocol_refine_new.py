@@ -24,22 +24,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import ast
-import json
 from enum import Enum
-import numpy as np
 from emantomo import Plugin
 from emantomo.convert import convertBetweenHdfAndMrc
+from emantomo.convert.lstAlignConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
-from pwem.objects import SetOfFSCs, Transform
-from pyworkflow.object import Float
+from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
-from tomo.constants import TR_EMAN
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, PARTICLE_FILE, SCORE, MATRIX, PARTICLE_IND, \
-    DEFOCUS, CLASS, PROJ_MATRIX, PART3D_ID, TILT_ID, ROT_TR_MATRIX, TR_MATRIX, EMAN_SCORE
+from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME
 
 # 3D maps filtering options
 WIENER = 'wiener'
@@ -226,12 +221,9 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         # Output 2: aligned particles
         outParticles = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
         outParticles.copyInfo(self.inParticles)
-        align3dData = self.parse3dAlignFile()
-        for particle, alignDict in zip(self.inParticles, align3dData):
-            outParticle = particle.clone()
-            setattr(outParticle, EMAN_SCORE, Float(alignDict[SCORE]))
-            outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
-            outParticles.append(outParticle)
+        outParticles.setAli2dLstFile(self.ali2dLst)
+        outParticles.setAli3dLstFile(self.ali3dLst)
+        EmanLstReader.align3dLst2Scipion(self.ali3dLst, self.inParticles, outParticles)
 
         # Output 3: FSCs
         fscs = self.genFscs(self.noIters)
@@ -263,8 +255,8 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
             args += '--goldstandard '
         else:
             args += '--goldcontinue '
-            args += '--loadali2d %s ' % self.inParticles.getAli2d()
-            args += '--loadali3d %s ' % self.inParticles.getAli3d()
+            args += '--loadali2d %s ' % self.inParticles.getAli2dLstFile()
+            args += '--loadali3d %s ' % self.inParticles.getAli3dLstFile()
         # Local refinement params
         if self.doLocalRefine.get():
             args += '--localrefine '
@@ -292,7 +284,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         Thus, we'll apply it if it is the first refinement, which means that the set of particles introduced do not
         contain an ali2d nor ali3d files in the corresponding attributes.
         """
-        return True if not self.inParticles.getAli2d() and not self.inParticles.getAli3d() else False
+        return True if not self.inParticles.getAli2dLstFile() and not self.inParticles.getAli3dLstFile() else False
 
     def _getNoIters(self):
         """From Eman doc: Default is p,p,p,t,p,p,t,r,d. Character followed by number is also acceptable. p3 = p,p,p."""
@@ -311,57 +303,5 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         iterStr = self.iters.get()
         itersList = iterStr.split(',')
         return len(itersList) - itersList[::-1].index("p")
-
-    def parse3dAlignFile(self):
-        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, ROT_TR_MATRIX]
-        list_of_lists = []
-        lastRow = np.array([0, 0, 0, 1])
-
-        with open(self.ali3dLst, 'r') as f:
-            for line in f:
-                lineContentsList = line.split('\t')
-                if len(lineContentsList) > 1:  # There are some explicative lines at the beginning
-                    jsonData = json.loads(lineContentsList[2])
-                    matrixAsList = ast.literal_eval(jsonData[ROT_TR_MATRIX][MATRIX])
-                    matrix = np.array(matrixAsList).reshape(3, 4)
-                    matrix = np.vstack([matrix, lastRow])
-                    list_of_lists.append([
-                        lineContentsList[0],
-                        lineContentsList[1],
-                        jsonData[SCORE],
-                        matrix])
-
-        # Create a list of dictionaries based on the lists filled before
-        return [dict(zip(keys, values)) for values in list_of_lists]
-
-    def parse2dAlignFile(self):
-        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, CLASS, DEFOCUS,
-                PART3D_ID, TILT_ID, TR_MATRIX, PROJ_MATRIX]
-        list_of_lists = []
-        lastRow = np.array([0, 0, 0, 1])
-
-        with open(self.ali2dLst, 'r') as f:
-            for line in f:
-                lineContentsList = line.split('\t')
-                if len(lineContentsList) > 1:
-                    jsonData = json.loads(lineContentsList[2])
-                    particleInd = lineContentsList[0]
-                    particleFile = lineContentsList[1]
-                    nClass = jsonData[CLASS]
-                    defocus = jsonData[DEFOCUS]
-                    trMatrix = ast.literal_eval(jsonData['dxf'][MATRIX])
-                    trMatrix = np.array(trMatrix).reshape(3, 4)
-                    trMatrix = np.vstack([trMatrix, lastRow])
-                    ptcl3dId = jsonData[PART3D_ID]
-                    score = jsonData[SCORE]
-                    tiltId = jsonData[TILT_ID]
-                    projMatrix = ast.literal_eval(jsonData[PROJ_MATRIX][MATRIX])
-                    projMatrix = np.array(projMatrix).reshape(3, 4)
-                    projMatrix = np.vstack([projMatrix, lastRow])
-                    list_of_lists.append(
-                        [particleInd, particleFile, score, nClass, defocus, ptcl3dId, tiltId, trMatrix, projMatrix])
-
-        # Create a list of dictionarys based on the lists filled before
-        return [dict(zip(keys, values)) for values in list_of_lists]
 
     # --------------------------- INFO functions --------------------------------
