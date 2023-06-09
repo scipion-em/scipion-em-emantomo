@@ -29,7 +29,7 @@ import json
 import numpy as np
 
 from emantomo.constants import PARTICLE_IND, PARTICLE_FILE, ROT_TR_MATRIX, SCORE, MATRIX, EMAN_SCORE, CLASS, DEFOCUS, \
-    PART3D_ID, TR_MATRIX, PROJ_MATRIX, TILT_ID
+    PART3D_ID, TR_MATRIX, PROJ_MATRIX, TILT_ID, LST_LINE
 from pwem.objects import Transform
 from pyworkflow.object import Float
 from tomo.constants import TR_EMAN
@@ -38,7 +38,7 @@ from tomo.constants import TR_EMAN
 class EmanLstReader:
 
     @staticmethod
-    def align3dLst2Scipion(lstFileName, inParticles, outParticles):
+    def read(lstFileName):
         """Reads an existing 3d alignment LST file. Example of the file contents:
 
         #LSX
@@ -49,11 +49,17 @@ class EmanLstReader:
         [...]
 
         :param lstFileName: path of the LST file.
-        :param inParticles: input EmanSetOfParticles.
-        :param outParticles: output EmanSetOfParticles, expected to contain the set info. It will be filled here with
-        the updated particles.
+        :returns: a list of dictionaries based on the lists filled before, one for each line (3d particle) following
+        each element this structure:
+                {
+                PARTICLE_IND: particle index in the corresponding 3d HDF file stack,
+                PARTICLE_FILE: path of the 3d HDF stack containing the current particle,
+                SCORE: EMAN's calculated score,
+                ROT_TR_MATRIX: 3d transformation matrix calculated by EMAN.
+                LST_LINE: current line as in the original file. Useful for sub-setting.
+                }
         """
-        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, ROT_TR_MATRIX]
+        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, ROT_TR_MATRIX, LST_LINE]
         list_of_lists = []
         lastRow = np.array([0, 0, 0, 1])
 
@@ -69,19 +75,29 @@ class EmanLstReader:
                         lineContentsList[0],
                         lineContentsList[1],
                         jsonData[SCORE],
-                        matrix])
+                        matrix,
+                        line
+                    ])
+                else:  # Header lines (required to replicate file when sub-setting)
+                    list_of_lists.append([
+                        None,
+                        None,
+                        None,
+                        None,
+                        line
+                    ])
 
-        # Create a list of dictionaries based on the lists filled before, one for each line (3d particle) following
-        # each element this structure:
-        #         {
-        #         PARTICLE_IND: particle index in the corresponding 3d HDF file stack,
-        #         PARTICLE_FILE: path of the 3d HDF stack containing the current particle,
-        #         SCORE: EMAN's calculated score,
-        #         ROT_TR_MATRIX: 3d transformation matrix calculated by EMAN.
-        #         }
-        align3dData = [dict(zip(keys, values)) for values in list_of_lists]
+        return [dict(zip(keys, values)) for values in list_of_lists]
 
-        # Fill the output set of particles with the info read before
+    @staticmethod
+    def align3dLst2Scipion(lstFileName, inParticles, outParticles):
+        """Converts the data from an existing EMAN's 3d align LST file into a Scipion EmanSetOfParticles object.
+        :param lstFileName: path of the LST file.
+        :param inParticles: input EmanSetOfParticles.
+        :param outParticles: output EmanSetOfParticles, expected to contain the set info. It will be filled here with
+        the updated particles.
+        """
+        align3dData = EmanLstReader.read(lstFileName)
         for particle, alignDict in zip(inParticles, align3dData):
             outParticle = particle.clone()
             setattr(outParticle, EMAN_SCORE, Float(alignDict[SCORE]))
@@ -99,8 +115,23 @@ class EmanLstReader:
         1	particles/ts_25__tomobox.hdf	{"class":0,"defocus":0,"dxf":{"__class__":"Transform","matrix":"[1,0,0,-1.24626,-0,1,0,0.130769,0,-0,1,0]"},"ptcl3d_id":0,"score":-0.5650576706552629,"tilt_id":1,"xform.projection":{"__class__":"Transform","matrix":"[0.995015,-0.0643083,-0.0762159,0.701939,-0.0284292,-0.9155,0.401314,-3.81944,-0.095584,-0.397146,-0.912765,5.72374]"}}
         [...]
 
+        :returns: a list of dictionaries based on the lists filled before, one for each line (3d particle) following
+        each element this structure:
+                {
+                PARTICLE_IND: particle index in the corresponding 2d HDF file stack,
+                PARTICLE_FILE: path of the 3d HDF stack containing the current particle,
+                SCORE: EMAN's calculated score,
+                CLASS: class number,
+                DEFOCUS: defocus value,
+                PART3D_ID: index of the corresponding 3d particle in the HDF stack file
+                TILT_ID: index of the tilt image in the corresponding stack,
+                TR_MATRIX: translation matrix,
+                PROJ_MATRIX: projection matrix.
+                LST_LINE: current line as in the original file. Useful for sub-setting.
+                }
         """
-        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, CLASS, DEFOCUS, PART3D_ID, TILT_ID, TR_MATRIX, PROJ_MATRIX]
+        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, CLASS, DEFOCUS, PART3D_ID, TILT_ID, TR_MATRIX,
+                PROJ_MATRIX, LST_LINE]
         list_of_lists = []
         lastRow = np.array([0, 0, 0, 1])
 
@@ -123,22 +154,10 @@ class EmanLstReader:
                     projMatrix = np.array(projMatrix).reshape(3, 4)
                     projMatrix = np.vstack([projMatrix, lastRow])
                     list_of_lists.append(
-                        [particleInd, particleFile, score, nClass, defocus, ptcl3dId, tiltId, trMatrix, projMatrix])
+                        [particleInd, particleFile, score, nClass, defocus, ptcl3dId, tiltId,
+                         trMatrix, projMatrix, line])
 
-        # Create a list of dictionaries based on the lists filled before, one for each line (3d particle) following
-        # each element this structure:
-        #         {
-        #         PARTICLE_IND: particle index in the corresponding 3d HDF file stack,
-        #         PARTICLE_FILE: path of the 3d HDF stack containing the current particle,
-        #         SCORE: EMAN's calculated score,
-        #         CLASS: class number,
-        #         DEFOCUS: defocus value,
-        #         TILT_ID: index of the tilt image in the corresponding stack,
-        #         TR_MATRIX: translation matrix,
-        #         PROJ_MATRIX: projection matrix.
-        #         }
-        alifn2dData = [dict(zip(keys, values)) for values in list_of_lists]
-        # TODO: finish the method once the scipion object for the tilt particles is ready
+        return [dict(zip(keys, values)) for values in list_of_lists]
 
 
 class EmanLstWriter:

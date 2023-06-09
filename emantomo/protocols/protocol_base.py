@@ -29,13 +29,14 @@ from os.path import join, abspath, basename, realpath, relpath
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
-    FSC_MASKED_TIGHT_BNAME
+    FSC_MASKED_TIGHT_BNAME, LST_LINE, PARTICLE_IND, PARTICLE_FILE, PART3D_ID
 from emantomo.convert import emanFSCsToScipion
-from emantomo.objects import EmanParticle
+from emantomo.convert.lstAlignConvert import EmanLstReader
+from emantomo.objects import EmanParticle, EmanSetOfParticles
 from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
-from pyworkflow.object import Pointer
+from pyworkflow.object import Pointer, String
 from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
@@ -149,24 +150,36 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                     if particleInd in presentParticlesDict[filePath]:
                         outLst.write(line)
 
-        # present3dStacks = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '*.hdf'))
-        # inLstFile = join(SETS_DIR, f'{TOMOBOX}.lst')
-        # lstFile2Merge = []
-        # for i, stack3d in enumerate(present3dStacks):
-        #     outLst = join(SETS_DIR, removeBaseExt(stack3d) + '.lst')
-        #     lstFile2Merge.append(outLst)
-        #     stack3dRealPath = relpath(realpath(stack3d))
-        #     self.runJob(buildSetProgram, join(PARTICLES_3D_DIR, basename(stack3d)), cwd=self._getExtraPath())
-        #     indList = []
-        #     for particle in self.inParticles.iterItems(where=f'_stack3dHdf="{stack3dRealPath}"'):
-        #         indList.append(str(particle.getIndex()))
-        #     args = f'{inLstFile} --create {outLst} --include {",".join(indList)}' #--inplace'
-        #     self.runJob(listProgram, args, cwd=self._getExtraPath())
-        #
-        # # Finally, merge all the lst files containing only the present particles into one file
-        # remove(self._getExtraPath(inLstFile))
-        # args = f'{" ".join(lstFile2Merge)} --merge {inLstFile}'
-        # self.runJob(listProgram, args, cwd=self._getExtraPath())
+        # Do the same with the 2d and 3d align files if necessary
+        align3dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_3D, String()).get()
+        align2dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_2D, String()).get()
+        if align3dFile:
+            new3dAlignFile = self.getNewAliFile()
+            dataDictList = EmanLstReader.read(align3dFile)
+            with open(new3dAlignFile, 'w') as out3dAlign:
+                for dataDict in dataDictList:
+                    line = dataDict[LST_LINE]
+                    if line[0] == '#':
+                        out3dAlign.write(line)
+                    else:
+                        particleInd = dataDict[PARTICLE_IND]
+                        filePath = dataDict[PARTICLE_FILE]
+                        if particleInd in presentParticlesDict[filePath]:
+                            out3dAlign.write(line)
+
+        if align2dFile:
+            new2dAlignFile = self.getNewAliFile(is3d=False)
+            dataDictList = EmanLstReader.read(align2dFile)
+            with open(new2dAlignFile, 'w') as out2dAlign:
+                for dataDict in dataDictList:
+                    line = dataDict[LST_LINE]
+                    if line[0] == '#':
+                        out2dAlign.write(line)
+                    else:
+                        particle3dInd = dataDict[PART3D_ID]
+                        filePath = dataDict[PARTICLE_FILE].replace(PARTICLES_DIR, PARTICLES_3D_DIR)
+                        if particle3dInd in presentParticlesDict[filePath]:
+                            out2dAlign.write(line)
 
     # --------------------------- UTILS functions ----------------------------------
     def getObjByName(self, name):
@@ -218,6 +231,10 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def getRefineDir(self):
         return self._getExtraPath(SPT_00_DIR)
+
+    def getNewAliFile(self, is3d=True):
+        fName = 'iniAlign3d.lst' if is3d else 'iniAlign2d.lst'
+        return join(self.getRefineDir(), fName)
 
     def getAttrib(self, attribName, getPointer=False):
         attribPointer = getattr(self, attribName)

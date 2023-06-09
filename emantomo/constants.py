@@ -47,6 +47,7 @@ TILT_ID = 'tilt_id'
 PROJ_MATRIX = 'xform.projection'
 ROT_TR_MATRIX = 'xform.align3d'
 TR_MATRIX = 'translationMatrix'
+LST_LINE = 'lstLine'
 
 # Directories and files of an EMAN project
 INFO_DIR = 'info'
