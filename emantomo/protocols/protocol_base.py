@@ -135,7 +135,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
         buildSetProgram = Plugin.getProgram("e2spt_buildsets.py")
         self.runJob(buildSetProgram, '--allparticles', cwd=self._getExtraPath())
-        particlesFile = join(self.getSetsDir(), f'{TOMOBOX}.lst')
+        particlesFile = glob.glob(join(self.getSetsDir(), '*.lst'))[0]  # There should be only 1 LST file at this point
         with open(particlesFile, 'r') as inLst:
             lines = inLst.readlines()
 

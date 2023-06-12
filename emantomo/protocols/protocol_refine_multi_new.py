@@ -25,23 +25,15 @@
 # *
 # **************************************************************************
 from enum import Enum
-from os.path import join
+from os.path import exists
 
 from emantomo import Plugin
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, SETS_DIR, REFERENCE_NAME
-
-# # 3D maps filtering options
-# WIENER = 'wiener'
-# GLOBAL = 'global'
-# LOCAL_WIENER = 'localwiener'
-# LOCAL = 'local'
-# filteringKeys = [WIENER, GLOBAL, LOCAL_WIENER, LOCAL]
-# mapFilterDict = dict(zip(filteringKeys, range(len(filteringKeys))))
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS
+from emantomo.constants import SYMMETRY_HELP_MSG
 
 
 class EmanRefineNewOutputs(Enum):
@@ -58,6 +50,8 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     _label = 'Multi-reference classification'
     _possibleOutputs = EmanRefineNewOutputs
+    maskRefOutName = 'maskRef'
+    maskAlignOutName = 'maskAlign'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -142,65 +136,66 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
-        self._insertFunctionStep(super().createEmanPrjPostExtractionStep)
-        self._insertFunctionStep(super().convertRefVolStep)
-        self._insertFunctionStep(super().buildEmanSetsStep)
-        self._insertFunctionStep(self.refineStep)
+        self._initialize()
+        self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
+        self._insertFunctionStep(self.convertReferencesStep)
+        self._insertFunctionStep(self.buildEmanSetsStep)
+        self._insertFunctionStep(self.refineMultiStep)
 
     # --------------- STEPS functions -----------------------
-    def refineStep(self):
+    def _initialize(self):
+        self.inParticles = self.getAttrib(IN_SUBTOMOS)
+        self.inSamplingRate = self.inParticles.getSamplingRate()
+
+    def convertReferencesStep(self):
+        maskRef = self.maskRef.get()
+        maskAlign = self.maskAlign.get()
+        if maskRef:
+            self.convertOrLink(maskRef.getFileName(), self.maskRefOutName, self._getExtraPath(), self.inSamplingRate)
+        if maskAlign:
+            self.convertOrLink(maskAlign.getFileName(), self.maskAlignOutName, self._getExtraPath(),
+                               self.inSamplingRate)
+
+    def refineMultiStep(self):
         program = Plugin.getProgram("e2spt_refinemulti_new.py")
-        self.runJob(program, self._genRefineCmd(), cwd=self._getExtraPath())
+        self.runJob(program, self._genRefineMultiCmd(), cwd=self._getExtraPath())
 
     # --------------------------- UTILS functions ------------------------------
-    def _genRefineCmd(self):
-        inParticles = getattr(self, IN_SUBTOMOS).get()
-        # Input params
-        args = '--ptcls %s ' % self._getLstFile()
-        if self.getRefVol():
-            args += '--ref %s ' % (REFERENCE_NAME + '.hdf')
-        args += '--startres %.2f ' % self.startRes.get()
-        # Refinement params
-        args += '--iters %s ' % self.iters.get()
-        args += '--sym %s ' % self.symmetry.get()
-        args += '--keep %.2f ' % self.pkeep.get()
-        args += '--tophat %s ' % mapFilterDict[filteringKeys[self.topHat.get()]]
-        args += '--maxres %.2f ' % self.maxResAli.get()
-        args += '--minres %.2f ' % self.minResAli.get()
-        if self._doGoldStandard():
-            args += '--goldstandard '
+    def _genRefineMultiCmd(self):
+        hdf = '.hdf'
+        refMask = self.maskRef.get()
+        alignMask = self.maskAlign.get()
+        breakSym = self.breakSym.get()
+        new2dAlignFile = self.getNewAliFile(is3d=False)
+        new3dAlignFile = self.getNewAliFile()
+        args = [
+            f'--ptcls {self._getLstFile()}',
+            f'--nref {self.nClasses.get()}',
+            f'--niter {self.nIter.get()}',
+            f'--sym {self.symmetry.get()}',
+            f'--parallel=thread:{self.numberOfThreads.get()}',
+            f'--threads {self.threadsPostProc.get()}'
+        ]
+        if exists(new3dAlignFile):
+            args.append(f'--loadali3d {new3dAlignFile}')
+        if exists(new2dAlignFile):
+            args.append(f'--loadali2d {new2dAlignFile}')
+        if refMask:
+            args.append(f'--maskref {self.maskRefOutName + hdf}')
+        if breakSym:
+            args.append(f'--breaksym {breakSym}')
+        if self.doAlignment.get():
+            args.append(f'--maxRes {self.maxRes.get():.2f}')
+            args.append(f'--minRes {self.minRes.get():.2f}')
+            args.append(f'--maxang {self.maxAng.get()}')
+            args.append(f'--maxshift {self.maxShift.get()}')
+            if alignMask:
+                args.append(f'--maskalign {self.maskAlignOutName + hdf}')
         else:
-            args += '--goldcontinue '
-            args += '--loadali2d %s ' % inParticles.getAli2dLstFile()
-            args += '--loadali3d %s ' % inParticles.getAli3dLstFile()
-        # Local refinement params
-        if self.doLocalRefine.get():
-            args += '--localrefine '
-            args += '--maxang %i ' % self.maxAng.get()
-            args += '--maxshift %i ' % self.maxShift.get()
-            args += '--smooth %.2f ' % self.sooth.get()
-            args += '--smoothN %i ' % self.smoothN.get()
-        # Extra params
-        args += '--parallel=thread:%i ' % self.numberOfThreads.get()
-        args += '--threads %i ' % self.threadsPostProc.get()
+            args.append('--skipali')
         if self.make3dThread.get():
-            args += '--m3dthread '
-        if self.extraParams.get():
-            args += '%s ' % self.extraParams.get()
-        args += '--verbose 9 '
-        return args
+            args.append('--m3dthread')
+        return ' '.join(args)
 
-    def _doGoldStandard(self):
-        """
-        From EMAN doc:
-            - goldstandard: "Phase randomize the reference to the starting resolution (--startres) independently for
-              the even/odd subsets of particles".
-            - goldcontinue: "Continue from previous gold standard refinement. Ues the _even/_odd version of the given
-              reference".
-        Thus, we'll apply it if it is the first refinement, which means that the set of particles introduced do not
-        contain an ali2d nor ali3d files in the corresponding attributes.
-        """
-        inParticles = getattr(self, IN_SUBTOMOS).get()
-        return True if not inParticles.getAli2dLstFile() and not inParticles.getAli3dLstFile() else False
 
     # --------------------------- INFO functions --------------------------------

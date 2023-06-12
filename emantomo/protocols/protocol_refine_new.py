@@ -25,6 +25,8 @@
 # *
 # **************************************************************************
 from enum import Enum
+from os.path import exists
+
 from emantomo import Plugin
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.convert.lstAlignConvert import EmanLstReader
@@ -239,40 +241,47 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
     # --------------------------- UTILS functions ------------------------------
     def _genRefineCmd(self):
+        new2dAlignFile = self.getNewAliFile(is3d=False)
+        new3dAlignFile = self.getNewAliFile()
         # Input params
-        args = '--ptcls %s ' % self._getLstFile()
+        args = [f'--ptcls {self._getLstFile()}']
         if self.getRefVol():
-            args += '--ref %s ' % (REFERENCE_NAME + '.hdf')
-        args += '--startres %.2f ' % self.startRes.get()
+            args.append(f'--ref {REFERENCE_NAME}.hdf')
+        args.append(f'--startres {self.startRes.get():.2f}')
         # Refinement params
-        args += '--iters %s ' % self.iters.get()
-        args += '--sym %s ' % self.symmetry.get()
-        args += '--keep %.2f ' % self.pkeep.get()
-        args += '--tophat %s ' % mapFilterDict[filteringKeys[self.topHat.get()]]
-        args += '--maxres %.2f ' % self.maxResAli.get()
-        args += '--minres %.2f ' % self.minResAli.get()
+        args.append(f'--iters {self.iters.get()}')
+        args.append(f'--sym {self.symmetry.get()}')
+        args.append(f'--keep {self.pkeep.get():.2f}')
+        args.append(f'--tophat {mapFilterDict[filteringKeys[self.topHat.get()]]}')
+        args.append(f'--maxres {self.maxResAli.get():.2f}')
+        args.append(f'--minres {self.minResAli.get():.2f}')
+        if exists(new3dAlignFile):
+            args.append(f'--loadali3d {new3dAlignFile}')
+        if exists(new2dAlignFile):
+            args.append(f'--loadali2d {new2dAlignFile}')
         if self._doGoldStandard():
-            args += '--goldstandard '
+            args.append('--goldstandard')
         else:
-            args += '--goldcontinue '
-            args += '--loadali2d %s ' % self.inParticles.getAli2dLstFile()
-            args += '--loadali3d %s ' % self.inParticles.getAli3dLstFile()
+            args.append('--goldcontinue')
+            args.append(f'--loadali2d {self.inParticles.getAli2dLstFile()}')
+            args.append(f'--loadali3d {self.inParticles.getAli3dLstFile()}')
         # Local refinement params
         if self.doLocalRefine.get():
-            args += '--localrefine '
-            args += '--maxang %i ' % self.maxAng.get()
-            args += '--maxshift %i ' % self.maxShift.get()
-            args += '--smooth %.2f ' % self.sooth.get()
-            args += '--smoothN %i ' % self.smoothN.get()
+            args.append('--localrefine')
+            args.append(f'--maxang {self.maxAng.get()}')
+            args.append(f'--maxshift {self.maxShift.get()}')
+            args.append(f'--smooth {self.sooth.get():.2f}')
+            args.append(f'--smoothN {self.smoothN.get()}')
         # Extra params
-        args += '--parallel=thread:%i ' % self.numberOfThreads.get()
-        args += '--threads %i ' % self.threadsPostProc.get()
+        args.append(f'--parallel=thread:{self.numberOfThreads.get()}')
+        args.append(f'--threads {self.threadsPostProc.get()}')
         if self.make3dThread.get():
-            args += '--m3dthread '
+            args.append('--m3dthread')
         if self.extraParams.get():
-            args += '%s ' % self.extraParams.get()
-        args += '--verbose 9 '
-        return args
+            args.append(self.extraParams.get())
+        args.append('--verbose 9')
+
+        return ' '.join(args)
 
     def _doGoldStandard(self):
         """
