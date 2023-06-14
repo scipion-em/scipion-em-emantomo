@@ -23,7 +23,7 @@
 # *
 # **************************************************************************
 import h5py
-from pyworkflow.object import String
+from pyworkflow.object import String, Float
 from tomo.objects import SetOfSubTomograms, SubTomogram
 
 
@@ -82,14 +82,17 @@ class EmanParticle(SubTomogram):
     TOMO_HDF = '_tomoHdf'
     STACK_2D_HDF = '_stack2dHdf'
     STACK_3D_HDF = '_stack3dHdf'
+    EMAN_SCORE = '_emanScore'
 
-    def __init__(self, infoJson=None, tsHdf=None, tomoHdf=None, stack2dHdf=None, stack3dHdf=None, **kwargs):
+    def __init__(self, infoJson=None, tsHdf=None, tomoHdf=None, stack2dHdf=None, stack3dHdf=None,
+                 emanScore=0, **kwargs):
         super().__init__(**kwargs)
         self._infoJson = String(infoJson)
         self._tsHdf = String(tsHdf)
         self._tomoHdf = String(tomoHdf)
         self._stack2dHdf = String(stack2dHdf)
         self._stack3dHdf = String(stack3dHdf)
+        self._emanScore = Float(emanScore)
 
     def setInfoJson(self, val):
         self._infoJson.set(val)
@@ -106,6 +109,9 @@ class EmanParticle(SubTomogram):
     def setStack3dHdf(self, val):
         self._stack3dHdf.set(val)
 
+    def setEmanScore(self, val):
+        self._emanScore.set(val)
+
     def getInfoJson(self):
         return self._infoJson.get()
 
@@ -120,6 +126,10 @@ class EmanParticle(SubTomogram):
 
     def getStack3dHdf(self):
         return self._stack3dHdf.get()
+
+    def getEmanScore(self):
+        return self._emanScore.get()
+
 
 
 class EmanSetOfParticles(SetOfSubTomograms):

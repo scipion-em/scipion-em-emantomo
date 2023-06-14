@@ -25,20 +25,20 @@
 # **************************************************************************
 import ast
 import json
-
+from os.path import basename, join
 import numpy as np
-
-from emantomo.constants import PARTICLE_IND, PARTICLE_FILE, ROT_TR_MATRIX, SCORE, MATRIX, EMAN_SCORE, CLASS, DEFOCUS, \
-    PART3D_ID, TR_MATRIX, PROJ_MATRIX, TILT_ID, LST_LINE
+from emantomo.constants import PARTICLE_IND, PARTICLE_FILE, ROT_TR_MATRIX, SCORE, MATRIX, CLASS, DEFOCUS, \
+    PART3D_ID, TR_MATRIX, PROJ_MATRIX, TILT_ID, LST_LINE, PARTICLES_3D_DIR
+from emantomo.utils import getPresentPrecedents
 from pwem.objects import Transform
-from pyworkflow.object import Float
 from tomo.constants import TR_EMAN
+from tomo.objects import Coordinate3D
 
 
 class EmanLstReader:
 
     @staticmethod
-    def read(lstFileName):
+    def read3dParticles(lstFileName):
         """Reads an existing 3d alignment LST file. Example of the file contents:
 
         #LSX
@@ -97,15 +97,15 @@ class EmanLstReader:
         :param outParticles: output EmanSetOfParticles, expected to contain the set info. It will be filled here with
         the updated particles.
         """
-        align3dData = EmanLstReader.read(lstFileName)
+        align3dData = EmanLstReader.read3dParticles(lstFileName)
         for particle, alignDict in zip(inParticles, align3dData):
             outParticle = particle.clone()
-            setattr(outParticle, EMAN_SCORE, Float(alignDict[SCORE]))
             outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
+            outParticle.setEmanScore(alignDict[SCORE])
             outParticles.append(outParticle)
 
     @staticmethod
-    def align2dLst2Scipion(lstFileName):
+    def read2dParticles(lstFileName):
         """Reads an existing 2d alignment LST file. Example of the file contents:
 
         #LSX
@@ -162,5 +162,86 @@ class EmanLstReader:
 
 class EmanLstWriter:
 
-    def scipion2Align3dLst(self):
-        pass
+    @staticmethod
+    def writeSimpleLst(emanParticles, outLstFileName):
+        """Writes a simple list of particle files in LST format. Example:
+
+        #LSX
+        # This file is in fast LST format. All lines after the next line have exactly the number of characters shown on the next line. This MUST be preserved if editing.
+        # 37
+        0	particles3d/tomoa__tomobox.hdf
+        1	particles3d/tomoa__tomobox.hdf
+        0	particles3d/tomoc__tomobox.hdf
+        1	particles3d/tomoc__tomobox.hdf
+        2	particles3d/tomoc__tomobox.hdf
+        3	particles3d/tomoc__tomobox.hdf
+
+        Thus, only the stack file and the particle index in the corresponding stack are required.
+
+        """
+        # Get the 3d stacks present in the introduced set
+        coords = emanParticles.getCoordinates3D()
+        presentTsIds = coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
+        presentPrecedents = getPresentPrecedents(coords, presentTsIds)
+        # Prepare contents
+        lines = []
+        for tomo in presentPrecedents:
+            for emanParticle in emanParticles.iterSubtomos(tomo):
+                lines.append(f'{emanParticle.getIndex()}\t'
+                             f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}')
+
+        # Write the LST file
+        extraPad = 1 + 1 + 4  # index, tab, 4 blank spaces added by EMAN
+        EmanLstWriter.lines2LstFile(lines, outLstFileName, extraPad=extraPad)
+
+    @staticmethod
+    def writeAlign3dLst(emanParticles, outLstFileName, isExtractingOrientedPicking=False):
+        # Get the 3d stacks present in the introduced set
+        coords = emanParticles.getCoordinates3D()
+        presentTsIds = coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
+        presentPrecedents = getPresentPrecedents(coords, presentTsIds)
+        # Prepare contents
+        lines = []
+        for tomo in presentPrecedents:
+            for emanParticle in emanParticles.iterSubtomos(tomo):
+                score = emanParticle.getEmanScore()
+                if isExtractingOrientedPicking:  # To preserve the oriented picking, the particles should be loaded as
+                    # 3d oriented particles
+                    matrix = emanParticle.getCoordinate3D().getMatrix(convention=TR_EMAN)
+                else:
+                    matrix = emanParticle.getTransform(convention=TR_EMAN).getMatrix()
+                particleDict = {
+                    SCORE: score,
+                    ROT_TR_MATRIX: {
+                        "__class__": "Transform",
+                        MATRIX: matrix
+                    }
+                }
+                lines.append(f'{emanParticle.getIndex()}\t'
+                             f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}\t'
+                             f'{json.dumps(particleDict)}')
+
+        # Write the LST file
+        extraPad = 1 + 1 + 4  # index, tab, 4 blank spaces added by EMAN
+        EmanLstWriter.lines2LstFile(lines, outLstFileName, extraPad=extraPad)
+
+    @staticmethod
+    def lines2LstFile(lines, outLstFileName, extraPad=0):
+        linesLen = EmanLstWriter.getLongestLineLen(lines, extraPad=extraPad)
+        with open(outLstFileName, 'w') as outLst:
+            EmanLstWriter.writeHeaderLines(outLst, linesLen)
+            outLst.writelines([f'{line}'.ljust(linesLen) + '\n' for line in lines])
+
+    @staticmethod
+    def getLongestLineLen(lines, extraPad=0):
+        longestBaseName = max(lines, key=len)
+        return len(join(PARTICLES_3D_DIR, longestBaseName)) + extraPad
+
+    @staticmethod
+    def writeHeaderLines(fileId, linesLen):
+        fileId.write('#LSX\n')
+        fileId.write('# This file is in fast LST format. All lines after the next line have exactly the number '
+                     'of characters shown on the next line. This MUST be preserved if editing.\n')
+        fileId.write(f'# {linesLen + 1}\n')  # + 1 is for the last \n added later when writing the file
+
+

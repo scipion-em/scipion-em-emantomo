@@ -29,7 +29,7 @@ from os.path import exists
 
 from emantomo import Plugin
 from emantomo.convert import convertBetweenHdfAndMrc
-from emantomo.convert.lstAlignConvert import EmanLstReader
+from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED

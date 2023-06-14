@@ -339,7 +339,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             trMatrix = copy.copy(currentCoord.getMatrix())
             transform.setMatrix(scaleTrMatrixShifts(trMatrix, factor))
             subtomogram.setTransform(transform, convention=TR_EMAN)
-            subtomogram.setVolName(tomoFile)
+            subtomogram.setVolName(currentCoord.getTomoId())
             outputSubTomogramsSet.append(subtomogram)
             counter += 1
         return outputSubTomogramsSet, counter

@@ -167,37 +167,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         outFile = replaceExt(inFile, 'mrc')
         self.convertBetweenHdfAndMrc(inFile, outFile)
 
-    def getProjections(self, mdObj):
-        """load the corresponding HDF 2d stack file and read from the header the required data to create later a
-        landmark model. To do that, the h5py module is used.
-        """
-        tsId = mdObj.tsId
-        stack2dHdf = abspath(self._getExtraPath(PARTICLES_DIR, self._getEmanFName(mdObj.tsId)))
-        eh = EmanHdf5Handler(stack2dHdf)
-        projList = eh.getProjsFrom2dStack(shrink=self.shrink.get())
-        # Add the required tsId as the first element of each sublist
-        list(map(lambda sublist: sublist.insert(0, tsId), projList))  # More efficient than comprehension for huge
-        # lists of lists, as expected
-        return projList
-
-    def createLandmarkModelGaps(self, ts, tsProjections, fiducialSize):
-        tsId = ts.getTsId()
-        landmarkModelGapsFilePath = self._getExtraPath(str(tsId) + "_gaps.sfid")
-        landmarkModelGaps = LandmarkModel(tsId=tsId,
-                                          tiltSeriesPointer=ts,
-                                          fileName=landmarkModelGapsFilePath,
-                                          modelName=None,
-                                          size=fiducialSize,
-                                          applyTSTransformation=False)
-        landmarkModelGaps.setTiltSeries(ts)
-        for projection in tsProjections:
-            tiltId = projection[1] + 1
-            partId = projection[2] + 1
-            xCoord = round(projection[3])
-            yCoord = round(projection[4])
-            landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
-        return landmarkModelGaps
-
     def createOutputStep(self, mdObjDict):
         inCoordsPointer = getattr(self, IN_COORDS)
         inCoords = inCoordsPointer.get()
@@ -242,7 +211,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                     self.scaleFactor * shift_y,
                                     self.scaleFactor * shift_z)
                 subtomogram.setTransform(transform, convention=TR_EMAN)
-                subtomogram.setVolName(tomoFile)
+                subtomogram.setVolName(coord.getTomoId())
                 # Fill EmanParticle own attributes
                 subtomogram.setInfoJson(mdObj.jsonFile)
                 subtomogram.setTsHdf(mdObj.tsHdfName)
@@ -261,16 +230,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self._defineSourceRelation(inTsPointer, fiducialModelGaps)
 
     # --------------------------- INFO functions --------------------------------
-    # def _validate(self):
-    #     valMsg = []
-    #     if not self.inputTS.get():
-    #         try:
-    #             getNonInterpolatedTsFromRelations(self.inputCoordinates.get(), self)
-    #         except:
-    #             valMsg.append('Unable to go through the relations from the introduced coordinates to the '
-    #                           'corresponding non-interpolated tilt series. Please introduce them using the '
-    #                           'advanced parameter "Tilt series with alignment, non-interpolated."')
-    #     return valMsg
 
     # --------------------------- UTILS functions ----------------------------------
     def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
@@ -338,3 +297,34 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             if shrink > 1:
                 pattern = f'__{TOMOBOX}_bin{int(self.shrink.get())}.hdf'
         return tsId + pattern
+
+    def getProjections(self, mdObj):
+        """load the corresponding HDF 2d stack file and read from the header the required data to create later a
+        landmark model. To do that, the h5py module is used.
+        """
+        tsId = mdObj.tsId
+        stack2dHdf = abspath(self._getExtraPath(PARTICLES_DIR, self._getEmanFName(mdObj.tsId)))
+        eh = EmanHdf5Handler(stack2dHdf)
+        projList = eh.getProjsFrom2dStack(shrink=self.shrink.get())
+        # Add the required tsId as the first element of each sublist
+        list(map(lambda sublist: sublist.insert(0, tsId), projList))  # More efficient than comprehension for huge
+        # lists of lists, as expected
+        return projList
+
+    def createLandmarkModelGaps(self, ts, tsProjections, fiducialSize):
+        tsId = ts.getTsId()
+        landmarkModelGapsFilePath = self._getExtraPath(str(tsId) + "_gaps.sfid")
+        landmarkModelGaps = LandmarkModel(tsId=tsId,
+                                          tiltSeriesPointer=ts,
+                                          fileName=landmarkModelGapsFilePath,
+                                          modelName=None,
+                                          size=fiducialSize,
+                                          applyTSTransformation=False)
+        landmarkModelGaps.setTiltSeries(ts)
+        for projection in tsProjections:
+            tiltId = projection[1] + 1
+            partId = projection[2] + 1
+            xCoord = round(projection[3])
+            yCoord = round(projection[4])
+            landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
+        return landmarkModelGaps

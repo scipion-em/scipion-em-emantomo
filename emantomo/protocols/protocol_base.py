@@ -29,9 +29,9 @@ from os.path import join, abspath, basename, realpath, relpath
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
-    FSC_MASKED_TIGHT_BNAME, LST_LINE, PARTICLE_IND, PARTICLE_FILE, PART3D_ID
+    FSC_MASKED_TIGHT_BNAME, LST_LINE, PARTICLE_IND, PARTICLE_FILE, PART3D_ID, INIT_MODEL_DIR
 from emantomo.convert import emanFSCsToScipion
-from emantomo.convert.lstAlignConvert import EmanLstReader
+from emantomo.convert.lstConvert import EmanLstReader, EmanLstWriter
 from emantomo.objects import EmanParticle, EmanSetOfParticles
 from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
@@ -118,68 +118,69 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             self.convertOrLink(inRef.getFileName(), REFERENCE_NAME, '', inRef.getSamplingRate())
 
     def buildEmanSetsStep(self):
-        # Prevent sub-setting: only the 3d HDF stacks are linked when initializing the corresponding protocols,
-        # covering partially the sub-setting functionality (as the stacks from which no particles are present in
-        # the subset won't appear in the EMAN project simulated in the current protocol). But, some particles can
-        # have been removed from the present stacks. Thus, a lst file is generated for all the stacks removing then
-        # the lines corresponding to non-present particle indices
-        present3dStacks = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '*.hdf'))
-        presentParticlesDict = {}
-        for i, stack3d in enumerate(present3dStacks):
-            stack3dRealPath = relpath(realpath(stack3d))
-            pathKey = join(PARTICLES_3D_DIR, basename(stack3d))
-            indList = []
-            for particle in self.inParticles.iterItems(where=f'_stack3dHdf="{stack3dRealPath}"'):
-                indList.append(str(particle.getIndex()))
-            presentParticlesDict[pathKey] = indList
-
-        buildSetProgram = Plugin.getProgram("e2spt_buildsets.py")
-        self.runJob(buildSetProgram, '--allparticles', cwd=self._getExtraPath())
-        particlesFile = glob.glob(join(self.getSetsDir(), '*.lst'))[0]  # There should be only 1 LST file at this point
-        with open(particlesFile, 'r') as inLst:
-            lines = inLst.readlines()
-
-        with open(particlesFile, 'w') as outLst:
-            for line in lines:
-                if line[0] == '#':
-                    outLst.write(line)
-                else:
-                    lineContentsList = line.strip().split('\t')
-                    particleInd = lineContentsList[0]
-                    filePath = lineContentsList[1]
-                    if particleInd in presentParticlesDict[filePath]:
-                        outLst.write(line)
-
-        # Do the same with the 2d and 3d align files if necessary
-        align3dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_3D, String()).get()
-        align2dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_2D, String()).get()
-        if align3dFile:
-            new3dAlignFile = self.getNewAliFile()
-            dataDictList = EmanLstReader.read(align3dFile)
-            with open(new3dAlignFile, 'w') as out3dAlign:
-                for dataDict in dataDictList:
-                    line = dataDict[LST_LINE]
-                    if line[0] == '#':
-                        out3dAlign.write(line)
-                    else:
-                        particleInd = dataDict[PARTICLE_IND]
-                        filePath = dataDict[PARTICLE_FILE]
-                        if particleInd in presentParticlesDict[filePath]:
-                            out3dAlign.write(line)
-
-        if align2dFile:
-            new2dAlignFile = self.getNewAliFile(is3d=False)
-            dataDictList = EmanLstReader.read(align2dFile)
-            with open(new2dAlignFile, 'w') as out2dAlign:
-                for dataDict in dataDictList:
-                    line = dataDict[LST_LINE]
-                    if line[0] == '#':
-                        out2dAlign.write(line)
-                    else:
-                        particle3dInd = dataDict[PART3D_ID]
-                        filePath = dataDict[PARTICLE_FILE].replace(PARTICLES_DIR, PARTICLES_3D_DIR)
-                        if particle3dInd in presentParticlesDict[filePath]:
-                            out2dAlign.write(line)
+        EmanLstWriter.writeSimpleLst(self.inParticles, self.getLstEmanRelPath())
+        # # Prevent sub-setting: only the 3d HDF stacks are linked when initializing the corresponding protocols,
+        # # covering partially the sub-setting functionality (as the stacks from which no particles are present in
+        # # the subset won't appear in the EMAN project simulated in the current protocol). But, some particles can
+        # # have been removed from the present stacks. Thus, a lst file is generated for all the stacks removing then
+        # # the lines corresponding to non-present particle indices
+        # present3dStacks = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '*.hdf'))
+        # presentParticlesDict = {}
+        # for stack3d in present3dStacks:
+        #     stack3dRealPath = relpath(realpath(stack3d))
+        #     pathKey = join(PARTICLES_3D_DIR, basename(stack3d))
+        #     indList = []
+        #     for particle in self.inParticles.iterItems(where=f'_stack3dHdf="{stack3dRealPath}"'):
+        #         indList.append(str(particle.getIndex()))
+        #     presentParticlesDict[pathKey] = indList
+        #
+        # buildSetProgram = Plugin.getProgram("e2spt_buildsets.py")
+        # self.runJob(buildSetProgram, '--allparticles', cwd=self._getExtraPath())
+        # particlesFile = glob.glob(join(self.getSetsDir(), '*.lst'))[0]  # There should be only 1 LST file at this point
+        # with open(particlesFile, 'r') as inLst:
+        #     lines = inLst.readlines()
+        #
+        # with open(particlesFile, 'w') as outLst:
+        #     for line in lines:
+        #         if line[0] == '#':
+        #             outLst.write(line)
+        #         else:
+        #             lineContentsList = line.strip().split('\t')
+        #             particleInd = lineContentsList[0]
+        #             filePath = lineContentsList[1]
+        #             if particleInd in presentParticlesDict[filePath]:
+        #                 outLst.write(line)
+        #
+        # # Do the same with the 2d and 3d align files if necessary
+        # align3dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_3D, String()).get()
+        # align2dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_2D, String()).get()
+        # if align3dFile:
+        #     new3dAlignFile = self.getNewAliFile()
+        #     dataDictList = EmanLstReader.read(align3dFile)
+        #     with open(new3dAlignFile, 'w') as out3dAlign:
+        #         for dataDict in dataDictList:
+        #             line = dataDict[LST_LINE]
+        #             if line[0] == '#':
+        #                 out3dAlign.write(line)
+        #             else:
+        #                 particleInd = dataDict[PARTICLE_IND]
+        #                 filePath = dataDict[PARTICLE_FILE]
+        #                 if particleInd in presentParticlesDict[filePath]:
+        #                     out3dAlign.write(line)
+        #
+        # if align2dFile:
+        #     new2dAlignFile = self.getNewAliFile(is3d=False)
+        #     dataDictList = EmanLstReader.read(align2dFile)
+        #     with open(new2dAlignFile, 'w') as out2dAlign:
+        #         for dataDict in dataDictList:
+        #             line = dataDict[LST_LINE]
+        #             if line[0] == '#':
+        #                 out2dAlign.write(line)
+        #             else:
+        #                 particle3dInd = dataDict[PART3D_ID]
+        #                 filePath = dataDict[PARTICLE_FILE].replace(PARTICLES_DIR, PARTICLES_3D_DIR)
+        #                 if particle3dInd in presentParticlesDict[filePath]:
+        #                     out2dAlign.write(line)
 
     # --------------------------- UTILS functions ----------------------------------
     def getObjByName(self, name):
@@ -229,6 +230,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def getSetsDir(self):
         return self._getExtraPath(SETS_DIR)
 
+    def getInitModelDir(self):
+        return self._getExtraPath(INIT_MODEL_DIR)
+
     def getRefineDir(self):
         return self._getExtraPath(SPT_00_DIR)
 
@@ -262,6 +266,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def _getLstFile(self):
         lstFile = glob.glob(join(self.getSetsDir(), TOMOBOX + '*.lst'))[0]
         return join(SETS_DIR, basename(lstFile))
+
+    def getLstEmanRelPath(self):
+        return join(self.getSetsDir(), f'{TOMOBOX}.lst')
 
     def getRefinedAverageFn(self, iterNumber, ext='hdf', half=None):
         # Example, for 9 iterations, the resulting file would be called threed_09.hdf

@@ -23,7 +23,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import shutil
 from enum import Enum
+from os.path import exists
+
 from emantomo import Plugin
 from emantomo.constants import INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, \
     SYMMETRY_HELP_MSG, REFERENCE_NAME
@@ -129,6 +132,11 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         self.inSamplingRate = self.inParticles.getSamplingRate()
 
     def createInitialModelStep(self):
+        # In case of continuing from this step, the previous results dir will be removed to avoid EMAN creating one
+        # for each execution (one for each continue)
+        initModelDir = self.getInitModelDir()
+        if exists(initModelDir):
+            shutil.rmtree(initModelDir)
         program = Plugin.getProgram("e2spt_sgd_new.py")
         self.runJob(program, self._genIniModelArgs(), cwd=self._getExtraPath())
 
