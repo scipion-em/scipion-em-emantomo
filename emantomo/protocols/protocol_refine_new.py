@@ -229,7 +229,6 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
         # Output 3: FSCs
         fscs = self.genFscs(self.noIters)
-
         outputs = {self._possibleOutputs.subtomogramAverage.name: averageSubTomogram,
                    self._possibleOutputs.subtomograms.name: outParticles,
                    self._possibleOutputs.FSCs.name: fscs}
@@ -255,16 +254,14 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         args.append(f'--tophat {mapFilterDict[filteringKeys[self.topHat.get()]]}')
         args.append(f'--maxres {self.maxResAli.get():.2f}')
         args.append(f'--minres {self.minResAli.get():.2f}')
-        if exists(new3dAlignFile):
-            args.append(f'--loadali3d {new3dAlignFile}')
-        if exists(new2dAlignFile):
-            args.append(f'--loadali2d {new2dAlignFile}')
         if self._doGoldStandard():
             args.append('--goldstandard')
         else:
             args.append('--goldcontinue')
-            args.append(f'--loadali2d {self.inParticles.getAli2dLstFile()}')
-            args.append(f'--loadali3d {self.inParticles.getAli3dLstFile()}')
+            if exists(new3dAlignFile):
+                args.append(f'--loadali3d {new3dAlignFile}')
+            if exists(new2dAlignFile):
+                args.append(f'--loadali2d {new2dAlignFile}')
         # Local refinement params
         if self.doLocalRefine.get():
             args.append('--localrefine')

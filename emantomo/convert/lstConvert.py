@@ -78,14 +78,6 @@ class EmanLstReader:
                         matrix,
                         line
                     ])
-                else:  # Header lines (required to replicate file when sub-setting)
-                    list_of_lists.append([
-                        None,
-                        None,
-                        None,
-                        None,
-                        line
-                    ])
 
         return [dict(zip(keys, values)) for values in list_of_lists]
 
@@ -99,10 +91,11 @@ class EmanLstReader:
         """
         align3dData = EmanLstReader.read3dParticles(lstFileName)
         for particle, alignDict in zip(inParticles, align3dData):
-            outParticle = particle.clone()
-            outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
-            outParticle.setEmanScore(alignDict[SCORE])
-            outParticles.append(outParticle)
+            if alignDict[PARTICLE_IND]:  # Will be None for the header lines
+                outParticle = particle.clone()
+                outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
+                outParticle.setEmanScore(alignDict[SCORE])
+                outParticles.append(outParticle)
 
     @staticmethod
     def read2dParticles(lstFileName):
@@ -210,16 +203,18 @@ class EmanLstWriter:
                     matrix = emanParticle.getCoordinate3D().getMatrix(convention=TR_EMAN)
                 else:
                     matrix = emanParticle.getTransform(convention=TR_EMAN).getMatrix()
+                # Remove the last row and transform into a flatten list to write it in a json string, as expected
+                matrix = matrix[:3, :].flatten().tolist()
                 particleDict = {
                     SCORE: score,
                     ROT_TR_MATRIX: {
                         "__class__": "Transform",
-                        MATRIX: matrix
+                        MATRIX: str(matrix)
                     }
                 }
                 lines.append(f'{emanParticle.getIndex()}\t'
                              f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}\t'
-                             f'{json.dumps(particleDict)}')
+                             f'{json.dumps(particleDict)}'.replace(' ', ''))
 
         # Write the LST file
         extraPad = 1 + 1 + 4  # index, tab, 4 blank spaces added by EMAN

@@ -31,7 +31,6 @@ class EmanMetaData:
 
     def __init__(self, tsId=None, inTomo=None, tomoHdfName=None, ts=None, tsHdfName=None, ctf=None, coords=None,
                  particles=None, jsonFile=None, processingInd=None):
-
         self.tsId = tsId
         self.inTomo = inTomo
         self.tomoHdfName = tomoHdfName
@@ -76,7 +75,6 @@ class EmanHdf5Handler:
 
 
 class EmanParticle(SubTomogram):
-
     INFO_JSON = '_infoJson'
     TS_HDF = '_tsHdf'
     TOMO_HDF = '_tomoHdf'
@@ -129,7 +127,6 @@ class EmanParticle(SubTomogram):
 
     def getEmanScore(self):
         return self._emanScore.get()
-
 
 
 class EmanSetOfParticles(SetOfSubTomograms):
