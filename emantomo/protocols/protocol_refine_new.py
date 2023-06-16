@@ -24,6 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import shutil
 from enum import Enum
 from os.path import exists
 
@@ -200,6 +201,11 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         self.ali3dLst = self.getAli3dFile(self._getNoPIters())
 
     def refineStep(self):
+        # In case of continuing from this step, the previous results dir will be removed to avoid EMAN creating one
+        # for each execution (one for each continue)
+        initModelDir = self.getRefineDir()
+        if exists(initModelDir):
+            shutil.rmtree(initModelDir)
         program = Plugin.getProgram("e2spt_refine_new.py")
         self.runJob(program, self._genRefineCmd(), cwd=self._getExtraPath())
 
@@ -254,7 +260,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         args.append(f'--tophat {mapFilterDict[filteringKeys[self.topHat.get()]]}')
         args.append(f'--maxres {self.maxResAli.get():.2f}')
         args.append(f'--minres {self.minResAli.get():.2f}')
-        if self._doGoldStandard():
+        if self._doGoldStandard(self.inParticles):
             args.append('--goldstandard')
         else:
             args.append('--goldcontinue')
@@ -280,7 +286,8 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
         return ' '.join(args)
 
-    def _doGoldStandard(self):
+    @staticmethod
+    def _doGoldStandard(inParticles):
         """
         From EMAN doc:
             - goldstandard: "Phase randomize the reference to the starting resolution (--startres) independently for
@@ -290,7 +297,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         Thus, we'll apply it if it is the first refinement, which means that the set of particles introduced do not
         contain an ali2d nor ali3d files in the corresponding attributes.
         """
-        return True if not self.inParticles.getAli2dLstFile() and not self.inParticles.getAli3dLstFile() else False
+        return True if not inParticles.getAli2dLstFile() and not inParticles.getAli3dLstFile() else False
 
     def _getNoIters(self):
         """From Eman doc: Default is p,p,p,t,p,p,t,r,d. Character followed by number is also acceptable. p3 = p,p,p."""
@@ -311,3 +318,14 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         return len(itersList) - itersList[::-1].index("p")
 
     # --------------------------- INFO functions --------------------------------
+    def _validate(self):
+        errorMsgs = []
+        inParticles = self.getAttrib(IN_SUBTOMOS)
+        inRef = self.getAttrib(REF_VOL)
+        if not self._doGoldStandard(inParticles) and inRef:
+            if not inRef.hasHalfMaps():
+                errorMsgs.append('If the introduced particles have some kind of alignment or orientation, the '
+                                 'initial volume introduced needs to have the corresponding even and odd halves. '
+                                 'Try to replace the initial volume by the resulting average of a previous refine '
+                                 'protocol.')
+        return errorMsgs

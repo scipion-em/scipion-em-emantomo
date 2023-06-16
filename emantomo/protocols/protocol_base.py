@@ -115,7 +115,12 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def convertRefVolStep(self):
         inRef = self.getRefVol()
         if inRef:
-            self.convertOrLink(inRef.getFileName(), REFERENCE_NAME, '', inRef.getSamplingRate())
+            sRate = inRef.getSamplingRate()
+            self.convertOrLink(inRef.getFileName(), REFERENCE_NAME, '', sRate)
+            if inRef.hasHalfMaps():
+                halves = inRef.getHalfMaps(asList=True)
+                self.convertOrLink(halves[0], f'{REFERENCE_NAME}_even', '', sRate)
+                self.convertOrLink(halves[1], f'{REFERENCE_NAME}_odd', '', sRate)
 
     def buildEmanSetsStep(self):
         # LST with the particles
