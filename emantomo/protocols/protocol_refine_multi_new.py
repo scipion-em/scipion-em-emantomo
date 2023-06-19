@@ -27,6 +27,8 @@
 from enum import Enum
 from os.path import exists
 
+import numpy as np
+
 from emantomo import Plugin
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
@@ -62,12 +64,22 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_SUBTOMOS, PointerParam,
                       pointerClass='EmanSetOfParticles',
-                      label='Particles',
+                      label='Aligned particles',
                       important=True)
         form.addParam('maskRef', PointerParam,
                       pointerClass='VolumeMask',
                       label='Mask the references prior to to classif. (opt.)',
                       allowsNull=True)
+        form.addParam('maxRes', FloatParam,
+                      default=20,
+                      important=True,
+                      label='Max. resolution (Å)',
+                      help='Maximum resolution (the smaller number) to consider in alignment (in Å).\n'
+                           'Since gold-standard validation is not used here, setting this parameter is mandatory.')
+        form.addParam('minRes', FloatParam,
+                      default=0,
+                      label='Min. resolution (Å)',
+                      help='Minimum resolution (the larger number) to consider in alignment (in Å).')
 
         form.addSection(label='Classification')
         form.addParam('nClasses', IntParam,
@@ -96,18 +108,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
                       label='Apply mask to the 3D alignment ref. in each iter. (opt.)',
                       allowsNull=True,
                       help="Not applied to the average, which will follow normal EMAN's masking routine.")
-        form.addParam('maxRes', FloatParam,
-                      default=20,
-                      condition='doAlignment',
-                      important=True,
-                      label='Max. resolution (Å)',
-                      help='Maximum resolution (the smaller number) to consider in alignment (in Å).\n'
-                           'Since gold-standard validation is not used here, setting this parameter is mandatory.')
-        form.addParam('minRes', FloatParam,
-                      default=0,
-                      condition='doAlignment',
-                      label='Min. resolution (Å)',
-                      help='Minimum resolution (the larger number) to consider in alignment (in Å).')
         form.addParam('maxAng', IntParam,
                       default=-1,
                       condition='doAlignment',
@@ -167,26 +167,24 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         alignMask = self.maskAlign.get()
         breakSym = self.breakSym.get()
         new2dAlignFile = self.getNewAliFile(is3d=False)
-        new3dAlignFile = self.getNewAliFile()
         args = [
-            f'--ptcls {self._getLstFile()}',
+            f'--ptcls {self.getNewAliFile()}',
             f'--nref {self.nClasses.get()}',
             f'--niter {self.nIter.get()}',
             f'--sym {self.symmetry.get()}',
-            f'--parallel=thread:{self.numberOfThreads.get()}',
-            f'--threads {self.threadsPostProc.get()}'
+            f'--parallel thread:{self.numberOfThreads.get()}',
+            f'--threads {self.threadsPostProc.get()}',
+            f'--maxres {self.maxRes.get():.2f}',
+            f'--minres {self.minRes.get():.2f}',
+            '--loadali3d'
         ]
-        if exists(new3dAlignFile):
-            args.append(f'--loadali3d {new3dAlignFile}')
-        if exists(new2dAlignFile):
+        if exists(self._getExtraPath(new2dAlignFile)):
             args.append(f'--loadali2d {new2dAlignFile}')
         if refMask:
             args.append(f'--maskref {self.maskRefOutName + hdf}')
         if breakSym:
             args.append(f'--breaksym {breakSym}')
         if self.doAlignment.get():
-            args.append(f'--maxRes {self.maxRes.get():.2f}')
-            args.append(f'--minRes {self.minRes.get():.2f}')
             args.append(f'--maxang {self.maxAng.get()}')
             args.append(f'--maxshift {self.maxShift.get()}')
             if alignMask:
@@ -197,5 +195,10 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             args.append('--m3dthread')
         return ' '.join(args)
 
-
     # --------------------------- INFO functions --------------------------------
+    def _validate(self):
+        errorMsg = []
+        inTrMatrix = self.getAttrib(IN_SUBTOMOS).getFirstItem().getTransform().getMatrix()
+        if np.allclose(inTrMatrix, np.eye(4), atol=1e-4):
+            errorMsg.append('No alignment was detected in the introduced particles.')
+        return errorMsg

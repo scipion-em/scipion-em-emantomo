@@ -257,7 +257,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         args.append(f'--iters {self.iters.get()}')
         args.append(f'--sym {self.symmetry.get()}')
         args.append(f'--keep {self.pkeep.get():.2f}')
-        args.append(f'--tophat {mapFilterDict[filteringKeys[self.topHat.get()]]}')
+        args.append(f'--tophat {filteringKeys[self.topHat.get()]}')
         args.append(f'--maxres {self.maxResAli.get():.2f}')
         args.append(f'--minres {self.minResAli.get():.2f}')
         if self._doGoldStandard(self.inParticles):
