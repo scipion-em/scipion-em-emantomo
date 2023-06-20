@@ -25,11 +25,11 @@
 # **************************************************************************
 import glob
 import re
-from os.path import join, abspath, basename, realpath, relpath
+from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
-    FSC_MASKED_TIGHT_BNAME, LST_LINE, PARTICLE_IND, PARTICLE_FILE, PART3D_ID, INIT_MODEL_DIR
+    FSC_MASKED_TIGHT_BNAME, LST_LINE, PART3D_ID, INIT_MODEL_DIR
 from emantomo.convert import emanFSCsToScipion
 from emantomo.convert.lstConvert import EmanLstReader, EmanLstWriter
 from emantomo.objects import EmanParticle, EmanSetOfParticles
@@ -93,7 +93,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         tomoDir = self.getTomogramsDir()
         stack2dDir = self.getStack2dDir()
         stack3dDir = self.getStack3dDir()
-        makePath(self.getSetsDir(), stack2dDir, stack3dDir)
+        makePath(self.getSetsDir(), stack2dDir, stack3dDir, self.getRefineDir())
         # Get the unique values of the files to be linked
         dataDict = inSubtomos.getUniqueValues([EmanParticle.INFO_JSON,
                                                EmanParticle.TS_HDF,
@@ -192,7 +192,8 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     @staticmethod
     def getNewAliFile(is3d=True):
-        return 'iniAlign3d.lst' if is3d else 'iniAlign2d.lst'
+        aliFile = 'iniAlign3d.lst' if is3d else 'iniAlign2d.lst'
+        return join(SPT_00_DIR, aliFile)
 
     def getAttrib(self, attribName, getPointer=False):
         attribPointer = getattr(self, attribName)
@@ -261,20 +262,11 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             return imagePaths[-1]
 
     def write2dLst(self, new2dAlignFile, dataDictList):
-        presentParticlesDict = {}
-        for stack3d in self.inParticles.getUniqueValues(EmanParticle.STACK_3D_HDF):
-            stack3dRealPath = relpath(realpath(stack3d))
-            pathKey = join(PARTICLES_3D_DIR, basename(stack3d))
-            indList = []
-            for particle in self.inParticles.iterItems(where=f'_stack3dHdf="{stack3dRealPath}"'):
-                indList.append(particle.getIndex())
-                presentParticlesDict[pathKey.replace(PARTICLES_3D_DIR, PARTICLES_DIR)] = indList
-
+        presentAbsIndices = [particle.getAbsIndex() for particle in self.inParticles]
         lines = []
         for dataDict in dataDictList:
             line = dataDict[LST_LINE]
             particle3dInd = dataDict[PART3D_ID]
-            filePath = dataDict[PARTICLE_FILE]
-            if particle3dInd in presentParticlesDict[filePath]:
-                lines.append(line)
+            if particle3dInd in presentAbsIndices:
+                lines.append(line.replace('\n', ''))
         EmanLstWriter.lines2LstFile(lines, new2dAlignFile)

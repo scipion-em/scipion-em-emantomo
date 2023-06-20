@@ -183,6 +183,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
         fiducialSize = round((inCoords.getBoxSize() / 2 * sRate) / 10)  # Box size is too large, a tenth of the radius
 
+        absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
             tomoFile = mdObj.inTomo.getFileName()
@@ -218,8 +219,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram.setTomoHdf(mdObj.tomoHdfName)
                 subtomogram.setStack2dHdf(stack2d)
                 subtomogram.setStack3dHdf(stack3d)
+                subtomogram.setAbsIndex(absParticleCounter)
                 subtomoSet.append(subtomogram)
                 particleCounter += 1
+                absParticleCounter += 1
 
         # Define outputs and relations
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: subtomoSet,

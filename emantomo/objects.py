@@ -23,7 +23,7 @@
 # *
 # **************************************************************************
 import h5py
-from pyworkflow.object import String, Float
+from pyworkflow.object import String, Float, Integer
 from tomo.objects import SetOfSubTomograms, SubTomogram
 
 
@@ -81,9 +81,11 @@ class EmanParticle(SubTomogram):
     STACK_2D_HDF = '_stack2dHdf'
     STACK_3D_HDF = '_stack3dHdf'
     EMAN_SCORE = '_emanScore'
+    ABS_INDEX = '_absIndex'  # Absolute index within the whole particles from all the tomograms (required for the 2d/3d
+    # particle matching and sub-setting)
 
     def __init__(self, infoJson=None, tsHdf=None, tomoHdf=None, stack2dHdf=None, stack3dHdf=None,
-                 emanScore=0, **kwargs):
+                 emanScore=0, absIndex=None, **kwargs):
         super().__init__(**kwargs)
         self._infoJson = String(infoJson)
         self._tsHdf = String(tsHdf)
@@ -91,6 +93,7 @@ class EmanParticle(SubTomogram):
         self._stack2dHdf = String(stack2dHdf)
         self._stack3dHdf = String(stack3dHdf)
         self._emanScore = Float(emanScore)
+        self._absIndex = Integer(absIndex)
 
     def setInfoJson(self, val):
         self._infoJson.set(val)
@@ -110,6 +113,9 @@ class EmanParticle(SubTomogram):
     def setEmanScore(self, val):
         self._emanScore.set(val)
 
+    def setAbsIndex(self, val):
+        self._absIndex.set(val)
+
     def getInfoJson(self):
         return self._infoJson.get()
 
@@ -127,6 +133,9 @@ class EmanParticle(SubTomogram):
 
     def getEmanScore(self):
         return self._emanScore.get()
+
+    def getAbsIndex(self):
+        return self._absIndex.get()
 
 
 class EmanSetOfParticles(SetOfSubTomograms):
