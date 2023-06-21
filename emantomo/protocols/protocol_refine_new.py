@@ -224,7 +224,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         averageSubTomogram = AverageSubTomogram()
         averageSubTomogram.setFileName(self.avgHdf.replace(HDF, MRC))
         averageSubTomogram.setHalfMaps([self.evenHdf.replace(HDF, MRC), self.oddFnHdf.replace(HDF, MRC)])
-        averageSubTomogram.setSamplingRate(self.inParticles.getSamplingRate())
+        averageSubTomogram.setSamplingRate(self.inSamplingRate)
 
         # Output 2: aligned particles
         outParticles = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
@@ -235,10 +235,11 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
         # Output 3: FSCs
         fscs = self.genFscs(self.noIters)
+
+        # Define outputs and relations
         outputs = {self._possibleOutputs.subtomogramAverage.name: averageSubTomogram,
                    self._possibleOutputs.subtomograms.name: outParticles,
                    self._possibleOutputs.FSCs.name: fscs}
-        #
         self._defineOutputs(**outputs)
         self._defineSourceRelation(self.inParticles, averageSubTomogram)
         self._defineSourceRelation(self.inParticles, outParticles)

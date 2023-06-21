@@ -29,7 +29,7 @@ from os.path import join, abspath, basename
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
-    FSC_MASKED_TIGHT_BNAME, LST_LINE, PART3D_ID, INIT_MODEL_DIR
+    FSC_MASKED_TIGHT_BNAME, LST_LINE, PART3D_ID, INIT_MODEL_DIR, SPT_CLS_00_FIR
 from emantomo.convert import emanFSCsToScipion
 from emantomo.convert.lstConvert import EmanLstReader, EmanLstWriter
 from emantomo.objects import EmanParticle, EmanSetOfParticles
@@ -189,6 +189,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def getRefineDir(self):
         return self._getExtraPath(SPT_00_DIR)
+
+    def getMultiRefineDir(self):
+        return self._getExtraPath(SPT_CLS_00_FIR)
 
     @staticmethod
     def getNewAliFile(is3d=True):

@@ -82,20 +82,47 @@ class EmanLstReader:
         return [dict(zip(keys, values)) for values in list_of_lists]
 
     @staticmethod
-    def align3dLst2Scipion(lstFileName, inParticles, outParticles):
+    def align3dLst2Scipion(lstFileNames, inParticles, outParticles):
         """Converts the data from an existing EMAN's 3d align LST file into a Scipion EmanSetOfParticles object.
-        :param lstFileName: path of the LST file.
+        :param lstFileNames: path of the LST file. It can also be a list of list of LST files.
         :param inParticles: input EmanSetOfParticles.
         :param outParticles: output EmanSetOfParticles, expected to contain the set info. It will be filled here with
         the updated particles.
         """
-        align3dData = EmanLstReader.read3dParticles(lstFileName)
-        for particle, alignDict in zip(inParticles, align3dData):
-            if alignDict[PARTICLE_IND]:  # Will be None for the header lines
-                outParticle = particle.clone()
+        if isinstance(lstFileNames, str):
+            align3dData = EmanLstReader.read3dParticles(lstFileNames)
+            for particle, alignDict in zip(inParticles, align3dData):
+                if alignDict[PARTICLE_IND]:  # Will be None for the header lines
+                    outParticle = particle.clone()
+                    outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
+                    outParticle.setEmanScore(alignDict[SCORE])
+                    outParticles.append(outParticle)
+
+        else:  # Multiple classification case. To avoid a DDBB access for each particle, the whole set is read once and
+            # structured into a list of dictionaries to carry out the particle matching
+            align3dData = []
+            IN_PARTICLE_OBJ = 'inParticleObj'
+            for lstFile in lstFileNames:
+                align3dData.extend(EmanLstReader.read3dParticles(lstFile))
+            inParticlesDicts = [{IN_PARTICLE_OBJ: particle.clone(),
+                                 PARTICLE_IND: particle.getIndex(),
+                                 PARTICLE_FILE: join(PARTICLES_3D_DIR, basename(particle.getStack3dHdf()))}
+                                for particle in inParticles]
+
+            for alignDict in align3dData:
+                # The filter() function is more efficient than using a list comprehension because it doesn’t create a
+                # new list in memory. Instead, it returns an iterator that generates the filtered values on-the-fly
+                matchingInPartDict = list(filter(lambda d:
+                                                 d.get(PARTICLE_FILE) == alignDict.get(PARTICLE_FILE) and
+                                                 d.get(PARTICLE_IND) == int(alignDict.get(PARTICLE_IND)),
+                                                 inParticlesDicts))
+                outParticle = matchingInPartDict[0].get(IN_PARTICLE_OBJ)
                 outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
                 outParticle.setEmanScore(alignDict[SCORE])
                 outParticles.append(outParticle)
+
+
+
 
     @staticmethod
     def read2dParticles(lstFileName):
