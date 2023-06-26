@@ -208,12 +208,10 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         avoiding added suffixes this way"""
         hdf = '.hdf'
         outFile = join(outDir, tsId + hdf)
-        program = Plugin.getProgram('e2proc3d.py')
         if inFile.endswith(hdf):
-            createLink(inFile, self._getExtraPath(outFile))
+            createLink(inFile, outFile)
         else:
-            args = '%s %s --apix %.2f ' % (abspath(inFile), outFile, sRate)
-            self.runJob(program, args, cwd=self._getExtraPath())
+            self.convertBetweenHdfAndMrc(abspath(inFile), outFile, extraArgs=f'--apix {sRate:.3f}')
         return outFile
 
     def convertBetweenHdfAndMrc(self, inFile, outFile, extraArgs=''):

@@ -24,8 +24,9 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import itertools
 from enum import Enum
-from os.path import exists, basename, join
+from os.path import exists, basename, join, abspath
 
 import numpy as np
 
@@ -35,15 +36,14 @@ from emantomo.objects import EmanSetOfParticles
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms
+from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms, SetOfClassesSubTomograms
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_BASENAME
+from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_BASENAME, SPTCLS_00_DIR, CLASS
 
 
 class EmanMultiRefineNewOutputs(Enum):
     subtomograms = SetOfSubTomograms
-    classAverages = AverageSubTomogram
-    representatives = SetOfAverageSubTomograms
+    classes = SetOfClassesSubTomograms
     FSCs = SetOfFSCs
 
 
@@ -61,9 +61,10 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.convertedRefDict = None
+        self.numClasses = None
+        self.refFiles = None
 
     # --------------- DEFINE param functions ---------------
-
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_SUBTOMOS, PointerParam,
@@ -155,63 +156,72 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         self._insertFunctionStep(self.convertReferencesStep)
         self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineMultiStep)
+        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
     def _initialize(self):
         self.inParticles = self.getAttrib(IN_SUBTOMOS)
         self.inSamplingRate = self.inParticles.getSamplingRate()
-        refFiles = self.getReferenceFiles()
-        if refFiles:
-            self.convertedRefDict = {refFile: basename(refFile) for refFile in refFiles}
+        self.numClasses = self.getNoRefs()
+        self.refFiles = self.getReferenceFiles()
+        # if refFiles:
+        #     self.convertedRefDict = {refFile: basename(refFile) for refFile in refFiles}
 
     def convertReferencesStep(self):
-        maskRef = self.maskRef.get()
-        maskAlign = self.maskAlign.get()
-        if maskRef:
-            self.convertOrLink(maskRef.getFileName(), self.maskRefOutName, self._getExtraPath(), self.inSamplingRate)
-        if maskAlign:
-            self.convertOrLink(maskAlign.getFileName(), self.maskAlignOutName, self._getExtraPath(),
-                               self.inSamplingRate)
-        if self.convertedRefDict:
-            for refFile, baseName in self.convertedRefDict.items():
-                self.convertOrLink(refFile, baseName, self._getExtraPath(), self.inSamplingRate)
+        pass
+        # maskRef = self.maskRef.get()
+        # maskAlign = self.maskAlign.get()
+        # if maskRef:
+        #     self.convertOrLink(abspath(maskRef.getFileName()), self.maskRefOutName, self._getExtraPath(),
+        #                        self.inSamplingRate)
+        # if maskAlign:
+        #     self.convertOrLink(abspath(maskAlign.getFileName()), self.maskAlignOutName, self._getExtraPath(),
+        #                        self.inSamplingRate)
+        # if self.convertedRefDict:
+        #     for refFile, baseName in self.convertedRefDict.items():
+        #         self.convertOrLink(refFile, baseName, '', self.inSamplingRate)
 
     def refineMultiStep(self):
         program = Plugin.getProgram("e2spt_refinemulti_new.py")
         self.runJob(program, self._genRefineMultiCmd(), cwd=self._getExtraPath())
 
+    def convertOutputStep(self):
+        for classId in range(self.numClasses):
+            inFile = join(SPTCLS_00_DIR, self.getOutputThreed(classId, 'hdf', onlyBaseName=True))
+            outFile = inFile.replace('.hdf', '.mrc')
+            self.convertBetweenHdfAndMrc(inFile, outFile, extraArgs=f'--apix {self.inSamplingRate:.3f}')
+
     def createOutputStep(self):
-        HDF = '.hdf'
-        MRC = '.mrc'
-        averages = SetOfAverageSubTomograms.create(self._getPath(), template='avgSubtomograms%s.sqlite', suffix='')
-        averages.setSamplingRate(self.inSamplingRate)
+        inParticlesPointer = self.getAttrib(IN_SUBTOMOS, getPointer=True)
         outParticles = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
         outParticles.copyInfo(self.inParticles)
-        nClasses = self.getNoRefs()
         align2dFiles = []
         align3dFiles = []
-        for classId in range(nClasses):
-            # Output 1: average (without halves, as they are not generated in this protocol)
-            avgSubtomo = AverageSubTomogram()
-            avgSubtomo.setFileName(self.getOutputAvgFile(classId).replace(HDF, MRC))
-            avgSubtomo.setSamplingRate(self.inSamplingRate)
-            averages.append(avgSubtomo)
+        for classId in range(self.numClasses):
             # Get the 2d and 3d align files
             align2dFiles.append(self.getAlign2dFile(classId))
             align3dFiles.append(self.getAlign3dFile(classId))
 
-        # Output 2: aligned particles
+        # Output 1: aligned particles
         # outParticles.setAli2dLstFile(self.ali2dLst)
         # outParticles.setAli3dLstFile(self.ali3dLst)
-        EmanLstReader.align3dLst2Scipion(align3dFiles, self.inParticles, outParticles)
+        align3dData = EmanLstReader.align3dLst2Scipion(align3dFiles, self.inParticles, outParticles)
+
+        # Output 2: Classes subtomograms
+        classes3d = SetOfClassesSubTomograms.create(self._getPath(), template='subtomogramClasses%s.sqlite')
+        classes3d.setImages(inParticlesPointer)
+        classes3d.classifyItems(updateItemCallback=self._updateParticle,
+                                updateClassCallback=self._updateClass,
+                                itemDataIterator=iter(align3dData))
+
+        # TODO: check if the FSCs and halves are generated if alignment is selected
 
         # Define outputs and relations
-        inParticlesPointer = self.getAttrib(IN_SUBTOMOS, getPointer=True)
-        self._defineOutputs(**{self._possibleOutputs.classAverages.name: averages,
-                               self._possibleOutputs.subtomograms.name: outParticles})
-        self._defineSourceRelation(inParticlesPointer, averages)
+        self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outParticles,
+                               self._possibleOutputs.classes.name: classes3d})
         self._defineSourceRelation(inParticlesPointer, outParticles)
+        self._defineSourceRelation(inParticlesPointer, classes3d)
 
     # --------------------------- UTILS functions ------------------------------
     def _genRefineMultiCmd(self):
@@ -219,10 +229,10 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         refMask = self.maskRef.get()
         alignMask = self.maskAlign.get()
         breakSym = self.breakSym.get()
-        nClasses = self.nClasses.get()
         new2dAlignFile = self.getNewAliFile(is3d=False)
+        nClasses = self.numClasses
         args = [
-            self.getReferenceFiles(),
+            ' '.join(self.refFiles) if self.refFiles else '',
             f'--ptcls {self.getNewAliFile()}',
             f'--niter {self.nIter.get()}',
             f'--sym {self.symmetry.get()}',
@@ -237,14 +247,17 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         if exists(self._getExtraPath(new2dAlignFile)):
             args.append(f'--loadali2d {new2dAlignFile}')
         if refMask:
-            args.append(f'--maskref {self.maskRefOutName + hdf}')
+            # args.append(f'--maskref {self.maskRefOutName + hdf}')
+            args.append(f'--maskref {abspath(refMask.getFileName())}')
+
         if breakSym:
             args.append(f'--breaksym {breakSym}')
         if self.doAlignment.get():
             args.append(f'--maxang {self.maxAng.get()}')
             args.append(f'--maxshift {self.maxShift.get()}')
             if alignMask:
-                args.append(f'--maskalign {self.maskAlignOutName + hdf}')
+                # args.append(f'--maskalign {self.maskAlignOutName + hdf}')
+                args.append(f'--maskalign {abspath(alignMask.getFileName())}')
         else:
             args.append('--skipali')
         if self.make3dThread.get():
@@ -255,8 +268,8 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         refs = self.getAttrib(REF_VOL)
         refList = None
         if refs:
-            refList = [vol.getFileName() for vol in refs]
-        return ' '.join(refList) if refList else ''
+            refList = [abspath(vol.getFileName()) for vol in refs]
+        return refList
 
     def getNoRefs(self):
         nClasses = self.nClasses.get()
@@ -272,9 +285,22 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def getAlign3dFile(self, classNum):
         return self.getOutputFile(classNum, ALI3D_BASENAME, 'lst')
 
-    def getOutputFile(self, classNum, baseName, ext):
+    def getOutputFile(self, classNum, baseName, ext, onlyBaseName=False):
         nIters = self.nIter.get()
-        return join(self.getMultiRefineDir(), f'{baseName}{nIters:02}_{classNum:02}.{ext}')
+        fName = f'{baseName}{nIters:02}_{classNum:02}.{ext}'
+        return fName if onlyBaseName else join(self.getMultiRefineDir(), fName)
+
+    def getOutputThreed(self, classNum, ext, onlyBaseName=False):
+        return self.getOutputFile(classNum, THREED + '_', ext, onlyBaseName=onlyBaseName)
+
+    @staticmethod
+    def _updateParticle(item, row):
+        item.setClassId(row[CLASS])
+
+    def _updateClass(self, item):
+        item.setAlignment3D()
+        representative = item.getRepresentative()
+        representative.setLocation(self.getOutputThreed(item.getObjId(), 'mrc'))
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):

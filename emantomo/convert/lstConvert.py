@@ -31,6 +31,7 @@ from emantomo.constants import PARTICLE_IND, PARTICLE_FILE, ROT_TR_MATRIX, SCORE
     PART3D_ID, TR_MATRIX, PROJ_MATRIX, TILT_ID, LST_LINE, PARTICLES_3D_DIR
 from emantomo.utils import getPresentPrecedents
 from pwem.objects import Transform
+from pyworkflow.utils import removeBaseExt
 from tomo.constants import TR_EMAN
 from tomo.objects import Coordinate3D
 
@@ -38,8 +39,14 @@ from tomo.objects import Coordinate3D
 class EmanLstReader:
 
     @staticmethod
+    def _getClassIdFromFileName(lstFileName):
+        """The name structure is name_iter_class.lst  --> aliptcls2d_05_00.lst"""
+        lstBaseName = removeBaseExt(lstFileName)
+        return int(lstBaseName.split('_')[-1])
+
+    @staticmethod
     def read3dParticles(lstFileName):
-        """Reads an existing 3d alignment LST file. Example of the file contents:
+        """Reads an existing 3d alignment LST file [name_iter_class.lst  --> aliptcls2d_05_00.lst]. Example of the file contents:
 
         #LSX
         # This file is in fast LST format. All lines after the next line have exactly the number of characters shown on the next line. This MUST be preserved if editing.
@@ -55,15 +62,17 @@ class EmanLstReader:
                 PARTICLE_IND: particle index in the corresponding 3d HDF file stack,
                 PARTICLE_FILE: path of the 3d HDF stack containing the current particle,
                 SCORE: EMAN's calculated score,
-                ROT_TR_MATRIX: 3d transformation matrix calculated by EMAN.
+                CLASS: class id read from the filename,
+                ROT_TR_MATRIX: 3d transformation matrix calculated by EMAN,
                 LST_LINE: current line as in the original file. Useful for sub-setting.
                 }
         """
-        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, ROT_TR_MATRIX, LST_LINE]
+        keys = [PARTICLE_IND, PARTICLE_FILE, SCORE, CLASS, ROT_TR_MATRIX, LST_LINE]
         list_of_lists = []
         lastRow = np.array([0, 0, 0, 1])
 
         with open(lstFileName, 'r') as f:
+            classId = EmanLstReader._getClassIdFromFileName(lstFileName)
             for line in f:
                 lineContentsList = line.split('\t')
                 if len(lineContentsList) > 1:  # There are some explicative lines at the beginning
@@ -75,6 +84,7 @@ class EmanLstReader:
                         lineContentsList[0],
                         lineContentsList[1],
                         jsonData[SCORE],
+                        classId,
                         matrix,
                         line
                     ])
@@ -109,7 +119,7 @@ class EmanLstReader:
                                  PARTICLE_FILE: join(PARTICLES_3D_DIR, basename(particle.getStack3dHdf()))}
                                 for particle in inParticles]
 
-            for alignDict in align3dData:
+            for classId, alignDict in enumerate(align3dData):
                 # The filter() function is more efficient than using a list comprehension because it doesn’t create a
                 # new list in memory. Instead, it returns an iterator that generates the filtered values on-the-fly
                 matchingInPartDict = list(filter(lambda d:
@@ -119,10 +129,10 @@ class EmanLstReader:
                 outParticle = matchingInPartDict[0].get(IN_PARTICLE_OBJ)
                 outParticle.setTransform(Transform(alignDict[ROT_TR_MATRIX]), convention=TR_EMAN)
                 outParticle.setEmanScore(alignDict[SCORE])
+                outParticle.setClassId(alignDict[CLASS])
                 outParticles.append(outParticle)
 
-
-
+        return align3dData
 
     @staticmethod
     def read2dParticles(lstFileName):
