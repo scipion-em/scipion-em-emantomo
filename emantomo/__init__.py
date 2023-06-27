@@ -23,9 +23,11 @@
 # *
 # **************************************************************************
 import eman2
-import emantomo.constants as emanConst
+from emantomo.constants import VERSIONS, EMAN_DEFAULT_VER_NUM
 
 __version__ = "4.0.0"
+
+
 _logo = "eman2_logo.png"
 _references = ['GALAZMONTOYA2015279', 'BELL201625']
 _url = "https://github.com/scipion-em/scipion-em-emantomo"
@@ -35,4 +37,5 @@ class Plugin(eman2.Plugin):
 
     @classmethod
     def defineBinaries(cls, env):
-        pass
+        for ver in VERSIONS:
+            cls.addEmanPackage(env, ver, default=ver == EMAN_DEFAULT_VER_NUM)

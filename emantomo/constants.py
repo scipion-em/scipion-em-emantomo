@@ -24,6 +24,10 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+# Supported versions
+VERSIONS = ['2.99.47', '2.99.52']
+EMAN_DEFAULT_VER_NUM = VERSIONS[-1]
+
 # Extra attributes for refinement
 EMAN_SCORE = '_eman_score'
 EMAN_COVERAGE = '_eman_coverage'
