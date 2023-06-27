@@ -70,7 +70,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             inTsFName = mdObj.ctf.getTiltSeries().getFirstItem().getFileName()
         else:
             inTsFName = mdObj.ts.getFirstItem().getFileName()
-        dirName = TS_DIR
+        dirName = self._getExtraPath(TS_DIR)
         sRate = mdObj.ts.getSamplingRate()
         outFile = self.convertOrLink(inTsFName, mdObj.tsId, dirName, sRate)
         # Store the tsHdfName in the current mdObj
