@@ -94,7 +94,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
         for mdObj in mdObjDict.values():
-            self._insertFunctionStep(super().convertTsStep, mdObj)
+            self._insertFunctionStep(self.convertTsStep, mdObj)
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.estimateCtfStep, mdObj)
         self._insertFunctionStep(self.createOutputStep, mdObjDict)

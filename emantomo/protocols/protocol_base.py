@@ -70,9 +70,8 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             inTsFName = mdObj.ctf.getTiltSeries().getFirstItem().getFileName()
         else:
             inTsFName = mdObj.ts.getFirstItem().getFileName()
-        dirName = self._getExtraPath(TS_DIR)
         sRate = mdObj.ts.getSamplingRate()
-        outFile = self.convertOrLink(inTsFName, mdObj.tsId, dirName, sRate)
+        outFile = self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
         # Store the tsHdfName in the current mdObj
         mdObj.tsHdfName = outFile
 
@@ -209,7 +208,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         hdf = '.hdf'
         outFile = join(outDir, tsId + hdf)
         if inFile.endswith(hdf):
-            createLink(inFile, outFile)
+            createLink(inFile, self._getExtraPath(outFile))
         else:
             self.convertBetweenHdfAndMrc(abspath(inFile), outFile, extraArgs=f'--apix {sRate:.3f}')
         return outFile
