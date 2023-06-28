@@ -34,6 +34,7 @@ from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName, getPresentTsIdsInSet
+from pwem.convert.headers import fixVolume
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
 from pyworkflow.object import Set, Float
@@ -281,6 +282,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             # Delete de HDF files if requested
             if not self.keepHdfFile.get():
                 remove(hdfFile)
+        fixVolume(hdfTomo.replace('.hdf', '.mrc'))
 
     def createOutputStep(self, mdObj):
         # TS alignment

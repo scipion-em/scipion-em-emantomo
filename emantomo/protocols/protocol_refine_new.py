@@ -321,11 +321,10 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         unrolledList = []
         for i in compressedList:
             if len(i) == 1:
-                
                 unrolledList.append(i)
             else:
                 unrolledList += [i[0]] * int(i[1])
-        return unrolledList.index("p") + 1
+        return len(unrolledList) - unrolledList[::-1].index('p')
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):

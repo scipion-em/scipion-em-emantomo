@@ -35,7 +35,7 @@ from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsI
 from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
-from pyworkflow.utils import Message, replaceExt
+from pyworkflow.utils import Message, replaceExt, removeExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
 from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D
@@ -162,12 +162,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # Unstack the 3d particles HDF stack into individual MRC files
         stack3d = join(PARTICLES_3D_DIR, fName)
         self.unstackParticles(stack3d)
+        fixVolume(glob.glob(join(self.getStack3dDir(), f"{removeExt(fName)}*.mrc")))
         # Convert the 2d particles HDF stack into MRC for visualization purposes (compatibility with viewers)
         stack2d = join(PARTICLES_DIR, fName)
         inFile = join(PARTICLES_DIR, basename(stack2d))
         outFile = replaceExt(inFile, 'mrc')
         self.convertBetweenHdfAndMrc(inFile, outFile)
-        fixVolume(self._getExtraPath(outFile))
 
     def createOutputStep(self, mdObjDict):
         inCoordsPointer = getattr(self, IN_COORDS)
