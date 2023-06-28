@@ -192,7 +192,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             inFile = join(SPTCLS_00_DIR, self.getOutputThreed(classId, 'hdf', onlyBaseName=True))
             outFile = inFile.replace('.hdf', '.mrc')
             self.convertBetweenHdfAndMrc(inFile, outFile, extraArgs=f'--apix {self.inSamplingRate:.3f}')
-            fixVolume(outFile)
+            fixVolume(self._getExtraPath(outFile))
 
     def createOutputStep(self):
         inParticlesPointer = self.getAttrib(IN_SUBTOMOS, getPointer=True)

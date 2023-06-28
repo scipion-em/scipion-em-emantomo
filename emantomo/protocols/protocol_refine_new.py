@@ -217,7 +217,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         for inFile in inFiles:
             outFile = inFile.replace('.hdf', '.mrc')
             convertBetweenHdfAndMrc(self, inFile, outFile, args)
-            fixVolume(outFile)
+            fixVolume(self._getExtraPath(outFile))
 
     def createOutputStep(self):
         HDF = '.hdf'
@@ -317,8 +317,15 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     def _getNoPIters(self):
         """From Eman doc: aliptcls3d files are only produced for 'p' iterations"""
         iterStr = self.iters.get()
-        itersList = iterStr.split(',')
-        return len(itersList) - itersList[::-1].index("p")
+        compressedList = iterStr.split(',')
+        unrolledList = []
+        for i in compressedList:
+            if len(i) == 1:
+                
+                unrolledList.append(i)
+            else:
+                unrolledList += [i[0]] * int(i[1])
+        return unrolledList.index("p") + 1
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):

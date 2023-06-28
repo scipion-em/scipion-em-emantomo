@@ -32,6 +32,7 @@ from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBO
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
+from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
 from pyworkflow.utils import Message, replaceExt
@@ -124,8 +125,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
         for mdObj in mdObjDict.values():
-            self._insertFunctionStep(super().convertTsStep, mdObj)
-            self._insertFunctionStep(super().convertTomoStep, mdObj)
+            self._insertFunctionStep(self.convertTsStep, mdObj)
+            self._insertFunctionStep(self.convertTomoStep, mdObj)
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.extractParticlesStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
@@ -166,6 +167,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         inFile = join(PARTICLES_DIR, basename(stack2d))
         outFile = replaceExt(inFile, 'mrc')
         self.convertBetweenHdfAndMrc(inFile, outFile)
+        fixVolume(self._getExtraPath(outFile))
 
     def createOutputStep(self, mdObjDict):
         inCoordsPointer = getattr(self, IN_COORDS)
@@ -186,8 +188,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
             coords = mdObj.coords
-            tomoFile = mdObj.inTomo.getFileName()
-            subtomoFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId))
+            subtomoFiles = sorted(glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId)))
             stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
             stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
             # Get the projections
