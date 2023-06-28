@@ -217,7 +217,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         for inFile in inFiles:
             outFile = inFile.replace('.hdf', '.mrc')
             convertBetweenHdfAndMrc(self, inFile, outFile, args)
-            fixVolume(self._getExtraPath(outFile))
+            fixVolume(outFile)
 
     def createOutputStep(self):
         HDF = '.hdf'
