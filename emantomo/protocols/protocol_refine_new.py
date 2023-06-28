@@ -32,6 +32,7 @@ from emantomo import Plugin
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
+from pwem.convert.headers import fixVolume
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
@@ -216,6 +217,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         for inFile in inFiles:
             outFile = inFile.replace('.hdf', '.mrc')
             convertBetweenHdfAndMrc(self, inFile, outFile, args)
+            fixVolume(outFile)
 
     def createOutputStep(self):
         HDF = '.hdf'

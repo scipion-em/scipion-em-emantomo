@@ -33,6 +33,7 @@ import numpy as np
 from emantomo import Plugin
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
+from pwem.convert.headers import fixVolume
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
@@ -191,6 +192,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             inFile = join(SPTCLS_00_DIR, self.getOutputThreed(classId, 'hdf', onlyBaseName=True))
             outFile = inFile.replace('.hdf', '.mrc')
             self.convertBetweenHdfAndMrc(inFile, outFile, extraArgs=f'--apix {self.inSamplingRate:.3f}')
+            fixVolume(outFile)
 
     def createOutputStep(self):
         inParticlesPointer = self.getAttrib(IN_SUBTOMOS, getPointer=True)
