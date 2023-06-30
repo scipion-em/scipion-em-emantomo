@@ -71,17 +71,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         else:
             inTsFName = mdObj.ts.getFirstItem().getFileName()
         sRate = mdObj.ts.getSamplingRate()
-        outFile = self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
-        # Store the tsHdfName in the current mdObj
-        mdObj.tsHdfName = outFile
-
-    def convertTomoStep(self, mdObj):
-        inTomoFName = mdObj.inTomo.getFileName()
-        dirName = TOMOGRAMS_DIR
-        sRate = mdObj.inTomo.getSamplingRate()
-        outFile = self.convertOrLink(inTomoFName, mdObj.tsId, dirName, sRate)
-        # Store the tomoHdfName in the current mdObj
-        mdObj.tomoHdfName = outFile
+        self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
 
     def createEmanPrjPostExtractionStep(self):
         inSubtomos = getattr(self, IN_SUBTOMOS).get()

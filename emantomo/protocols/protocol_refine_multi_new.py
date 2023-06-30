@@ -227,12 +227,11 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     # --------------------------- UTILS functions ------------------------------
     def _genRefineMultiCmd(self):
-        hdf = '.hdf'
         refMask = self.maskRef.get()
         alignMask = self.maskAlign.get()
         breakSym = self.breakSym.get()
         new2dAlignFile = self.getNewAliFile(is3d=False)
-        nClasses = self.numClasses
+        nClasses = self.nClasses.get()
         args = [
             ' '.join(self.refFiles) if self.refFiles else '',
             f'--ptcls {self.getNewAliFile()}',

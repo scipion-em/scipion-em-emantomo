@@ -247,6 +247,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 ts.generateTltFile(join(tltDir, tsId + '.tlt'))
             mdObjList.append(EmanMetaData(tsId=tsId,
                                           ts=ts,
+                                          tsHdfName=join(TS_DIR, f'{tsId}.hdf'),
                                           jsonFile=genJsonFileName(self.getInfoDir(), tsId),
                                           processingInd=counter))
             counter += 1

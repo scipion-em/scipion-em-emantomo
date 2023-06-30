@@ -28,7 +28,7 @@ import glob
 from enum import Enum
 from os.path import join, exists, basename, abspath
 from emantomo import Plugin
-from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX
+from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX, TOMOGRAMS_DIR, TS_DIR
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
 from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
@@ -147,6 +147,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # Generate the md object data units as a dict
         return self.genMdObjDict(inTsSet, inCtfSet, coords=coords)
 
+    def convertTomoStep(self, mdObj):
+        inTomoFName = mdObj.inTomo.getFileName()
+        dirName = TOMOGRAMS_DIR
+        sRate = mdObj.inTomo.getSamplingRate()
+        self.convertOrLink(inTomoFName, mdObj.tsId, dirName, sRate)
+
     def writeData2JsonFileStep(self, mdObj):
         mode = 'a' if exists(mdObj.jsonFile) else 'w'
         coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(), mode=mode)
@@ -260,9 +266,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         mdObjDict = {}
         for tomoId, ts in tsIdsDict.items():
             tomo = tomoIdsDict[tomoId]
+            hdfFileBaseName = f'{tomoId}.hdf'
             mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
                                              inTomo=tomo,
+                                             tomoHdfName=join(TOMOGRAMS_DIR, hdfFileBaseName),
                                              ts=ts,
+                                             tsHdfName=join(TS_DIR, hdfFileBaseName),
                                              ctf=ctfIdsDict[tomoId],
                                              coords=[coord.clone() for coord in
                                                      coords.iterCoordinates(volume=tomo)] if coords else None,

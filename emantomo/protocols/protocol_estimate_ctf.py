@@ -26,8 +26,9 @@
 # **************************************************************************
 
 from enum import Enum
-from os.path import exists
+from os.path import exists, join
 from emantomo import Plugin
+from emantomo.constants import TS_DIR
 from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
@@ -114,6 +115,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
         for tomoId, ts in tsIdsDict.items():
             mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
                                              ts=ts,
+                                             tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
                                              jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
         return mdObjDict
 
