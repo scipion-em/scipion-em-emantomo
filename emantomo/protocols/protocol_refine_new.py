@@ -252,40 +252,40 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         new2dAlignFile = self.getNewAliFile(is3d=False)
         new3dAlignFile = self.getNewAliFile()
         # Input params
-        args = [f'--ptcls {self._getLstFile()}']
+        args = [f'--ptcls={self._getLstFile()}']
         if self.getRefVol():
-            args.append(f'--ref {REFERENCE_NAME}.hdf')
-        args.append(f'--startres {self.startRes.get():.2f}')
+            args.append(f'--ref={REFERENCE_NAME}.hdf')
+        args.append(f'--startres={self.startRes.get():.2f}')
         # Refinement params
-        args.append(f'--iters {self.iters.get()}')
-        args.append(f'--sym {self.symmetry.get()}')
-        args.append(f'--keep {self.pkeep.get():.2f}')
-        args.append(f'--tophat {filteringKeys[self.topHat.get()]}')
-        args.append(f'--maxres {self.maxResAli.get():.2f}')
-        args.append(f'--minres {self.minResAli.get():.2f}')
+        args.append(f'--iters={self.iters.get()}')
+        args.append(f'--sym={self.symmetry.get()}')
+        args.append(f'--keep={self.pkeep.get():.2f}')
+        args.append(f'--tophat={filteringKeys[self.topHat.get()]}')
+        args.append(f'--maxres={self.maxResAli.get():.2f}')
+        args.append(f'--minres={self.minResAli.get():.2f}')
         if self._doGoldStandard(self.inParticles):
             args.append('--goldstandard')
         else:
             args.append('--goldcontinue')
             if exists(new3dAlignFile):
-                args.append(f'--loadali3d {new3dAlignFile}')
+                args.append(f'--loadali3d={new3dAlignFile}')
             if exists(new2dAlignFile):
-                args.append(f'--loadali2d {new2dAlignFile}')
+                args.append(f'--loadali2d={new2dAlignFile}')
         # Local refinement params
         if self.doLocalRefine.get():
             args.append('--localrefine')
-            args.append(f'--maxang {self.maxAng.get()}')
-            args.append(f'--maxshift {self.maxShift.get()}')
-            args.append(f'--smooth {self.sooth.get():.2f}')
-            args.append(f'--smoothN {self.smoothN.get()}')
+            args.append(f'--maxang={self.maxAng.get()}')
+            args.append(f'--maxshift={self.maxShift.get()}')
+            args.append(f'--smooth={self.sooth.get():.2f}')
+            args.append(f'--smoothN={self.smoothN.get()}')
         # Extra params
         args.append(f'--parallel=thread:{self.numberOfThreads.get()}')
-        args.append(f'--threads {self.threadsPostProc.get()}')
+        args.append(f'--threads={self.threadsPostProc.get()}')
         if self.make3dThread.get():
             args.append('--m3dthread')
         if self.extraParams.get():
             args.append(self.extraParams.get())
-        args.append('--verbose 9')
+        args.append('--verbose=9')
 
         return ' '.join(args)
 

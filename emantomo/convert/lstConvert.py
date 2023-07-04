@@ -215,7 +215,7 @@ class EmanLstWriter:
         presentPrecedents = getPresentPrecedents(coords, presentTsIds)
         # Prepare contents
         lines = []
-        for tomo in presentPrecedents:
+        for tomo in sorted(presentPrecedents, key=lambda t: t.getTsId()):
             for emanParticle in emanParticles.iterSubtomos(tomo):
                 lines.append(f'{emanParticle.getIndex()}\t'
                              f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}')
