@@ -42,7 +42,8 @@ import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms
 from tomo.constants import TR_EMAN
 from .. import Plugin
-from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX
+from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
+    TS_FILE
 
 
 def loadJson(jsonFn):
@@ -642,6 +643,7 @@ def ctfTomo2Json(mdObj, sphAb, voltage, mode="w"):
 def ts2Json(mdObj, mode="w"):
     paths = []
     tltParams = []
+    aliLoss = []
     ts = mdObj.ts
     tiltAxisAngle = ts.getAcquisition().getTiltAxisAngle()
     apixTs = ts.getSamplingRate()
@@ -666,10 +668,12 @@ def ts2Json(mdObj, mode="w"):
         if tiltAxisAngle >= 0:
             rotz = -rotz
         tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
+        aliLoss.append(getattr(tiltImage, EMAN_ALI_LOSS, Float(0)).get())
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
-    tltDict = {"apix_unbin": apixUnbinned,
-               "tlt_file": tltFile,
-               "tlt_params": tltParams}
+    tltDict = {ALI_LOSS: aliLoss,
+               APIX_UNBIN: apixUnbinned,
+               TS_FILE: tltFile,
+               TLT_PARAMS: tltParams}
     if mode == "w":
         writeJson(tltDict, jsonFile)
         paths.append(jsonFile)

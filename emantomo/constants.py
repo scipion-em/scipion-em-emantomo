@@ -31,6 +31,13 @@ EMAN_DEFAULT_VER_NUM = VERSIONS[-1]
 # Extra attributes for refinement
 EMAN_SCORE = '_eman_score'
 EMAN_COVERAGE = '_eman_coverage'
+EMAN_ALI_LOSS = '_eman_ali_loss'
+
+# Info json fields
+ALI_LOSS = 'ali_loss'
+APIX_UNBIN = 'apix_unbin'
+TS_FILE = 'tlt_file'
+TLT_PARAMS = 'tlt_params'
 
 # Default label for picking with eman
 TOMOBOX = 'tomobox'

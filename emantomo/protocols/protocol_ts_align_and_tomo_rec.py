@@ -29,7 +29,7 @@ from os import remove
 from os.path import join, getctime, basename
 import numpy as np
 import emantomo
-from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS
+from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS
 from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
@@ -73,6 +73,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     """
 
     _label = 'TS align & tomo rec'
+    _possibleOutputs = outputObjects
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)
@@ -288,8 +289,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     def createOutputStep(self, mdObj):
         # TS alignment
         if self.doAlignment.get():
-            alignParams = loadJson(mdObj.jsonFile)['tlt_params']
-            outTsSet = self._createOutputTs(mdObj, alignParams)
+            jsonDict = loadJson(mdObj.jsonFile)
+            aliLoss = jsonDict[ALI_LOSS]
+            alignParams = jsonDict[TLT_PARAMS]
+            outTsSet = self._createOutputTs(mdObj, alignParams, aliLoss)
             outTsSet.write()
             if self.genInterpolatedTs.get():
                 outTsSetInterp = self._createOutputTsInterpolated(mdObj, alignParams)
@@ -426,7 +429,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         else:
             setattr(self, outputObjects.tiltSeries.name, tsSet)
 
-    def _createOutputTs(self, mdObj, alignParams):
+    def _createOutputTs(self, mdObj, alignParams, aliLoss):
         outTsSet = self.getOutputSetOfTs()
         tiltSeries = self._createCurrentOutTs(mdObj.ts)
         outTsSet.append(tiltSeries)
@@ -436,6 +439,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setIndex(ti.getIndex())
             outTi.setFileName(self._getExtraPath(TS_DIR, mdObj.tsId + '.mrc'))
             curerntAlignParams = alignParams[idx]
+            setattr(outTi, EMAN_ALI_LOSS, Float(aliLoss[idx]))
             self._genTrMatrixFromEmanAlign(outTi, curerntAlignParams)
             # Append the current tilt image to the corresponding tilt series
             tiltSeries.append(outTi)
