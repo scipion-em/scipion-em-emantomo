@@ -251,9 +251,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         acquisition = TomoAcquisition()
 
         firstTomo = self.getInputTomograms().getFirstItem()
-        acquisition.setAngleMin(firstTomo.getAcquisition().getAngleMin())
-        acquisition.setAngleMax(firstTomo.getAcquisition().getAngleMax())
-        acquisition.setStep(firstTomo.getAcquisition().getStep())
+        acquisition.copyInfo(firstTomo.getAcquisition())
         outputSubTomogramsSet.setAcquisition(acquisition)
 
         samplingRateInput = self.inputCoordinates.get().getSamplingRate()
