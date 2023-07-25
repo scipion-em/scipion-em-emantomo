@@ -39,7 +39,7 @@ from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE
 from pyworkflow.utils import Message, replaceExt, removeExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D
+from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms
 
 
 class outputObjects(Enum):
@@ -68,7 +68,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         form.addParam(IN_COORDS, PointerParam,
                       label="Coordinates",
                       important=True,
-                      pointerClass='SetOfCoordinates3D',
+                      pointerClass='SetOfCoordinates3D, SetOfSubTomograms',
                       help='The corresponding tomograms data will be accessed from the provided coordinates.')
         form.addParam(IN_CTF, PointerParam,
                       label="CTF tomo series",
@@ -157,6 +157,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         coords = getattr(self, IN_COORDS).get()
+        if type(coords) == SetOfSubTomograms:
+            coords = coords.getCoordinates3D()
         inCtfSet = getattr(self, IN_CTF).get()
         inTsSet = self.getTs()
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
