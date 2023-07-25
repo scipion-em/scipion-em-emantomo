@@ -157,8 +157,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         coords = getattr(self, IN_COORDS).get()
-        if type(coords) == SetOfSubTomograms:
-            coords = coords.getCoordinates3D()
         inCtfSet = getattr(self, IN_CTF).get()
         inTsSet = self.getTs()
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
@@ -268,7 +266,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     # --------------------------- UTILS functions ----------------------------------
     def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
         self.createInitEmanPrjDirs()
-
+        if type(coords) == SetOfSubTomograms:
+            coords = coords.getCoordinates3D()
         # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
         # which means the intersection of the tsId lists
         tomograms = tomograms if tomograms and not coords else coords.getPrecedents()
