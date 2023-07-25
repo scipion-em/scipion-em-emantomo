@@ -34,7 +34,8 @@ from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF
 from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
 from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
-from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
+from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam, \
+    StringParam
 from pyworkflow.utils import Message, replaceExt, removeExt
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
@@ -92,7 +93,23 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       help='The subtomograms are extracted as a cubic box of this size.')
         form.addParam('shrink', FloatParam,
                       default=1,
-                      label='Shrink factor')
+                      label='Binning factor')
+        form.addParam('editSet', BooleanParam,
+                      label='Apply post transformations?',
+                      default=False)
+        group = form.addGroup('Post transformations', condition='editSet')
+        group.addParam('shiftx', IntParam,
+                       label='X shift (pix.)',
+                       default=0)
+        group.addParam('shifty', IntParam,
+                       label='Y shift (pix.)',
+                       default=0)
+        group.addParam('shiftz', IntParam,
+                       label='Z shift (pix.)',
+                       default=0)
+        group.addParam('postSym', StringParam,
+                       label='Symmetry',
+                       default='c1')
         form.addParam('maxTilt', IntParam,
                       default=100,
                       label='Max tilt',
@@ -119,6 +136,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       help='If set to 0, no padding will be considered. If your particles are deeply buried in other '
                            'densities, using a bigger padtwod may help, but doing so may significantly increase the '
                            'memory usage and slow down the process.')
+        form.addParam('minDist', FloatParam,
+                      label='Minimum distance between particles (Å)',
+                      default=10,
+                      validators=[GE(0)],
+                      expertLevel=LEVEL_ADVANCED,)
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -287,10 +309,13 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             f'--tltkeep={self.tltKeep.get():.2f}',
             f'--padtwod={self.paddingFactor.get():.2f}',
             f'--rmbeadthr={self.rmThr.get():.2f}',
+            f'--mindist={self.minDist.get():.2f}',
             f'--threads={self.numberOfThreads.get()}',
             '--append',
             '--verbose=9'
         ]
+        if self.editSet.get():
+            args.append(f'--postxf={self.postSym.get()},{self.shiftx.get()},{self.shifty.get()},{self.shiftz.get()}')
         return ' '.join(args)
 
     def unstackParticles(self, stackFile, outExt='mrc'):
