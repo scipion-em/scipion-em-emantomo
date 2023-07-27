@@ -25,7 +25,7 @@
 from os.path import join, abspath
 from emantomo.constants import TS_ID
 from pyworkflow.utils import removeBaseExt, getParentFolder
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, Coordinate3D
+from tomo.objects import SetOfCoordinates3D, Coordinate3D
 
 
 def getPresentPrecedents(coordSet, tomoIdsList):
@@ -44,7 +44,7 @@ def genTomoJsonFileName(tomoFileName, jsonOutDirName):
 
 
 def getFromPresentObjects(inSet, labelList):
-    idLabel = Coordinate3D.TOMO_ID_ATTR if type(inSet) in [SetOfCoordinates3D, SetOfSubTomograms] else TS_ID
+    idLabel = Coordinate3D.TOMO_ID_ATTR if type(inSet) == SetOfCoordinates3D else TS_ID
     matches = inSet.aggregate(['COUNT'], idLabel, labelList)
     outDict = {}
     for label in labelList:

@@ -30,16 +30,16 @@ from os.path import join, exists, basename, abspath
 from emantomo import Plugin
 from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX, TOMOGRAMS_DIR, TS_DIR
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_COORDS, IN_CTF, IN_TS, IN_BOXSIZE
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_CTF, IN_TS, IN_BOXSIZE, IN_SUBTOMOS
 from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
 from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam, \
     StringParam
-from pyworkflow.utils import Message, replaceExt, removeExt
+from pyworkflow.utils import Message, replaceExt, removeExt, makePath, createLink
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms
+from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D
 
 
 class outputObjects(Enum):
@@ -60,15 +60,16 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.sphAb = None
         self.voltage = None
         self.scaleFactor = None
+        self.isReExtraction = False
         self.projectionsDict = {}
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_COORDS, PointerParam,
+        form.addParam(IN_SUBTOMOS, PointerParam,
                       label="Coordinates",
                       important=True,
-                      pointerClass='SetOfCoordinates3D, SetOfSubTomograms',
+                      pointerClass='SetOfCoordinates3D, EmanSetOfParticles',
                       help='The corresponding tomograms data will be accessed from the provided coordinates.')
         form.addParam(IN_CTF, PointerParam,
                       label="CTF tomo series",
@@ -146,44 +147,80 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
+        if self.isReExtraction:
+            self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
+            self._insertFunctionStep(self.buildEmanSetsStep)
+        else:
+            self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
+            for mdObj in mdObjDict.values():
+                self._insertFunctionStep(self.convertTsStep, mdObj)
+            # self._insertFunctionStep(self.convertTomoStep, mdObj)
+        self._insertFunctionStep(self.writeData2JsonFileStep, mdObjDict)
+        self._insertFunctionStep(self.extractParticlesStep, mdObjDict)
         for mdObj in mdObjDict.values():
-            self._insertFunctionStep(self.convertTsStep, mdObj)
-            self._insertFunctionStep(self.convertTomoStep, mdObj)
-            self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
-            self._insertFunctionStep(self.extractParticlesStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
         self._insertFunctionStep(self.createOutputStep, mdObjDict)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        coords = getattr(self, IN_COORDS).get()
+        inParticles = getattr(self, IN_SUBTOMOS).get()
         inCtfSet = getattr(self, IN_CTF).get()
         inTsSet = self.getTs()
+        typeInParticles = type(inParticles)
+        if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
+            coords = inParticles
+        elif typeInParticles == SetOfSubTomograms:  # Extraction from classic subtomograms
+            coords = inParticles.getCoordinates3D()
+        else:  # Re-extraction case (from EmanSetOfParticles)
+            self.isReExtraction = True
+            self.inParticles = inParticles
+            coords = inParticles.getCoordinates3D()
+
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
         uniqueTomoValsDict = getFromPresentObjects(coords, [Coordinate3D.TOMO_ID_ATTR, GROUP_ID])
         self.groupIds = uniqueTomoValsDict[GROUP_ID]
         self.emanDict = genEmanGrouping(self.groupIds)
         # Calculate the scale factor
-        self.scaleFactor = coords.getSamplingRate() / inTsSet.getSamplingRate()
+        self.scaleFactor = inParticles.getSamplingRate() / inTsSet.getSamplingRate()
         # Generate the md object data units as a dict
         return self.genMdObjDict(inTsSet, inCtfSet, coords=coords)
 
-    def convertTomoStep(self, mdObj):
-        inTomoFName = mdObj.inTomo.getFileName()
-        dirName = TOMOGRAMS_DIR
-        sRate = mdObj.inTomo.getSamplingRate()
-        self.convertOrLink(inTomoFName, mdObj.tsId, dirName, sRate)
+    def createExtractionEmanPrjStep(self, mdObjDict):
+        # Create project dir structure
+        self.createInitEmanPrjDirs()
+        tomogramsDir = self.getTomogramsDir()
+        # TS must be in HDF (in EMAN's native code it is searched in harcoded HDF format based on the tomogram
+        # basename), so it will be converted later. However, the tomograms can be linked in MRC without any problem
+        if self.isReExtraction:
+            makePath(self.getSetsDir(), self.getRefineDir())
+            infoDir = self.getInfoDir()
+            for mdObj in mdObjDict.values():
+                # infoJson = mdObj.jsonFile
+                tomoFName = mdObj.inTomo.getFileName()
+                # createLink(infoJson, join(infoDir, basename(infoJson)))
+                createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
+        else:
+            for mdObj in mdObjDict.values():
+                tomoFName = mdObj.inTomo.getFileName()
+                createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
 
-    def writeData2JsonFileStep(self, mdObj):
-        mode = 'a' if exists(mdObj.jsonFile) else 'w'
-        coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(), mode=mode)
-        ts2Json(mdObj, mode='a')
-        ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
+    # def convertTomoStep(self, mdObj):
+    #     inTomoFName = mdObj.inTomo.getFileName()
+    #     dirName = TOMOGRAMS_DIR
+    #     sRate = mdObj.inTomo.getSamplingRate()
+    #     self.convertOrLink(inTomoFName, mdObj.tsId, dirName, sRate)
 
-    def extractParticlesStep(self, mdObj):
+    def writeData2JsonFileStep(self, mdObjDict):
+        for mdObj in mdObjDict.values():
+            mode = 'a' if exists(mdObj.jsonFile) else 'w'
+            coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(), mode=mode)
+            ts2Json(mdObj, mode='a')
+            ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
+
+    def extractParticlesStep(self, mdObjDict):
         program = Plugin.getProgram('e2spt_extract.py')
-        self.runJob(program, self._genExtractArgs(mdObj), cwd=self._getExtraPath())
+        self.runJob(program, self._genExtractArgs(mdObjDict), cwd=self._getExtraPath())
 
     def convertOutputStep(self, mdObj):
         fName = self._getEmanFName(mdObj.tsId)
@@ -198,20 +235,24 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.convertBetweenHdfAndMrc(inFile, outFile)
 
     def createOutputStep(self, mdObjDict):
-        inCoordsPointer = getattr(self, IN_COORDS)
+        inCoordsPointer = getattr(self, IN_SUBTOMOS)
         inCoords = inCoordsPointer.get()
         sRate = inCoords.getSamplingRate()
         inTsPointer = getattr(self, IN_TS)
         inTs = inTsPointer.get()
         subtomoSet = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
-        subtomoSet.setSamplingRate(sRate)
-        subtomoSet.setCoordinates3D(inCoords)
+        if self.inParticles:
+            subtomoSet.copyInfo(inCoords)
+        else:
+            subtomoSet.setSamplingRate(sRate)
+            subtomoSet.setCoordinates3D(inCoords)
 
         # Generate the fiducial model (for data visualization purpose)
         fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
-        fiducialSize = round((inCoords.getBoxSize() / 2 * sRate) / 10)  # Box size is too large, a tenth of the radius
+        # The fiducial size is the diameter in angstroms
+        fiducialSize = round(inCoords.getBoxSize() / sRate)
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
@@ -244,8 +285,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram.setVolName(coord.getTomoId())
                 # Fill EmanParticle own attributes
                 subtomogram.setInfoJson(mdObj.jsonFile)
-                subtomogram.setTsHdf(mdObj.tsHdfName)
-                subtomogram.setTomoHdf(mdObj.tomoHdfName)
+                subtomogram.setTsHdf(self._getExtraPath(mdObj.tsHdfName))
+                subtomogram.setTomoHdf(self._getExtraPath(mdObj.tomoHdfName))
                 subtomogram.setStack2dHdf(stack2d)
                 subtomogram.setStack3dHdf(stack3d)
                 subtomogram.setAbsIndex(absParticleCounter)
@@ -256,7 +297,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # Define outputs and relations
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: subtomoSet,
                                self._possibleOutputs.projected2DCoordinates.name: fiducialModelGaps})
-        self._defineSourceRelation(inCoordsPointer, subtomoSet)
+        self._defineSourceRelation(getattr(self, IN_SUBTOMOS), subtomoSet)
         self._defineSourceRelation(getattr(self, IN_CTF), subtomoSet)
         self._defineSourceRelation(inTsPointer, subtomoSet)
         self._defineSourceRelation(inTsPointer, fiducialModelGaps)
@@ -301,9 +342,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                              jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
         return mdObjDict
 
-    def _genExtractArgs(self, mdObj):
+    def _genExtractArgs(self, mdObjDict):
+        # align2dFile = self.getNewAliFile(is3d=False)
+        align3dFile = self.getNewAliFile()
+        tomoFiles = [join(TOMOGRAMS_DIR, basename(mdObj.inTomo.getFileName())) for mdObj in mdObjDict.values()]
         args = [
-            f'{mdObj.tomoHdfName}',
+            f'{" ".join(tomoFiles)}',
             f'--boxsz_unbin={self.getBoxSize()}',
             f'--shrink={self.shrink.get():.2f}',
             f'--maxtilt={self.maxTilt.get()}',
@@ -317,6 +361,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         ]
         if self.editSet.get():
             args.append(f'--postxf={self.postSym.get()},{self.shiftx.get()},{self.shifty.get()},{self.shiftz.get()}')
+        if exists(self._getExtraPath(align3dFile)):
+            args.append(f'--jsonali={align3dFile}')
+        # if exists(self._getExtraPath(align2dFile)):
+        #     args.append(f'--loadali2d={align2dFile}')
         return ' '.join(args)
 
     def unstackParticles(self, stackFile, outExt='mrc'):

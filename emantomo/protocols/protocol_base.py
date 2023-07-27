@@ -60,6 +60,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         self.scaleFactor = 1
         self.voltage = 300
         self.sphAb = 2.7
+        self.linkTS = True  # Used to link the TS or not when creating the EMAN tomo project
+        self.linkTomos = True  # The same, but with the tomograms
+        self.linkParticles = True  # The same, but for the 2d and 3d particles
 
     # --------------------------- STEPS functions -----------------------------
     def convertTsStep(self, mdObj):
@@ -184,7 +187,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     @staticmethod
     def getNewAliFile(is3d=True):
-        aliFile = 'iniAlign3d.lst' if is3d else 'iniAlign2d.lst'
+        aliFile = 'particle_info_3d.lst' if is3d else 'particle_info_2d.lst'  # Names are hardcoded in some parts of EMAN's native code
         return join(SPT_00_DIR, aliFile)
 
     def getAttrib(self, attribName, getPointer=False):
