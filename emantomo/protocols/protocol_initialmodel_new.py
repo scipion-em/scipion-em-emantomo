@@ -77,6 +77,9 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         form.addParam('nIters', IntParam,
                       default=100,
                       label='No. iterations')
+        form.addParam('nClasses', IntParam,
+                      default=1,
+                      label='No. classes')
         form.addParam('symmetry', StringParam,
                       default='c1',
                       label='Symmetry',
@@ -158,19 +161,20 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
 
     # --------------------------- UTILS functions -----------------------------
     def _genIniModelArgs(self):
-        args = [f" {self._getLstFile()} "]
+        args = [f" {self._getLstFile()}"]
         if self.getRefVol():
-            args.append(f"--ref {REFERENCE_NAME}.hdf ")
-        args.append(f"--shrink {self.shrink.get()} ")
-        args.append(f"--niter {self.nIters.get()} ")
-        args.append(f"--sym {self.symmetry.get()} ")
-        args.append(f"--res {self.targetRes.get():.2f} ")
-        args.append(f"--batch {self.batchSize.get()} ")
-        args.append(f"--keep {self.keptParticles.get():.2f} ")
-        args.append(f"--learnrate {self.learningRate.get():.2f} ")
-        args.append(f"--parallel thread:{self.numberOfThreads.get()} ")
-        args.append("--verbose 9 ")
-        return ''.join(args)
+            args.append(f"--ref {REFERENCE_NAME}.hdf")
+        args.append([f"--shrink {self.shrink.get()}",
+                     f"--niter {self.nIters.get()}",
+                     f"--ncls {self.nClasses.get()}",
+                     f"--sym {self.symmetry.get()}",
+                     f"--res {self.targetRes.get():.2f}",
+                     f"--batch {self.batchSize.get()}",
+                     f"--keep {self.keptParticles.get():.2f}",
+                     f"--learnrate {self.learningRate.get():.2f}",
+                     f"--parallel thread:{self.numberOfThreads.get()}",
+                     "--verbose 9 "])
+        return ' '.join(args)
 
     def getInitialModelHdfFile(self):
         return self._getExtraPath(INIT_MODEL_DIR, INIT_MODEL_NAME)
