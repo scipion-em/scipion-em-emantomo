@@ -164,7 +164,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         args = [f" {self._getLstFile()}"]
         if self.getRefVol():
             args.append(f"--ref {REFERENCE_NAME}.hdf")
-        args.append([f"--shrink {self.shrink.get()}",
+        args.extend([f"--shrink {self.shrink.get()}",
                      f"--niter {self.nIters.get()}",
                      f"--ncls {self.nClasses.get()}",
                      f"--sym {self.symmetry.get()}",
