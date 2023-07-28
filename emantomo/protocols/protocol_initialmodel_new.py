@@ -35,11 +35,11 @@ from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_
 from pwem.convert.headers import fixVolume
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
-from tomo.objects import AverageSubTomogram
+from tomo.objects import AverageSubTomogram, SetOfAverageSubTomograms
 
 
 class OutputsInitModelNew(Enum):
-    average = AverageSubTomogram
+    averages = SetOfAverageSubTomograms
 
 
 class EmanProtTomoInitialModelNew(ProtEmantomoBase):
@@ -126,7 +126,6 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         self._insertFunctionStep(self.convertRefVolStep)
         self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.createInitialModelStep)
-        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
@@ -143,21 +142,24 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         program = Plugin.getProgram("e2spt_sgd_new.py")
         self.runJob(program, self._genIniModelArgs(), cwd=self._getExtraPath())
 
-    def convertOutputStep(self):
-        initModelFile = self.getInitialModelHdfFile()
-        outFile = self.getInitialModelMrcFile()
-        args = '--apix %d' % self.inSamplingRate
-        convertBetweenHdfAndMrc(self, initModelFile, outFile, args)
-
     def createOutputStep(self):
-        averageSubTomogram = AverageSubTomogram()
-        iniModelFileName = self.getInitialModelMrcFile()
-        fixVolume(iniModelFileName)  # Fix header to make it interpreted as volume instead of a stack by xmipp
-        averageSubTomogram.setFileName(iniModelFileName)
-        averageSubTomogram.setSamplingRate(self.inSamplingRate)
+        avgSet = SetOfAverageSubTomograms.create(self._getPath(), template='setOfAvgSubTomograms%s.sqlite')
+        avgSet.copyInfo(self.inParticles)
+        for iVol in range(self.nClasses.get()):
+            # Convert the output to MRC
+            initModelFile = self.getInitialModelHdfFile(iVol)
+            outFile = self.getInitialModelMrcFile(iVol)
+            args = '--apix %d' % self.inSamplingRate
+            convertBetweenHdfAndMrc(self, initModelFile, outFile, args)
+            # Generate the corresponding output
+            averageSubTomogram = AverageSubTomogram()
+            fixVolume(outFile)  # Fix header to make it interpreted as volume instead of a stack by xmipp
+            averageSubTomogram.setFileName(outFile)
+            averageSubTomogram.setSamplingRate(self.inSamplingRate)
+            avgSet.append(averageSubTomogram)
         # Define outputs and relations
-        self._defineOutputs(**{self._possibleOutputs.average.name: averageSubTomogram})
-        self._defineSourceRelation(getattr(self, IN_SUBTOMOS), averageSubTomogram)
+        self._defineOutputs(**{self._possibleOutputs.averages.name: avgSet})
+        self._defineSourceRelation(getattr(self, IN_SUBTOMOS), avgSet)
 
     # --------------------------- UTILS functions -----------------------------
     def _genIniModelArgs(self):
@@ -176,10 +178,10 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
                      "--verbose 9 "])
         return ' '.join(args)
 
-    def getInitialModelHdfFile(self):
-        return self._getExtraPath(INIT_MODEL_DIR, INIT_MODEL_NAME)
+    def getInitialModelHdfFile(self, iVol):
+        return self._getExtraPath(INIT_MODEL_DIR, INIT_MODEL_NAME % iVol)
 
-    def getInitialModelMrcFile(self):
-        return self._getExtraPath(INIT_MODEL_MRC)
+    def getInitialModelMrcFile(self, iVol):
+        return self._getExtraPath(INIT_MODEL_MRC % iVol)
 
     # -------------------------- INFO functions -------------------------------
