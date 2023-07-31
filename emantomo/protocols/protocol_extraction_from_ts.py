@@ -62,7 +62,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.scaleFactor = None
         self.isReExtraction = False
         self.projectionsDict = {}
-        self.boxSize = None
+        self.coordsBoxSize = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -176,7 +176,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self.isReExtraction = True
             self.inParticles = inParticles
             coords = inParticles.getCoordinates3D()
-        self.boxSize = coords.getBoxSize()
+        self.coordsBoxSize = coords.getBoxSize()
 
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
