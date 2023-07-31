@@ -383,7 +383,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         if shrink:
             if shrink > 1:
                 pattern += f'_bin{int(self.shrink.get())}'
-        if self.isReExtraction.get():
+        if self.isReExtraction:
             pattern += '_reext'
         return tsId + pattern + '.hdf'
 
