@@ -379,7 +379,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     def _getEmanFName(self, tsId):
         if self.isReExtraction:
-            partFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, f'{tsId}*_reext.hdf'))
+            partFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, f'{tsId}*_reextract.hdf'))
             return basename(partFiles[0])
         else:
             shrink = self.shrink.get()
