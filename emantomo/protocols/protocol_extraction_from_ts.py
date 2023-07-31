@@ -62,6 +62,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.scaleFactor = None
         self.isReExtraction = False
         self.projectionsDict = {}
+        self.boxSize = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -175,6 +176,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self.isReExtraction = True
             self.inParticles = inParticles
             coords = inParticles.getCoordinates3D()
+        self.boxSize = coords.getBoxSize()
 
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
@@ -252,7 +254,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
         # The fiducial size is the diameter in angstroms
-        fiducialSize = round(inCoords.getBoxSize() / sRate)
+        fiducialSize = round(self.boxSize / sRate)
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
