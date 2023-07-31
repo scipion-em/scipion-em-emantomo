@@ -60,7 +60,6 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         self.scaleFactor = 1
         self.voltage = 300
         self.sphAb = 2.7
-        self.linkParticles = True  # Used to link the 2d and 3d particles or not when creating the EMAN tomo project
 
     # --------------------------- STEPS functions -----------------------------
     def convertTsStep(self, mdObj):
@@ -99,9 +98,8 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             createLink(infoJson, join(infoDir, basename(infoJson)))
             createLink(tsFile, join(tsDir, basename(tsFile)))
             createLink(tomoFile, join(tomoDir, basename(tomoFile)))
-            if self.linkParticles:
-                createLink(stack2d, join(stack2dDir, basename(stack2d)))
-                createLink(stack3d, join(stack3dDir, basename(stack3d)))
+            createLink(stack2d, join(stack2dDir, basename(stack2d)))
+            createLink(stack3d, join(stack3dDir, basename(stack3d)))
 
     def convertRefVolStep(self):
         inRef = self.getRefVol()
