@@ -378,14 +378,16 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.runJob(program, ' '.join(args), cwd=self._getExtraPath())
 
     def _getEmanFName(self, tsId):
-        shrink = self.shrink.get()
-        pattern = f'__{TOMOBOX}'
-        if shrink:
-            if shrink > 1:
-                pattern += f'_bin{int(self.shrink.get())}'
         if self.isReExtraction:
-            pattern += '_reext'
-        return tsId + pattern + '.hdf'
+            partFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, f'{tsId}*_reext.hdf'))
+            return basename(partFiles[0])
+        else:
+            shrink = self.shrink.get()
+            pattern = f'__{TOMOBOX}'
+            if shrink:
+                if shrink > 1:
+                    pattern += f'_bin{int(self.shrink.get())}'
+            return tsId + pattern + '.hdf'
 
     def getProjections(self, mdObj):
         """load the corresponding HDF 2d stack file and read from the header the required data to create later a
