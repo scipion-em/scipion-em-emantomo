@@ -173,6 +173,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             coords = inParticles.getCoordinates3D()
         else:  # Re-extraction case (from EmanSetOfParticles)
             self.isReExtraction = True
+            self.linkParticles = False
             self.inParticles = inParticles
             coords = inParticles.getCoordinates3D()
 
@@ -194,7 +195,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # basename), so it will be converted later. However, the tomograms can be linked in MRC without any problem
         if self.isReExtraction:
             makePath(self.getSetsDir(), self.getRefineDir())
-            infoDir = self.getInfoDir()
+            # infoDir = self.getInfoDir()
             for mdObj in mdObjDict.values():
                 # infoJson = mdObj.jsonFile
                 tomoFName = mdObj.inTomo.getFileName()
