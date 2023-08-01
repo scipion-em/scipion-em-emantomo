@@ -69,7 +69,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         form.addParam('shrink', IntParam,
                       default=1,
                       expertLevel=LEVEL_ADVANCED,
-                      label='Shrink factor',
+                      label='Binning factor',
                       help='This option can be used to shrink the input particles by an integer amount '
                            'prior to reconstruction, making them smaller. Default = 1 means no shrinking')
 

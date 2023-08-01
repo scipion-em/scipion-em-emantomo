@@ -254,14 +254,15 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
         # The fiducial size is the diameter in angstroms
-        fiducialSize = round(self.boxSize / sRate)
+        fiducialSize = round(self.coordsBoxSize / sRate)
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
-            coords = mdObj.coords
+            coords = mdObj.particles if self.inParticles else mdObj.coords
             subtomoFiles = sorted(glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId)))
             stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
             stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
+            eh = EmanHdf5Handler(stack3d)
             # Get the projections
             tsProjections = self.getProjections(mdObj)
             landmarkModelGaps = self.createLandmarkModelGaps(mdObj.ts, tsProjections, fiducialSize)
@@ -269,21 +270,25 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
             particleCounter = 0
             for coord, subtomoFile in zip(coords, subtomoFiles):
+                coord = coord.getCoordinate3D() if self.inParticles else coord
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
                 subtomogram.setSamplingRate(sRate)
                 subtomogram.setCoordinate3D(coord)
-                M = coord.getMatrix()
-                shift_x = M[0, 3]
-                shift_y = M[1, 3]
-                shift_z = M[2, 3]
-                transform.setMatrix(M)
-                transform.setShifts(self.scaleFactor * shift_x,
-                                    self.scaleFactor * shift_y,
-                                    self.scaleFactor * shift_z)
-                subtomogram.setTransform(transform, convention=TR_EMAN)
+                if self.isReExtraction:
+                    subtomogram.setTransform(coord.getTransform())
+                else:
+                    M = coord.getMatrix()
+                    shift_x = M[0, 3]
+                    shift_y = M[1, 3]
+                    shift_z = M[2, 3]
+                    transform.setMatrix(M)
+                    transform.setShifts(self.scaleFactor * shift_x,
+                                        self.scaleFactor * shift_y,
+                                        self.scaleFactor * shift_z)
+                    subtomogram.setTransform(transform, convention=TR_EMAN)
                 subtomogram.setVolName(coord.getTomoId())
                 # Fill EmanParticle own attributes
                 subtomogram.setInfoJson(mdObj.jsonFile)
@@ -333,14 +338,17 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         for tomoId, ts in tsIdsDict.items():
             tomo = tomoIdsDict[tomoId]
             hdfFileBaseName = f'{tomoId}.hdf'
+            iCoords = [coord.clone() for coord in coords.iterCoordinates(volume=tomo)] if coords else None
+            iParticles = [particle.clone() for particle in self.inParticles.iterSubtomos(volume=tomo)] if \
+                self.inParticles else None
             mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
                                              inTomo=tomo,
                                              tomoHdfName=join(TOMOGRAMS_DIR, hdfFileBaseName),
                                              ts=ts,
                                              tsHdfName=join(TS_DIR, hdfFileBaseName),
                                              ctf=ctfIdsDict[tomoId],
-                                             coords=[coord.clone() for coord in
-                                                     coords.iterCoordinates(volume=tomo)] if coords else None,
+                                             coords=iCoords,
+                                             particles=iParticles,
                                              jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
         return mdObjDict
 
