@@ -276,7 +276,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
             args.append('--localrefine')
             args.append(f'--maxang={self.maxAng.get()}')
             args.append(f'--maxshift={self.maxShift.get()}')
-            args.append(f'--smooth={self.sooth.get():.2f}')
+            args.append(f'--smooth={self.smooth.get():.2f}')
             args.append(f'--smoothN={self.smoothN.get()}')
         # Extra params
         args.append(f'--parallel=thread:{self.numberOfThreads.get()}')
