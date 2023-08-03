@@ -251,7 +251,10 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         refs = self.getAttrib(REF_VOL)
         refList = None
         if refs:
-            refList = [abspath(vol.getFileName()) for vol in refs]
+            if isinstance(refs, SubTomogram):
+                refList = [abspath(refs.getFileName())]
+            else:
+                refList = [abspath(vol.getFileName()) for vol in refs]
         return refList
 
     def getNoRefs(self):
