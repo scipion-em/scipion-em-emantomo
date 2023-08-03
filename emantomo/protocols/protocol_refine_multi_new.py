@@ -24,9 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import itertools
 from enum import Enum
-from os.path import exists, basename, join, abspath
+from os.path import exists, join, abspath
 
 import numpy as np
 
@@ -37,7 +36,7 @@ from pwem.convert.headers import fixVolume
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms, SetOfAverageSubTomograms, SetOfClassesSubTomograms
+from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SubTomogram
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
 from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_BASENAME, SPTCLS_00_DIR, CLASS
 
@@ -154,7 +153,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
-        self._insertFunctionStep(self.convertReferencesStep)
         self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineMultiStep)
         self._insertFunctionStep(self.convertOutputStep)
@@ -166,22 +164,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         self.inSamplingRate = self.inParticles.getSamplingRate()
         self.numClasses = self.getNoRefs()
         self.refFiles = self.getReferenceFiles()
-        # if refFiles:
-        #     self.convertedRefDict = {refFile: basename(refFile) for refFile in refFiles}
-
-    def convertReferencesStep(self):
-        pass
-        # maskRef = self.maskRef.get()
-        # maskAlign = self.maskAlign.get()
-        # if maskRef:
-        #     self.convertOrLink(abspath(maskRef.getFileName()), self.maskRefOutName, self._getExtraPath(),
-        #                        self.inSamplingRate)
-        # if maskAlign:
-        #     self.convertOrLink(abspath(maskAlign.getFileName()), self.maskAlignOutName, self._getExtraPath(),
-        #                        self.inSamplingRate)
-        # if self.convertedRefDict:
-        #     for refFile, baseName in self.convertedRefDict.items():
-        #         self.convertOrLink(refFile, baseName, '', self.inSamplingRate)
 
     def refineMultiStep(self):
         program = Plugin.getProgram("e2spt_refinemulti_new.py")
@@ -275,7 +257,8 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def getNoRefs(self):
         nClasses = self.nClasses.get()
         refs = self.getAttrib(REF_VOL)
-        return nClasses if nClasses > 0 else len(refs)
+        lenRefs = 1 if isinstance(refs, SubTomogram) else len(refs)
+        return nClasses if nClasses > 0 else lenRefs
 
     def getOutputAvgFile(self, classNum):
         return self.getOutputFile(classNum, THREED, 'hdf')
