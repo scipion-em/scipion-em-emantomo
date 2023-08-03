@@ -37,8 +37,8 @@ from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam, \
     StringParam
 from pyworkflow.utils import Message, replaceExt, removeExt, makePath, createLink
-from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
-from tomo.constants import TR_EMAN
+from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json, getApixUnbinnedFromMd
+from tomo.constants import TR_EMAN, BOTTOM_LEFT_CORNER
 from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D
 
 
@@ -155,7 +155,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
             for mdObj in mdObjDict.values():
                 self._insertFunctionStep(self.convertTsStep, mdObj)
-            # self._insertFunctionStep(self.convertTomoStep, mdObj)
         self._insertFunctionStep(self.writeData2JsonFileStep, mdObjDict)
         self._insertFunctionStep(self.extractParticlesStep, mdObjDict)
         for mdObj in mdObjDict.values():
@@ -206,12 +205,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             for mdObj in mdObjDict.values():
                 tomoFName = mdObj.inTomo.getFileName()
                 createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
-
-    # def convertTomoStep(self, mdObj):
-    #     inTomoFName = mdObj.inTomo.getFileName()
-    #     dirName = TOMOGRAMS_DIR
-    #     sRate = mdObj.inTomo.getSamplingRate()
-    #     self.convertOrLink(inTomoFName, mdObj.tsId, dirName, sRate)
 
     def writeData2JsonFileStep(self, mdObjDict):
         for mdObj in mdObjDict.values():
@@ -270,16 +263,52 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
             particleCounter = 0
             for coord, subtomoFile in zip(coords, subtomoFiles):
-                coord = coord.getCoordinate3D() if self.inParticles else coord
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
                 subtomogram.setSamplingRate(sRate)
-                subtomogram.setCoordinate3D(coord)
+                subtomogram.setVolName(mdObj.tsId)
                 if self.isReExtraction:
                     subtomogram.setTransform(coord.getTransform())
+                    iCoord = coord.getCoordinate3D()
+                    emanParticleInfo = eh._imgObjList[str(particleCounter)]
+                    emanCoord = emanParticleInfo.attrs['EMAN.ptcl_source_coord']
+                    x, y, z = emanCoord[0], emanCoord[1], emanCoord[2]
+                    ###########################################################################################
+                    # From EMAN's e2spt_boxer (this is how it stores the coordinates picked):
+                    # def SaveJson(self):
+                    #
+                    #     info = js_open_dict(self.jsonfile)
+                    #     sx, sy, sz = (self.data["nx"] // 2, self.data["ny"] // 2, self.data["nz"] // 2)
+                    #     if "apix_unbin" in info:
+                    #         bxs = []
+                    #         for b0 in self.boxes:
+                    #             b = [(b0[0] - sx) * self.apix_cur / self.apix_unbin,
+                    #                  (b0[1] - sy) * self.apix_cur / self.apix_unbin,
+                    #                  (b0[2] - sz) * self.apix_cur / self.apix_unbin,
+                    #                  b0[3], b0[4], b0[5]]
+                    #             bxs.append(b)
+                    ###########################################################################################
+                    # In this case, we have to determine b0[0], b0[1] and b0[2], as b is what is read from the HDF
+                    # file header
+                    tomo = mdObj.inTomo
+                    apix = tomo.getSamplingRate()
+                    apixUnbin = getApixUnbinnedFromMd(mdObj)
+                    nx, ny, nz = tomo.getDim()
+                    sx = nx // 2
+                    sy = ny // 2
+                    sz = nz // 2
+                    scaleFactor = apix / apixUnbin
+                    zInvertFactor = -1 if self.doFlipZInTomo.get() else 1
+                    xf = sx + x / scaleFactor
+                    yf = sy + y / scaleFactor
+                    zf = sz + z / (scaleFactor * zInvertFactor)  # The Z is inverted if the reconstruction wasn't made with EMAN
+
+                    iCoord.setPosition(xf, yf, zf, originFunction=BOTTOM_LEFT_CORNER)
+                    subtomogram.setCoordinate3D(iCoord)
                 else:
+                    subtomogram.setCoordinate3D(coord)
                     M = coord.getMatrix()
                     shift_x = M[0, 3]
                     shift_y = M[1, 3]
@@ -289,7 +318,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                         self.scaleFactor * shift_y,
                                         self.scaleFactor * shift_z)
                     subtomogram.setTransform(transform, convention=TR_EMAN)
-                subtomogram.setVolName(coord.getTomoId())
                 # Fill EmanParticle own attributes
                 subtomogram.setInfoJson(mdObj.jsonFile)
                 subtomogram.setTsHdf(self._getExtraPath(mdObj.tsHdfName))
