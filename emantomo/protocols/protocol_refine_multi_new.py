@@ -260,7 +260,8 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def getNoRefs(self):
         nClasses = self.nClasses.get()
         refs = self.getAttrib(REF_VOL)
-        lenRefs = 1 if isinstance(refs, SubTomogram) else len(refs)
+        if refs:
+            lenRefs = 1 if isinstance(refs, SubTomogram) else len(refs)
         return nClasses if nClasses > 0 else lenRefs
 
     def getOutputAvgFile(self, classNum):
