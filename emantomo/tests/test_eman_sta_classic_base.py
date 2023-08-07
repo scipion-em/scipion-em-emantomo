@@ -40,6 +40,7 @@ from pyworkflow.utils import magentaStr
 from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
 from tomo.protocols.protocol_import_coordinates_from_scipion import outputObjs
+from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import EMD_10439, DataSetEmd10439
 
 
@@ -99,7 +100,7 @@ class TestEmantomoStaClassicBase(BaseTest):
                                              samplingRate=cls.origSRate, )
 
         cls.launchProtocol(protImportTomogram)
-        tomoImported = protImportTomogram.outputTomograms
+        tomoImported = getattr(protImportTomogram, OUTPUT_NAME, None)
         cls.assertIsNotNone(tomoImported, "There was a problem with tomogram output")
         return tomoImported
 

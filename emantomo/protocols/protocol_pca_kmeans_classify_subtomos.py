@@ -28,7 +28,7 @@
 import glob
 import itertools
 from enum import Enum
-from os.path import join, abspath
+from os.path import join, abspath, basename
 from pwem import ALIGN_3D
 from pyworkflow import BETA
 from pwem.protocols import EMProtocol
@@ -128,8 +128,8 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         makePath(*[self.subtomosDir, self.spt00Dir])
 
     def convertInputStep(self):
-        volName = self.inSubtomos.get().getFirstItem().getVolName()
-        stackHdf = join(self.subtomosDir, removeBaseExt(volName).split('__ctf')[0] + '.hdf')
+        # volName = self.inSubtomos.get().getFirstItem().getVolName()
+        # stackHdf = join(self.subtomosDir, removeBaseExt(volName).split('__ctf')[0] + '.hdf')
 
         # Convert the particles to HDF if necessary
         writeSetOfSubTomograms(self.inSubtomos.get(), self.subtomosDir, lignType=ALIGN_3D)
@@ -139,13 +139,15 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
 
         # Generate the LST file expected to be in the SPT directory
         program = emantomo.Plugin.getProgram('e2proclst.py')
-        args = ' --create %s %s' % (join(self.spt00Dir, INPUT_PTCLS_LST), abspath(stackHdf))
-        self.runJob(program, args)
+        particleStacks = [join(SUBTOMOGRAMS_DIR, basename(partStack)) for partStack in glob.glob(join(self.subtomosDir, '*.hdf'))]
+        args = f'{" ".join(particleStacks)} --create {join(SPT_00_DIR, INPUT_PTCLS_LST)}'
+        # args = ' --create %s %s' % (join(self.spt00Dir, INPUT_PTCLS_LST), abspath(stackHdf))
+        self.runJob(program, args, cwd=self._getExtraPath())
 
         # Average the introduced particles to get the refined expected to be in the SPT directory
-        args = " --path=%s --keep 1" % self.spt00Dir
+        args = "--keep 1"
         program = emantomo.Plugin.getProgram('e2spt_average.py')
-        self.runJob(program, args)
+        self.runJob(program, args, cwd=self._getExtraPath())
 
     def pcaClassification(self):
         """ Run the pca classification. """
