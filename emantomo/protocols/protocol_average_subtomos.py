@@ -26,16 +26,17 @@
 # *
 # **************************************************************************
 import enum
+import glob
 import os
 import shutil
-from os.path import join
+from os.path import join, basename
 
 from pyworkflow import BETA
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, FloatParam, StringParam, BooleanParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt
-from ..constants import SPT_00_DIR, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG
+from ..constants import SPT_00_DIR, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR
 
 from ..convert import writeSetOfSubTomograms, refinement2Json
 import emantomo
@@ -113,32 +114,26 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
     # --------------- STEPS functions -----------------------
     def _initialize(self):
         self.projectPath = self._getExtraPath(SPT_00_DIR)
-        self.hdfSubtomosDir = self._getExtraPath("subtomograms")
-        makePath(self.hdfSubtomosDir)
-        makePath(self.projectPath)
+        self.hdfSubtomosDir = self._getExtraPath(SUBTOMOGRAMS_DIR)
+        makePath(*[self.hdfSubtomosDir, self.projectPath])
 
     def convertInputStep(self):
         inSubtomos = self.inputSetOfSubTomogram.get()
-
-        volName = inSubtomos.getFirstItem().getVolName()
-        newFn = removeBaseExt(volName).split('__ctf')[0] + '.hdf'
-        newFn = join(self.hdfSubtomosDir, newFn)
         writeSetOfSubTomograms(inSubtomos, self.hdfSubtomosDir)
-
         refinement2Json(self, inSubtomos)
 
         # Generate a virtual stack of particle represented by a .lst file, as expected by EMAN
-        args = ' --create %s %s' % (join(self.projectPath, INPUT_PTCLS_LST), newFn)
         program = emantomo.Plugin.getProgram('e2proclst.py')
-        self.runJob(program, args)
+        particleStacks = [join(SUBTOMOGRAMS_DIR, basename(partStack)) for partStack in glob.glob(join(self.hdfSubtomosDir, '*.hdf'))]
+        args = f'{" ".join(particleStacks)} --create {join(SPT_00_DIR, INPUT_PTCLS_LST)}'
+        self.runJob(program, args, cwd=self._getExtraPath())
 
     def computeAverageStep(self):
-        args = " --path=%s --keep 1 --wedgesigma=%f --threads %i " % \
-               (self.projectPath, self.msWedge.get(), self.numberOfThreads.get())
+        args = "--keep 1 --wedgesigma=%f --threads %i " % (self.msWedge.get(), self.numberOfThreads.get())
         if self.skipPostProc.get():
             args += '--skippostp '
         program = emantomo.Plugin.getProgram('e2spt_average.py')
-        self.runJob(program, args)
+        self.runJob(program, args, cwd=self._getExtraPath())
 
     def converOutputStep(self):
         # Also fix the sampling rate as it might be set wrong (the value stored in the hdf header may be referred

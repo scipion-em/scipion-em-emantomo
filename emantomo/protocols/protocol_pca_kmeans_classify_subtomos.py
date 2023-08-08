@@ -128,9 +128,6 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         makePath(*[self.subtomosDir, self.spt00Dir])
 
     def convertInputStep(self):
-        # volName = self.inSubtomos.get().getFirstItem().getVolName()
-        # stackHdf = join(self.subtomosDir, removeBaseExt(volName).split('__ctf')[0] + '.hdf')
-
         # Convert the particles to HDF if necessary
         writeSetOfSubTomograms(self.inSubtomos.get(), self.subtomosDir, lignType=ALIGN_3D)
 
@@ -141,7 +138,6 @@ class EmanProtPcaKMeansClassifySubtomos(EMProtocol, ProtTomoBase):
         program = emantomo.Plugin.getProgram('e2proclst.py')
         particleStacks = [join(SUBTOMOGRAMS_DIR, basename(partStack)) for partStack in glob.glob(join(self.subtomosDir, '*.hdf'))]
         args = f'{" ".join(particleStacks)} --create {join(SPT_00_DIR, INPUT_PTCLS_LST)}'
-        # args = ' --create %s %s' % (join(self.spt00Dir, INPUT_PTCLS_LST), abspath(stackHdf))
         self.runJob(program, args, cwd=self._getExtraPath())
 
         # Average the introduced particles to get the refined expected to be in the SPT directory
