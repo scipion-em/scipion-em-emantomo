@@ -1,3 +1,6 @@
+v3.1.4:
+  - Subtomogram refinement fixed for multiple tomograms.
+  - Residual sleep command removed from protocol extraction from tomograms.
 v3.1.1:
   Users:
     - Fix in particles extraction -> shifts are now correctly scaled if the particles are extracted from another tomo source.

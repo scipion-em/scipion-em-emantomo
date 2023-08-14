@@ -27,6 +27,7 @@
 import enum
 from glob import glob
 import re
+from os import remove
 from os.path import abspath, basename, join
 from pwem.objects import SetOfFSCs
 from pyworkflow import BETA
@@ -70,8 +71,8 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         EMProtocol.__init__(self, **kwargs)
         self.refFileIn = None
         self.alignType = None
-        self.newFn = None
         self.refFileOut = None
+        self.whole3dStack = None
 
     # --------------- DEFINE param functions ---------------
 
@@ -150,10 +151,9 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     # --------------- INSERT steps functions ----------------
 
     def _insertAllSteps(self):
-        # TODO: Get the basename.hdf from the inputSetOfSubTomogram
+        self.whole3dStack = self._getExtraPath(SUBTOMOGRAMS_DIR, 'whole3dstack.hdf')
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.refinementSubtomogram)
-        # TODO: Set and show the output
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
@@ -166,17 +166,21 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
         else:
             self.alignType = emcts.ALIGN_NONE
         writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=self.alignType)
-        self.newFn = glob(join(storePath, '*.hdf'))[0]
+        fileList = glob(join(storePath, '*.hdf'))
 
         # Fix the sampling rate as it might be set wrong
         inSubtomos = self.inputSetOfSubTomogram.get()
         sampling_rate = inSubtomos.getSamplingRate()
         program = emantomo.Plugin.getProgram('e2proc3d.py')
-        args = "--apix %f %s %s" % (sampling_rate, self.newFn, self.newFn)
-        self.runJob(program, args)
+        for file in fileList:
+            # Bypass the problematic lst generation with this classical approach by making one HDF file containing all
+            # the particles from all the tomograms
+            args = "--apix %f %s %s --append" % (sampling_rate, file, self.whole3dStack)
+            self.runJob(program, args)
+            remove(file)
+        # The same with the reference volume
         self.refFileIn = self.inputRef.get().getFileName()
         self.refFileOut = self._getExtraPath('refVol.hdf')
-        # The same with the reference volume
         if self.refFileIn.endswith('.mrc'):
             args = "--apix %f %s %s" % (sampling_rate, self.refFileIn, self.refFileOut)
             self.runJob(program, args)
@@ -185,7 +189,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     def refinementSubtomogram(self):
         """Run the Subtomogram refinement. """
-        args = ' %s' % abspath(self.newFn)
+        args = ' %s' % self.whole3dStack
         args += ' --verbose=9'
         args += (' --reference=%s ' % abspath(self.refFileOut))
         args += (' --mass=%f' % self.mass.get())
@@ -298,22 +302,3 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     def getOutputPath(self, *args):
         return join(self._getExtraPath(SPT_00_DIR, *args))
 
-    # @staticmethod
-    # def getOutputFile(folderpattern, folder, files, pattern):
-    #     pattern = "^" + folderpattern + pattern
-    #     outputList = list()
-    #     for file in files:
-    #         if re.match(pattern, file) is not None:
-    #             outputList.append(file.replace(folder, ""))
-    #     lastIteration = max(re.findall(r'\d+', ''.join(outputList)))
-    #
-    #     output = [file for file in outputList if lastIteration in file]
-    #     return folder + output.pop()
-    #
-    # @staticmethod
-    # def getLastOutputFolder(files):
-    #     folder = "./spt_"
-    #     validFolders = [file for file in files if folder in file]
-    #     folderSuffix = max(re.findall(r'\d+', ''.join(validFolders)))
-    #     folder = folder + folderSuffix
-    #     return folder
