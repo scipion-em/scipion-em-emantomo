@@ -251,9 +251,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         acquisition = TomoAcquisition()
 
         firstTomo = self.getInputTomograms().getFirstItem()
-        acquisition.setAngleMin(firstTomo.getAcquisition().getAngleMin())
-        acquisition.setAngleMax(firstTomo.getAcquisition().getAngleMax())
-        acquisition.setStep(firstTomo.getAcquisition().getStep())
+        acquisition.copyInfo(firstTomo.getAcquisition())
         outputSubTomogramsSet.setAcquisition(acquisition)
 
         samplingRateInput = self.inputCoordinates.get().getSamplingRate()
@@ -413,9 +411,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         :param factor: factor between the inputSet and the tomogram
         :param counter: counter for eman hdf index
         """
-
-        import time
-        time.sleep(10)
         outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
         subtomoFileList = sorted(glob.glob(outRegex))
         itemList = [item.clone() for item in inputSet] # Get the items (coords or subtomos) in a list)
