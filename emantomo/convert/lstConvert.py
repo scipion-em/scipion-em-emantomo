@@ -210,9 +210,9 @@ class EmanLstWriter:
         Thus, only the stack file and the particle index in the corresponding stack are required.
 
         """
+        # It can be a set of oriented coordinates
+        coords = emanParticles.getCoordinates3D() if type(emanParticles) == EmanSetOfParticles else emanParticles
         # Get the 3d stacks present in the introduced set
-        if type(emanParticles) == EmanSetOfParticles:  # It can be a set of oriented coordinates
-            coords = emanParticles.getCoordinates3D()
         presentTsIds = coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
         presentPrecedents = getPresentPrecedents(coords, presentTsIds)
         # Prepare contents
