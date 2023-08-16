@@ -211,16 +211,24 @@ class EmanLstWriter:
 
         """
         # It can be a set of oriented coordinates
-        coords = emanParticles.getCoordinates3D() if type(emanParticles) == EmanSetOfParticles else emanParticles
+        inputIsEmanParticles = type(emanParticles) == EmanSetOfParticles
+        coords = emanParticles.getCoordinates3D() if inputIsEmanParticles else emanParticles
         # Get the 3d stacks present in the introduced set
         presentTsIds = coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
         presentPrecedents = getPresentPrecedents(coords, presentTsIds)
         # Prepare contents
         lines = []
-        for tomo in sorted(presentPrecedents, key=lambda t: t.getTsId()):
-            for emanParticle in emanParticles.iterSubtomos(tomo):
-                lines.append(f'{emanParticle.getIndex()}\t'
-                             f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}')
+        if inputIsEmanParticles:
+            for tomo in sorted(presentPrecedents, key=lambda t: t.getTsId()):
+                for emanParticle in emanParticles.iterSubtomos(tomo):
+                    lines.append(f'{emanParticle.getIndex()}\t'
+                                 f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}')
+        else:  # Oriented coordinates
+            for tomo in sorted(presentPrecedents, key=lambda t: t.getTsId()):
+                for emanParticle in emanParticles.iterCoordinates(tomo):
+                    lines.append(f'{emanParticle.getIndex()}\t'
+                                 f'{join(PARTICLES_3D_DIR, basename(emanParticle.getStack3dHdf()))}')
+
 
         # Write the LST file
         extraPad = 1 + 1 + 4  # index, tab, 4 blank spaces added by EMAN
