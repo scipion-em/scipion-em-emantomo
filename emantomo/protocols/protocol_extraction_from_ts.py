@@ -150,7 +150,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         mdObjDict = self._initialize()
         if self.isReExtraction:
             self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
-            self._insertFunctionStep(self.buildEmanSetsStep)
+            # self._insertFunctionStep(self.buildEmanSetsStep)
         else:
             self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
             for mdObj in mdObjDict.values():
@@ -214,6 +214,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
     def extractParticlesStep(self, mdObjDict):
+        if self.isReExtraction:
+            self.buildEmanSets()
         program = Plugin.getProgram('e2spt_extract.py')
         self.runJob(program, self._genExtractArgs(mdObjDict), cwd=self._getExtraPath())
 

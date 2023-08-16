@@ -24,6 +24,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+import shutil
 from enum import Enum
 from os.path import exists, join, abspath
 
@@ -153,7 +154,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
-        self._insertFunctionStep(self.buildEmanSetsStep)
+        # self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineMultiStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -166,6 +167,12 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         self.refFiles = self.getReferenceFiles()
 
     def refineMultiStep(self):
+        # In case of continuing from this step, the previous results dir will be removed to avoid EMAN creating one
+        # for each execution (one for each continue)
+        multiRefineDir = self.getMultiRefineDir()
+        if exists(multiRefineDir):
+            shutil.rmtree(multiRefineDir)
+        self.buildEmanSets()
         program = Plugin.getProgram("e2spt_refinemulti_new.py")
         self.runJob(program, self._genRefineMultiCmd(), cwd=self._getExtraPath())
 

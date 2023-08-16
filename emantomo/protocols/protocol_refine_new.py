@@ -185,7 +185,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
         self._insertFunctionStep(self.convertRefVolStep)
-        self._insertFunctionStep(self.buildEmanSetsStep)
+        # self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -204,9 +204,10 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     def refineStep(self):
         # In case of continuing from this step, the previous results dir will be removed to avoid EMAN creating one
         # for each execution (one for each continue)
-        initModelDir = self.getRefineDir()
-        if exists(initModelDir):
-            shutil.rmtree(initModelDir)
+        refineDir = self.getRefineDir()
+        if exists(refineDir):
+            shutil.rmtree(refineDir)
+        self.buildEmanSets(outAliPath=None)
         program = Plugin.getProgram("e2spt_refine_new.py")
         self.runJob(program, self._genRefineCmd(), cwd=self._getExtraPath())
 
@@ -252,7 +253,10 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         new2dAlignFile = self.getNewAliFile(is3d=False)
         new3dAlignFile = self.getNewAliFile()
         # Input params
-        args = [f'--ptcls={self._getLstFile()}']
+        if exists(self._getExtraPath(new3dAlignFile)):
+            args = [f'--ptcls={new3dAlignFile}', f'--loadali3d']
+        else:
+            args = [f'--ptcls={self._getLstFile()}']
         if self.getRefVol():
             args.append(f'--ref={REFERENCE_NAME}.hdf')
         args.append(f'--startres={self.startRes.get():.2f}')
@@ -263,14 +267,15 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         args.append(f'--tophat={filteringKeys[self.topHat.get()]}')
         args.append(f'--maxres={self.maxResAli.get():.2f}')
         args.append(f'--minres={self.minResAli.get():.2f}')
-        if self._doGoldStandard(self.inParticles):
-            args.append('--goldstandard')
-        else:
-            args.append('--goldcontinue')
-            if exists(new3dAlignFile):
-                args.append(f'--loadali3d={new3dAlignFile}')
-            if exists(new2dAlignFile):
-                args.append(f'--loadali2d={new2dAlignFile}')
+        # if self._doGoldStandard(self.inParticles):
+        args.append('--goldstandard')
+        # else:
+        #     args.append('--goldcontinue')
+        # if exists(self._getExtraPath(new3dAlignFile)):
+        #     # args.append(f'--loadali3d={new3dAlignFile}')
+        #     args.append(f'--loadali3d')
+        if exists(self._getExtraPath(new2dAlignFile)):
+            args.append(f'--loadali2d={new2dAlignFile}')
         # Local refinement params
         if self.doLocalRefine.get():
             args.append('--localrefine')

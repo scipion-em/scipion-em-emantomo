@@ -124,7 +124,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
         self._insertFunctionStep(self.convertRefVolStep)
-        self._insertFunctionStep(self.buildEmanSetsStep)
+        # self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.createInitialModelStep)
         self._insertFunctionStep(self.createOutputStep)
 
@@ -139,6 +139,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         initModelDir = self.getInitModelDir()
         if exists(initModelDir):
             shutil.rmtree(initModelDir)
+        self.buildEmanSets()
         program = Plugin.getProgram("e2spt_sgd_new.py")
         self.runJob(program, self._genIniModelArgs(), cwd=self._getExtraPath())
 

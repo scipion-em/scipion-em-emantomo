@@ -26,6 +26,9 @@
 import glob
 import re
 from os.path import join, abspath, basename
+
+import numpy as np
+
 from emantomo import Plugin
 from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTICLES_DIR, PARTICLES_3D_DIR, \
     REFERENCE_NAME, TOMOBOX, SPT_00_DIR, THREED, ALI3D_BASENAME, ALI2D_BASENAME, FSC_MASKED_BNAME, FSC_UNMASKED_BNAME, \
@@ -111,21 +114,23 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                 self.convertOrLink(halves[0], f'{REFERENCE_NAME}_even', '', sRate)
                 self.convertOrLink(halves[1], f'{REFERENCE_NAME}_odd', '', sRate)
 
-    def buildEmanSetsStep(self):
+    # --------------------------- UTILS functions ----------------------------------
+    def buildEmanSets(self, outAliPath=SPT_00_DIR):
         # LST with the particles
         EmanLstWriter.writeSimpleLst(self.inParticles, self.getLstEmanRelPath())
         # LST with the 2d/3d particles and the corresponding alignments
         align3dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_3D, String()).get()
         align2dFile = getattr(self.inParticles, EmanSetOfParticles.ALI_2D, String()).get()
-        if align3dFile:
-            new3dAlignFile = self._getExtraPath(self.getNewAliFile())
+        transformMatrix = self.inParticles.getFirstItem().getTransform(convention=None).getMatrix()
+        particlesFromOrientedPicking = np.any(abs(transformMatrix - np.eye(4)) > 1e-3)
+        if align3dFile or particlesFromOrientedPicking:
+            new3dAlignFile = self._getExtraPath(self.getNewAliFile(outPath=outAliPath))
             EmanLstWriter.writeAlign3dLst(self.inParticles, new3dAlignFile)
         if align2dFile:
-            new2dAlignFile = self._getExtraPath(self.getNewAliFile(is3d=False))
+            new2dAlignFile = self._getExtraPath(self.getNewAliFile(outPath=outAliPath, is3d=False))
             dataDictList = EmanLstReader.read2dParticles(align2dFile)
             self.write2dLst(new2dAlignFile, dataDictList)
 
-    # --------------------------- UTILS functions ----------------------------------
     def getObjByName(self, name):
         """Return an object, from a protocol, named 'name' instead of a pointer."""
         obj = getattr(self, name, None)
@@ -183,9 +188,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         return self._getExtraPath(SPT_CLS_00_FIR)
 
     @staticmethod
-    def getNewAliFile(is3d=True):
+    def getNewAliFile(is3d=True, outPath=None):
         aliFile = 'particle_info_3d.lst' if is3d else 'particle_info_2d.lst'  # Names are hardcoded in some parts of EMAN's native code
-        return join(SPT_00_DIR, aliFile)
+        return join(outPath, aliFile) if outPath else aliFile
 
     def getAttrib(self, attribName, getPointer=False):
         attribPointer = getattr(self, attribName)
