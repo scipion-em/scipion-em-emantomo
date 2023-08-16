@@ -161,7 +161,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
             for mdObj in mdObjDict.values():
                 self._insertFunctionStep(self.convertTsStep, mdObj)
-            self._insertFunctionStep(self.writeAliFilesFromOrientedCoordsStep)
+            if self.orientedCoords:
+                self._insertFunctionStep(self.writeAliFilesFromOrientedCoordsStep)
         self._insertFunctionStep(self.writeData2JsonFileStep, mdObjDict)
         self._insertFunctionStep(self.extractParticlesStep, mdObjDict)
         for mdObj in mdObjDict.values():
