@@ -221,7 +221,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     def writeAliFilesFromOrientedCoordsStep(self):
         # LST with the particles
-        EmanLstWriter.writeSimpleLst(self.inParticles, self.getLstEmanRelPath())
+        EmanLstWriter.writeSimpleLst(getattr(self, IN_SUBTOMOS).get(), self.getLstEmanRelPath())
         # LST with the 3d particles and the corresponding alignments
         new3dAlignFile = self._getExtraPath(self.getNewAliFile())
         EmanLstWriter.writeAlign3dLst(self.inParticles, new3dAlignFile)
