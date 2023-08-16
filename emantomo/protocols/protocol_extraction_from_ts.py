@@ -177,11 +177,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.isReExtraction = False
         if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
             coords = inParticles
-            transformMatrix = coords.getMatrix(convention=MATRIX_CONVERSION.EMAN)
+            transformMatrix = coords.getFirstItem().getMatrix(convention=MATRIX_CONVERSION.EMAN)
         else:  # Extraction from classic subtomograms or Eman particles
             self.inParticles = inParticles
             coords = inParticles.getCoordinates3D()
-            transformMatrix = inParticles.getTransform(convention=MATRIX_CONVERSION.EMAN).getMatrix()
+            transformMatrix = inParticles.getFirstItem().getTransform(convention=MATRIX_CONVERSION.EMAN).getMatrix()
             if typeInParticles == EmanSetOfParticles:
                 self.isReExtraction = True
         self.orientedCoords = np.any(abs(transformMatrix - np.eye(4)) > 1e-4)
