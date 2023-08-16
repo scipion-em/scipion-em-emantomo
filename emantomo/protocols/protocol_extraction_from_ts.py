@@ -27,12 +27,8 @@
 import glob
 from enum import Enum
 from os.path import join, exists, basename, abspath
-
-import numpy as np
-
 from emantomo import Plugin
 from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX, TOMOGRAMS_DIR, TS_DIR
-from emantomo.convert.lstConvert import EmanLstWriter
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_CTF, IN_TS, IN_BOXSIZE, IN_SUBTOMOS
 from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
@@ -43,8 +39,7 @@ from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE
 from pyworkflow.utils import Message, replaceExt, removeExt, makePath, createLink
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json, getApixUnbinnedFromMd
 from tomo.constants import TR_EMAN, BOTTOM_LEFT_CORNER
-from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D, \
-    MATRIX_CONVERSION
+from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D
 
 
 class outputObjects(Enum):
@@ -68,15 +63,14 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.isReExtraction = False
         self.projectionsDict = {}
         self.coordsBoxSize = None
-        self.orientedCoords = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_SUBTOMOS, PointerParam,
-                      label="Coordinates or subtomograms",
+                      label="Coordinates",
                       important=True,
-                      pointerClass='SetOfCoordinates3D, SetOfSubTomograms',
+                      pointerClass='SetOfCoordinates3D, EmanSetOfParticles',
                       help='The corresponding tomograms data will be accessed from the provided coordinates.')
         form.addParam(IN_CTF, PointerParam,
                       label="CTF tomo series",
@@ -161,8 +155,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
             for mdObj in mdObjDict.values():
                 self._insertFunctionStep(self.convertTsStep, mdObj)
-            if self.orientedCoords:
-                self._insertFunctionStep(self.writeAliFilesFromOrientedCoordsStep)
         self._insertFunctionStep(self.writeData2JsonFileStep, mdObjDict)
         self._insertFunctionStep(self.extractParticlesStep, mdObjDict)
         for mdObj in mdObjDict.values():
@@ -175,18 +167,16 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         inCtfSet = getattr(self, IN_CTF).get()
         inTsSet = self.getTs()
         typeInParticles = type(inParticles)
-        self.isReExtraction = False
         if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
             coords = inParticles
-            transformMatrix = coords.getFirstItem().getMatrix(convention=MATRIX_CONVERSION.EMAN)
-        else:  # Extraction from classic subtomograms or Eman particles
+        elif typeInParticles == SetOfSubTomograms:  # Extraction from classic subtomograms
+            coords = inParticles.getCoordinates3D()
+        else:  # Re-extraction case (from EmanSetOfParticles)
+            self.isReExtraction = True
             self.inParticles = inParticles
             coords = inParticles.getCoordinates3D()
-            transformMatrix = inParticles.getFirstItem().getTransform(convention=MATRIX_CONVERSION.EMAN).getMatrix()
-            if typeInParticles == EmanSetOfParticles:
-                self.isReExtraction = True
-        self.orientedCoords = np.any(abs(transformMatrix - np.eye(4)) > 1e-4)
         self.coordsBoxSize = coords.getBoxSize()
+
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
         uniqueTomoValsDict = getFromPresentObjects(coords, [Coordinate3D.TOMO_ID_ATTR, GROUP_ID])
@@ -203,26 +193,18 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         tomogramsDir = self.getTomogramsDir()
         # TS must be in HDF (in EMAN's native code it is searched in harcoded HDF format based on the tomogram
         # basename), so it will be converted later. However, the tomograms can be linked in MRC without any problem
-        # if self.isReExtraction:
-        #     makePath(self.getSetsDir(), self.getRefineDir())
-        #     # infoDir = self.getInfoDir()
-        #     for mdObj in mdObjDict.values():
-        #         # infoJson = mdObj.jsonFile
-        #         tomoFName = mdObj.inTomo.getFileName()
-        #         # createLink(infoJson, join(infoDir, basename(infoJson)))
-        #         createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
-        # else:
-        if self.orientedCoords:
+        if self.isReExtraction:
             makePath(self.getSetsDir(), self.getRefineDir())
-
-        for mdObj in mdObjDict.values():
-            tomoFName = mdObj.inTomo.getFileName()
-            createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
-
-    def writeAliFilesFromOrientedCoordsStep(self):
-        # LST with the 3d particles and the corresponding alignments
-        new3dAlignFile = self._getExtraPath(self.getNewAliFile())
-        EmanLstWriter.writeAlign3dLst(self.inParticles, new3dAlignFile)
+            # infoDir = self.getInfoDir()
+            for mdObj in mdObjDict.values():
+                # infoJson = mdObj.jsonFile
+                tomoFName = mdObj.inTomo.getFileName()
+                # createLink(infoJson, join(infoDir, basename(infoJson)))
+                createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
+        else:
+            for mdObj in mdObjDict.values():
+                tomoFName = mdObj.inTomo.getFileName()
+                createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
 
     def writeData2JsonFileStep(self, mdObjDict):
         for mdObj in mdObjDict.values():
