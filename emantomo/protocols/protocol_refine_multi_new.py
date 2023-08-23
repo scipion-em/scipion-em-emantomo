@@ -39,7 +39,8 @@ from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam
 from pyworkflow.utils import Message
 from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SubTomogram
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_BASENAME, SPTCLS_00_DIR, CLASS
+from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_BASENAME, SPTCLS_00_DIR, CLASS, \
+    SPT_00_DIR
 
 
 class EmanMultiRefineNewOutputs(Enum):
@@ -117,7 +118,9 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         form.addSection(label='Alignment')
         form.addParam('doAlignment', BooleanParam,
                       default=True,
-                      label='Do alignment?')
+                      label='Do alignment?',
+                      help='If set to No (default), it will skip the alignment entirely when aligned particles are '
+                           'provided. Otherwise a local orientation search will still be performed.')
         form.addParam('maskAlign', PointerParam,
                       pointerClass='VolumeMask',
                       condition='doAlignment',
@@ -223,7 +226,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         nClasses = self.nClasses.get()
         args = [
             ' '.join(self.refFiles) if self.refFiles else '',
-            f'--ptcls {self.getNewAliFile()}',
+            f'--ptcls {self.getNewAliFile(outPath=SPT_00_DIR)}',
             f'--niter {self.nIter.get()}',
             f'--sym {self.symmetry.get()}',
             f'--parallel thread:{self.numberOfThreads.get()}',

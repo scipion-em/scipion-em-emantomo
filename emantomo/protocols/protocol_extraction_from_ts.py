@@ -62,7 +62,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.scaleFactor = None
         self.isReExtraction = False
         self.projectionsDict = {}
-        self.coordsBoxSize = None
+        self.currentBoxSize = None
+        self.currentSRate = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -166,6 +167,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         inParticles = getattr(self, IN_SUBTOMOS).get()
         inCtfSet = getattr(self, IN_CTF).get()
         inTsSet = self.getTs()
+        binFactor = self.shrink.get()
         typeInParticles = type(inParticles)
         if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
             coords = inParticles
@@ -175,7 +177,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self.isReExtraction = True
             self.inParticles = inParticles
             coords = inParticles.getCoordinates3D()
-        self.coordsBoxSize = coords.getBoxSize()
+        self.currentBoxSize = self.getAttrib(IN_BOXSIZE) / binFactor
+        self.currentSRate = inTsSet.getSamplingRate() * binFactor
 
         # Get the group ids and the emanDict to have the correspondence between the previous classes and
         # how EMAN will refer them
@@ -215,7 +218,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     def extractParticlesStep(self, mdObjDict):
         if self.isReExtraction:
-            self.buildEmanSets()
+            self.buildEmanSets(outAliPath=None)
         program = Plugin.getProgram('e2spt_extract.py')
         self.runJob(program, self._genExtractArgs(mdObjDict), cwd=self._getExtraPath())
 
@@ -234,22 +237,21 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def createOutputStep(self, mdObjDict):
         inCoordsPointer = getattr(self, IN_SUBTOMOS)
         inCoords = inCoordsPointer.get()
-        sRate = inCoords.getSamplingRate()
         inTsPointer = getattr(self, IN_TS)
         inTs = inTsPointer.get()
         subtomoSet = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
         if self.inParticles:
             subtomoSet.copyInfo(inCoords)
         else:
-            subtomoSet.setSamplingRate(sRate)
             subtomoSet.setCoordinates3D(inCoords)
+        subtomoSet.setSamplingRate(self.currentSRate)
 
         # Generate the fiducial model (for data visualization purpose)
         fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
         # The fiducial size is the diameter in angstroms
-        fiducialSize = round(self.coordsBoxSize / sRate)
+        fiducialSize = round(self.currentBoxSize / self.currentSRate)
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
@@ -269,7 +271,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
                 subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
-                subtomogram.setSamplingRate(sRate)
+                subtomogram.setSamplingRate(self.currentSRate)
                 subtomogram.setVolName(mdObj.tsId)
                 if self.isReExtraction:
                     subtomogram.setTransform(coord.getTransform())
@@ -387,7 +389,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         align3dFile = self.getNewAliFile()
         tomoFiles = [join(TOMOGRAMS_DIR, basename(mdObj.inTomo.getFileName())) for mdObj in mdObjDict.values()]
         args = [
-            f'{" ".join(tomoFiles)}',
+            # The particles can be read using the input tomograms or directly the particles contained in the ali3d file
+            # in clase it exists
+            f'--jsonali={align3dFile}' if exists(self._getExtraPath(align3dFile)) else f'{" ".join(tomoFiles)}',
             f'--boxsz_unbin={self.getBoxSize()}',
             f'--shrink={self.shrink.get():.2f}',
             f'--maxtilt={self.maxTilt.get()}',
@@ -401,8 +405,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         ]
         if self.editSet.get():
             args.append(f'--postxf={self.postSym.get()},{self.shiftx.get()},{self.shifty.get()},{self.shiftz.get()}')
-        if exists(self._getExtraPath(align3dFile)):
-            args.append(f'--jsonali={align3dFile}')
         # if exists(self._getExtraPath(align2dFile)):
         #     args.append(f'--loadali2d={align2dFile}')
         return ' '.join(args)
