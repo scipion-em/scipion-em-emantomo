@@ -32,7 +32,7 @@ from emantomo.constants import TS_DIR
 from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
-from pyworkflow.protocol import PointerParam, FloatParam, IntParam
+from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
 from emantomo.convert import loadJson, ts2Json
 
@@ -65,13 +65,16 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
         lineDefocus.addParam('minDefocus', FloatParam, default=2.0, label='min')
         lineDefocus.addParam('maxDefocus', FloatParam, default=7.0, label='max')
         lineDefocus.addParam('stepDefocus', FloatParam, default=0.02, label='Step')
-
+        form.addParam('doPhaseShiftSearch', BooleanParam,
+                      label='Do phase shift search?',
+                      default=False)
         linePhaseShift = form.addLine('Phase shift range (deg.)',
+                                      condition='doPhaseShiftSearch',
                                       help="Search range of the phase shift (start, end, step). To avoid"
                                            "the phase shift search use min 0.0, max 1.0, and step 1.0.")
-        linePhaseShift.addParam('minPhaseShift', FloatParam, default=10.0, label='min')
-        linePhaseShift.addParam('maxPhaseShift', FloatParam, default=15.0, label='max')
-        linePhaseShift.addParam('stepPhaseShift', FloatParam, default=5.0, label='Step')
+        linePhaseShift.addParam('minPhaseShift', FloatParam, default=0, label='min', condition='doPhaseShiftSearch')
+        linePhaseShift.addParam('maxPhaseShift', FloatParam, default=1, label='max', condition='doPhaseShiftSearch')
+        linePhaseShift.addParam('stepPhaseShift', FloatParam, default=1, label='Step', condition='doPhaseShiftSearch')
 
         form.addParam('tilesize', IntParam,
                       label='Size of tile to calculate FFT',

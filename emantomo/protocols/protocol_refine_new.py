@@ -142,8 +142,8 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         form.addSection(label='Local refine')
         form.addParam('doLocalRefine', BooleanParam,
                       default=False,
-                      label='Do local refine?',
-                      help='Perform only local search around the solution from the last iteration.')
+                      label='Do local refine? (only for p iterations)',
+                      help='Perform only local search around the solution from the previous alignment.')
         form.addParam('maxAng', IntParam,
                       default=30,
                       condition='doLocalRefine',
