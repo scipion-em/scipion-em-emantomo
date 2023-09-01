@@ -1,3 +1,5 @@
+v3.1.5:
+  - Fix: viewer now only show the particle classes from the selected tomogram, not from all the set.
 v3.1.4:
   - Subtomogram refinement fixed for multiple tomograms.
   - Residual sleep command removed from protocol extraction from tomograms.

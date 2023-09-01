@@ -47,7 +47,7 @@ from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries, SetOfTomograms
+from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D
 from tomo.constants import TR_EMAN
 
 from .. import Plugin
@@ -626,12 +626,13 @@ def jsonFilesFromSet(setScipion, path):
 
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
-    groupIds = setCoords.aggregate(["MAX", "COUNT"], "_groupId", ["_groupId"])
-    groupIds = set([d['_groupId'] for d in groupIds])
-    emanIds = list(range(len(groupIds)))
-    dict_eman = dict(zip(groupIds, emanIds))
-    for json_file in json_files:
+    TOMO_ID = Coordinate3D.TOMO_ID_ATTR
+    tomoIds = sorted(setCoords.getUniqueValues(TOMO_ID))
+    json_files = sorted(json_files)
+    for tomoId, json_file in zip(tomoIds, json_files):
         coords = []
+        groupIds = setCoords.getUniqueValues("_groupId", where='_tomoId="%s"' % tomoId)
+        dict_eman = dict(zip(groupIds, range(len(groupIds))))
         for coor in setCoords.iterCoordinates():
             tomoName = pwutils.removeBaseExt(coor.getVolume().getFileName())
             if "__" in tomoName:
