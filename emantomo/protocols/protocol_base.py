@@ -59,9 +59,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.inParticles = None
-        self.inSamplingRate = -1
-        self.scaleFactor = 1
-        self.voltage = 300
+        self.inSamplingRate = -1.0
+        self.scaleFactor = 1.0
+        self.voltage = 300.0
         self.sphAb = 2.7
 
     # --------------------------- STEPS functions -----------------------------
