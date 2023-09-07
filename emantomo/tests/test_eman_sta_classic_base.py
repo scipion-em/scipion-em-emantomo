@@ -100,7 +100,7 @@ class TestEmantomoStaClassicBase(BaseTest):
                                              samplingRate=cls.origSRate, )
 
         cls.launchProtocol(protImportTomogram)
-        tomoImported = getattr(protImportTomogram, OUTPUT_NAME, None)
+        tomoImported = protImportTomogram.Tomograms
         cls.assertIsNotNone(tomoImported, "There was a problem with tomogram output")
         return tomoImported
 
@@ -132,10 +132,10 @@ class TestEmantomoStaClassicBase(BaseTest):
         return tomosBinned
 
     @classmethod
-    def runExtractSubtomograms(cls, coordsImported, tomoSource=SAME_AS_PICKING, tomograms=None, boxSize=None):
+    def runExtractSubtomograms(cls, coordsImported, tomoSource=SAME_AS_PICKING, tomograms=None, boxSize=None, label=None):
         # Extract subtomograms
         print(magentaStr("\n==> Extracting the subtomograms:"))
-        protLabel = 'Extraction - same as picking'
+        protLabel = 'Extraction - same as picking' if label is None else label
         argsDict = {'inputCoordinates': coordsImported,
                     'tomoSource': tomoSource,
                     'boxSize': boxSize,

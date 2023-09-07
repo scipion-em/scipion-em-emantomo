@@ -33,6 +33,10 @@ EMAN_SCORE = '_eman_score'
 EMAN_COVERAGE = '_eman_coverage'
 EMAN_ALI_LOSS = '_eman_ali_loss'
 
+# Norm options
+PROC_NORMALIZE = 0
+PROC_EDGEMEAN = 1
+
 # Info json fields
 ALI_LOSS = 'ali_loss'
 APIX_UNBIN = 'apix_unbin'

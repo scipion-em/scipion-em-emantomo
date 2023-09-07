@@ -1,6 +1,14 @@
+v3.1.5:
+  - Fix: viewer now only show the particle classes from the selected tomogram, not from all the set.
+v3.1.4:
+  - Subtomogram refinement fixed for multiple tomograms.
+  - Residual sleep command removed from protocol extraction from tomograms.
 v3.1.1:
-  - Users: fix in particles extraction -> shifts are now correctly scaled if the particles are extracted from another tomo source.
-  - Developers:
+  Users:
+    - Fix in particles extraction -> shifts are now correctly scaled if the particles are extracted from another tomo source.
+    - Coordinates extraction extracts also from subtomograms.
+    - Fix: extraction box size wizard
+  Developers:
     - Multiple refactoring, tests renewed, protocols re-evaluated and new useful parameter addition.
     - Version STA classic can be considered as complete, but may be expanded to the MRA in the near future.
 

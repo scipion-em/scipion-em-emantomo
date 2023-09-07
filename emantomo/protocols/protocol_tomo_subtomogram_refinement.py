@@ -302,22 +302,3 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     def getOutputPath(self, *args):
         return join(self._getExtraPath(SPT_00_DIR, *args))
 
-    # @staticmethod
-    # def getOutputFile(folderpattern, folder, files, pattern):
-    #     pattern = "^" + folderpattern + pattern
-    #     outputList = list()
-    #     for file in files:
-    #         if re.match(pattern, file) is not None:
-    #             outputList.append(file.replace(folder, ""))
-    #     lastIteration = max(re.findall(r'\d+', ''.join(outputList)))
-    #
-    #     output = [file for file in outputList if lastIteration in file]
-    #     return folder + output.pop()
-    #
-    # @staticmethod
-    # def getLastOutputFolder(files):
-    #     folder = "./spt_"
-    #     validFolders = [file for file in files if folder in file]
-    #     folderSuffix = max(re.findall(r'\d+', ''.join(validFolders)))
-    #     folder = folder + folderSuffix
-    #     return folder
