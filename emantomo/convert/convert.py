@@ -438,6 +438,8 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
     coord3DSetDict = {}
 
     # Subsets do not have this
+    outputname = "coordinates%s"
+    suffix = None
     if hasattr(protocol, "_getOutputSuffix"):
         suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
         outputname = protocol.OUTPUT_PREFIX + suffix
@@ -448,8 +450,7 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
                 suffix = "user%s" % count
                 break
 
-    coord3DSet = SetOfCoordinates3D.create(protocol._getPath(),
-                                           prefix=outputname)
+    coord3DSet = SetOfCoordinates3D.create(protocol._getPath(), prefix=outputname, suffix=suffix)
     coord3DSet.setPrecedents(setTomograms)
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     first = True

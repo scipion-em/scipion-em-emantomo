@@ -31,12 +31,12 @@ from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
 from emantomo.convert import jsons2SetCoords3D
 from emantomo.protocols.protocol_base import ProtEmantomoBase, REF_VOL, IN_TOMOS
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam
-from pyworkflow.utils import Message, createLink
-from tomo.objects import AverageSubTomogram
+from pyworkflow.utils import Message
+from tomo.objects import SetOfCoordinates3D
 
 
 class OutputsTemplateMatch(Enum):
-    average = AverageSubTomogram
+    coordinates = SetOfCoordinates3D
 
 
 class EmanProtTemplateMatching(ProtEmantomoBase):
@@ -47,6 +47,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     _label = 'Reference-based picking'
     _possibleOutputs = OutputsTemplateMatch
+    OUTPUT_PREFIX = _possibleOutputs.coordinates.name
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -109,9 +110,8 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.prepareEmanPrj)
-        self._insertFunctionStep(super().convertRefVolStep)
+        self._insertFunctionStep(self.convertRefVolStep)
         self._insertFunctionStep(self.templateMatchingStep)
-        # self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
@@ -120,19 +120,16 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     def prepareEmanPrj(self):
         super().createInitEmanPrjDirs()
+        sRate = self.inTomos.getSamplingRate()
         for tomo in self.inTomos:
             inTomoName = tomo.getFileName()
-            createLink(inTomoName, self._getExtraPath(TOMOGRAMS_DIR, basename(inTomoName)))
+            # Required to ensure that the sampling rate is correct in the header, as EMAN reads and compares it
+            # with the sampling rate of the reference volume to scale the data
+            self.convertOrLink(inTomoName, tomo.getTsId(), TOMOGRAMS_DIR, sRate)
 
     def templateMatchingStep(self):
         program = Plugin.getProgram("e2spt_tempmatch.py")
         self.runJob(program, self._genTempMatchArgs(), cwd=self._getExtraPath())
-
-    # def convertOutputStep(self):
-    #     initModelFile = self.getInitialModelHdfFile()
-    #     outFile = self.getInitialModelMrcFile()
-    #     args = '--apix %d' % self.inSamplingRate
-    #     convertBetweenHdfAndMrc(self, initModelFile, outFile, args)
 
     def createOutputStep(self):
         jsons2SetCoords3D(self, self.inTomos, self.getInfoDir())
@@ -159,6 +156,5 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         tomoFileList = [join(TOMOGRAMS_DIR, basename(tomoFile)) for tomoFile
                         in glob.glob(join(self.getTomogramsDir(), '*'))]
         return ' '.join(tomoFileList)
-
 
     # -------------------------- INFO functions -------------------------------
