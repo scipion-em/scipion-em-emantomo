@@ -301,9 +301,9 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         representative.setLocation(self.getOutputThreed(item.getObjId(), 'mrc'))
 
     # --------------------------- INFO functions --------------------------------
-    def _validate(self):
-        errorMsg = []
-        inTrMatrix = self.getAttrib(IN_SUBTOMOS).getFirstItem().getTransform().getMatrix()
-        if np.allclose(inTrMatrix, np.eye(4), atol=1e-4):
-            errorMsg.append('No alignment was detected in the introduced particles.')
-        return errorMsg
+    # def _validate(self):
+    #     errorMsg = []
+    #     inTrMatrix = self.getAttrib(IN_SUBTOMOS).getFirstItem().getTransform().getMatrix()
+    #     if np.allclose(inTrMatrix, np.eye(4), atol=1e-4):
+    #         errorMsg.append('No alignment was detected in the introduced particles.')
+    #     return errorMsg

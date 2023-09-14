@@ -1,3 +1,7 @@
+v4.0.0:
+  - EMAN's per particle per tilt workflow with all the new programs integrated.
+  - Classic template matching protocol renewed.
+  - Unused or obsolete protocols removed.
 v3.1.5:
   - Fix: viewer now only show the particle classes from the selected tomogram, not from all the set.
 v3.1.4:

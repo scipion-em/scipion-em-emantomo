@@ -30,7 +30,7 @@ from emantomo import Plugin
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
 from emantomo.convert import jsons2SetCoords3D
 from emantomo.protocols.protocol_base import ProtEmantomoBase, REF_VOL, IN_TOMOS
-from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam
+from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam, GE, LE
 from pyworkflow.utils import Message
 from tomo.objects import SetOfCoordinates3D
 
@@ -74,13 +74,18 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                       label='maximum number of particles per tomogram')
         form.addParam('dthr', FloatParam,
                       default=-1,
-                      label='Distance threshold than (Å)',
+                      label='Distance threshold (Å)',
                       help='Particles closer than the value introduced will be removed. If default =-1, '
                            'it will be considered as half of the box size of the reference.')
         form.addParam('vthr', FloatParam,
-                      default=10,
+                      default=5,
                       label='Template matching threshold (n sigma)',
-                      help='Particles with score lower than the introduced value will be removed.')
+                      validators=[GE(1), LE(10)],
+                      help='Particles with score lower than the introduced value will be removed. Admitted values '
+                           'are [1, 10], where 1 means very insensitive picking (pick a lot of particles with a high '
+                           'probability of having a a high number of false positives) and 10 means very sensitive '
+                           'picking (strict picking, with less particles picked and very low presence of false '
+                           'positives, but with high probability of some or even a lot of particles not to be picked.')
         form.addParam('minvol', IntParam,
                       default=-1,
                       label='Minimum peak volume',

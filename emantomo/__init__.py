@@ -22,8 +22,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+
 import eman2
-from emantomo.constants import VERSIONS, EMAN_DEFAULT_VER_NUM
 
 __version__ = "4.0.0"
 _logo = "eman2_logo.png"
