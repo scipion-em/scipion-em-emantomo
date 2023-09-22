@@ -45,7 +45,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     It is a reference-based picking (template matching).
     """
 
-    _label = 'Reference-based picking'
+    _label = 'Template matching picking'
     _possibleOutputs = OutputsTemplateMatch
     OUTPUT_PREFIX = _possibleOutputs.coordinates.name
 
@@ -71,7 +71,13 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         form.addSection(label='options')
         form.addParam('nptcl', IntParam,
                       default=500,
-                      label='maximum number of particles per tomogram')
+                      label='Maximum number of particles per tomogram.',
+                      help='If a higher number of particles is detected, the program will take the best N, '
+                           'being N the value of the current parameter.')
+        form.addParam('delta', FloatParam,
+                      default=30,
+                      label='Anglular sampling to rotate the reference (deg.',
+                      help='The lower value, the higher number of orientations that will be checked.')
         form.addParam('dthr', FloatParam,
                       default=-1,
                       label='Distance threshold (Å)',
@@ -96,18 +102,15 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                       label='Maximum peak volume',
                       expertLevel=LEVEL_ADVANCED,
                       help='If default=-1, this filter is not applied.')
-        form.addParam('delta', FloatParam,
-                      default=30,
-                      label='Anglular sampling to rotate the reference (deg.')
         form.addParam('symmetry', StringParam,
                       default='c1',
                       label='Symmetry of the reference',
                       help=SYMMETRY_HELP_MSG)
         form.addParam('rmedge', BooleanParam,
-                      default=False,
+                      default=True,
                       label='Remove particles on the edge?')
         form.addParam('rmgold', BooleanParam,
-                      default=False,
+                      default=True,
                       label='Remove particles near gold fiducials?')
         form.addParallelSection(threads=4, mpi=0)
 

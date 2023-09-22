@@ -24,13 +24,11 @@
 # *
 # **************************************************************************
 from os.path import exists
-
-import numpy as np
 from pyworkflow.utils import magentaStr
 from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
-from ..constants import EMAN_COVERAGE, EMAN_SCORE, SPTCLS_00_DIR
+from ..constants import SPTCLS_00_DIR
 from tomo.constants import TR_EMAN
-from ..protocols import EmanProtTomoInitialModel
+from ..protocols import EmanProtTomoInitialModel, EmanProtTemplateMatching
 from ..protocols.protocol_pca_kmeans_classify_subtomos import pcaOutputObjects, EmanProtPcaKMeansClassifySubtomos
 from ..protocols.protocol_tomo_initialmodel import OutputsInitModel
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
@@ -52,11 +50,12 @@ class TestEmanTomoAverageSubtomogramsStaClassic(TestEmantomoStaClassicBase):
 
     def test_averageSubtomograms(self):
         avgSubtomo = super().runAverageSubtomograms()
-        super().checkAverage(avgSubtomo, boxSize=super().binnedBoxSize)
+        super().checkAverage(avgSubtomo,
+                             expectedSRate=self.binnedSRate,
+                             expectedBoxSize=self.binnedBoxSize)
 
 
 class TestEmanTomoInitialModelStaClassic(TestEmantomoStaClassicBase):
-
     avgSubtomo = None
 
     @classmethod
@@ -86,11 +85,13 @@ class TestEmanTomoInitialModelStaClassic(TestEmantomoStaClassicBase):
 
     def test_genInitialModel(self):
         initModel = self.runGenInitialModel()
-        super().checkAverage(initModel, boxSize=super().binnedBoxSize, halvesExpected=False)
+        super().checkAverage(initModel,
+                             expectedSRate=self.binnedSRate,
+                             expectedBoxSize=self.binnedBoxSize,
+                             hasHalves=False)
 
 
 class TestEmanTomoPcaClassificationStaClassic(TestEmantomoStaClassicBase):
-
     pcaNumClasses = 2
     mask = None
 
@@ -193,7 +194,6 @@ class TestEmanTomoPcaClassificationStaClassic(TestEmantomoStaClassicBase):
 
 
 class TestEmanTomoSubtomogramRefinementStaClassic(TestEmantomoStaClassicBase):
-
     mask = None
     avgSubtomo = None
 
@@ -232,42 +232,58 @@ class TestEmanTomoSubtomogramRefinementStaClassic(TestEmantomoStaClassicBase):
 
     def test_subtomoRefinement(self):
         protSubtomoRefinement = self.runSubtomogramRefinement(self.avgSubtomo)
-        self.checkRefinementResults(protSubtomoRefinement)
+        refinedSubtomos = getattr(protSubtomoRefinement, EmanTomoRefinementOutputs.subtomograms.name, None)
+        self._checkRefinmentResults(refinedSubtomos)
 
     def test_subTomoRefinementWithMask(self):
         protSubtomoRefinement = self.runSubtomogramRefinement(self.avgSubtomo, mask=self.mask)
-        self.checkRefinementResults(protSubtomoRefinement)
+        refinedSubtomos = getattr(protSubtomoRefinement, EmanTomoRefinementOutputs.subtomograms.name, None)
+        self._checkRefinmentResults(refinedSubtomos)
 
-    def checkRefinementResults(self, protRefineSubtomos):
-        refinedSubtomos = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.subtomograms.name, None)
-        avgSubtomo = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.subtomogramAverage.name, None)
-        testDims = (super().binnedBoxSize, super().binnedBoxSize, super().binnedBoxSize)
-
-        # Generation checking
-        self.assertIsNotNone(refinedSubtomos)
-        self.assertIsNotNone(avgSubtomo)
-
-        # Avg checking
-        self.checkAverage(avgSubtomo, boxSize=super().binnedBoxSize)
-
-        # Subtomos checking
-        self.assertEqual(refinedSubtomos.getDimensions(), testDims)
-        self.assertSetSize(refinedSubtomos, self.nParticles, msg='Expected size of the generated subtomograms is '
-                                                                 'different than expected: %i != %i' %
-                                                                 (refinedSubtomos.getSize(), self.nParticles))
-        self.assertEqual(refinedSubtomos.getCoordinates3D().getSize(), self.nParticles)
-        for subTomogram in refinedSubtomos:
-            self.assertEqual(subTomogram.getSamplingRate(), super().binnedSRate)
-            self.assertTrue(hasattr(subTomogram, EMAN_COVERAGE))
-            self.assertTrue(hasattr(subTomogram, EMAN_SCORE))
-            matrix = subTomogram.getTransform(convention=TR_EMAN).getMatrix()
-            self.assertEqual(matrix.shape, (4, 4))
-            self.assertFalse(np.array_equal(matrix, np.eye(4)))  # Then it contains the angles and shitfs
-
-        # FSCs checking
-        fscs = getattr(protRefineSubtomos, EmanTomoRefinementOutputs.FSCs.name)
-        self.assertSetSize(fscs, 3, msg="FSCs not registered properly")
+    def _checkRefinmentResults(self, outSubtomos):
+        self.checkRefinedSubtomograms(self.subtomosExtracted, outSubtomos,
+                                      expectedSetSize=self.nParticles,
+                                      expectedBoxSize=self.binnedBoxSize,
+                                      expectedSRate=self.binnedSRate,
+                                      convention=TR_EMAN,
+                                      orientedParticles=True)  # The coords imported were picked with PySeg
 
 
+class TestEmanTemplateMatchingStaClassic(TestEmantomoStaClassicBase):
+    avgSubtomo = None
+    outNoParticles = 100
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.runPreviousProtocols()
+
+    @classmethod
+    def runPreviousProtocols(cls):
+        try:
+            super().runPreviousProtocols()
+            cls.avgSubtomo = super().runAverageSubtomograms()
+        except Exception as e:
+            raise Exception('Some of the previous protocols failed --> \n%s' % e)
+
+    @classmethod
+    def runTemplateMatching(cls):
+        print(magentaStr("\n==> Running the template matching:"))
+        protTempMatch = cls.newProtocol(EmanProtTemplateMatching,
+                                        inputTomograms=cls.tomosBinned,
+                                        refVol=cls.avgSubtomo,
+                                        nptcl=cls.outNoParticles,
+                                        delta=45,
+                                        dthr=10)
+        cls.launchProtocol(protTempMatch)
+        return getattr(protTempMatch, protTempMatch._possibleOutputs.coordinates.name, None)
+
+    def test_template_matching(self):
+        # The imported coordinates were referred to the tomo used for the picking, which was at bin 2
+        extractedCoords = self.runTemplateMatching()
+        self.checkCoordinates(extractedCoords,
+                              expectedSetSize=self.outNoParticles,
+                              expectedSRate=self.binnedSRate,
+                              expectedBoxSize=self.binnedBoxSize,
+                              orientedParticles=False)  # The template matching generates non-oriented coords
 

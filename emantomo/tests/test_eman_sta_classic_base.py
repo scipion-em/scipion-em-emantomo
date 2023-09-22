@@ -23,28 +23,23 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists
-
-import numpy as np
 from xmipp3.constants import MASK3D_CYLINDER
 from xmipp3.protocols import XmippProtCreateMask3D
 from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
-
 from emantomo.protocols import EmanProtTomoExtraction, EmanProtSubTomoAverage
 from emantomo.protocols.protocol_average_subtomos import OutputsAverageSubtomos
 from emantomo.protocols.protocol_extraction_from_tomo import SAME_AS_PICKING, OutputExtraction, OTHER
 from imod.protocols import ProtImodTomoNormalization
 from imod.protocols.protocol_base import OUTPUT_TOMOGRAMS_NAME
-from pyworkflow.tests import BaseTest, DataSet, setupTestProject
+from pyworkflow.tests import DataSet, setupTestProject
 from pyworkflow.utils import magentaStr
-from tomo.objects import SetOfSubTomograms
 from tomo.protocols import ProtImportTomograms, ProtImportCoordinates3DFromScipion
 from tomo.protocols.protocol_import_coordinates_from_scipion import outputObjs
-from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import EMD_10439, DataSetEmd10439
+from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
 
-class TestEmantomoStaClassicBase(BaseTest):
+class TestEmantomoStaClassicBase(TestBaseCentralizedLayer):
     ds = None
     coordsImported = None
     tomosBinned = None
@@ -160,53 +155,3 @@ class TestEmantomoStaClassicBase(BaseTest):
         avgSubtomo = getattr(protAvgSubtomo, OutputsAverageSubtomos.averageSubTomos.name, None)
         cls.assertIsNotNone(avgSubtomo, "There was a problem calculating the average subtomogram")
         return avgSubtomo
-
-    # --------------- CHECKS functions -----------------------
-
-    def check3dTransformMatrix(self, outMatrix):
-        transfMatrixShape = (4, 4)
-        self.assertIsNotNone(outMatrix)
-        if type(outMatrix) != np.ndarray:
-            outMatrix = np.array(outMatrix)
-        self.assertIsNotNone(outMatrix)
-        self.assertTrue(outMatrix.shape, transfMatrixShape)
-        self.assertFalse(np.array_equal(outMatrix, np.eye(4)))
-
-    def checkShiftsScaling(self, inTransform, outTransform, scaleFactor):
-        # Check if the shifts have been scaled properly
-        sx, sy, sz = inTransform.getShifts()
-        osx, osy, osz = outTransform.getShifts()
-        for inShift, outShift in zip([sx, sy, sz], [osx, osy, osz]):
-            self.assertEqual(outShift, scaleFactor * inShift)
-
-    def checkAverage(self, avg, boxSize=None, halvesExpected=True):
-        testBoxSize = (boxSize, boxSize, boxSize)
-        self.assertTrue(exists(avg.getFileName()), "Average %s does not exists" % avg.getFileName())
-        self.assertTrue(avg.getFileName().endswith(".mrc"))
-        # The imported coordinates correspond to a binned 2 tomogram
-        self.assertEqual(avg.getSamplingRate(), self.binnedSRate)
-        self.assertEqual(avg.getDimensions(), testBoxSize)
-        # Check the halves
-        if halvesExpected:
-            self.assertTrue(avg.hasHalfMaps(), "Halves not registered")
-            half1, half2 = avg.getHalfMaps().split(',')
-            self.assertTrue(exists(half1), msg="Average 1st half %s does not exists" % half1)
-            self.assertTrue(exists(half2), msg="Average 2nd half %s does not exists" % half2)
-
-
-    # --------------- AUX functions -----------------------
-
-    @staticmethod
-    def getMinAndMaxCoordValuesFromSet(inSet):
-        if type(inSet) == SetOfSubTomograms:
-            inSet = inSet.getCoordinates3D()
-
-        dataDict = inSet.aggregate(['MAX'], '_tomoId', ['_x', '_y', '_z'])
-        xcoords, ycoords, zcoords = zip(*[(d['_x'], d['_y'], d['_z']) for d in dataDict])
-        return np.array([min(xcoords),
-                         max(xcoords),
-                         min(ycoords),
-                         max(ycoords),
-                         min(zcoords),
-                         max(zcoords)])
-
