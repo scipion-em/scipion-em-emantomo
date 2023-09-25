@@ -29,7 +29,7 @@ from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
 from ..constants import SPTCLS_00_DIR
 from tomo.constants import TR_EMAN
 from ..protocols import EmanProtTomoInitialModel, EmanProtTemplateMatching
-from ..protocols.protocol_pca_kmeans_classify_subtomos import pcaOutputObjects, EmanProtPcaKMeansClassifySubtomos
+from emantomo.protocols.deprecated_20230914.protocol_pca_kmeans_classify_subtomos import pcaOutputObjects, EmanProtPcaKMeansClassifySubtomos
 from ..protocols.protocol_tomo_initialmodel import OutputsInitModel
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
 

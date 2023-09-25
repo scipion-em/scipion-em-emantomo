@@ -54,7 +54,6 @@ class OutputExtraction(enum.Enum):
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'Subtomograms extraction from tomogram'
-    _devStatus = BETA
     _possibleOutputs = OutputExtraction
     OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
     tomoFiles = []

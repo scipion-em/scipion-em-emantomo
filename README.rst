@@ -56,7 +56,7 @@ Protocols
 =========
 The integrated protocols are:
 
-1. PCA-K Means classification of subtomograms.
+1. Template matching picking.
 
 2. Average subtomograms.
 

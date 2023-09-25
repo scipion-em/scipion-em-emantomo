@@ -41,7 +41,6 @@ class EmanProtTomoBoxing(ProtTomoPicking):
     """ Manual picker for Tomo. Uses EMAN2 e2spt_boxer.py.
     """
     _label = 'Manual picking'
-    _devStatus = BETA
 
     def __init__(self, **kwargs):
         ProtTomoPicking.__init__(self, **kwargs)

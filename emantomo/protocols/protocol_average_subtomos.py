@@ -56,7 +56,6 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
     """
 
     _label = 'average subtomograms'
-    _devStatus = BETA
     _possibleOutputs = OutputsAverageSubtomos
 
     def __init__(self, **kwargs):

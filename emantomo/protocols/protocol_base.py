@@ -54,7 +54,6 @@ REF_VOL = 'refVol'
 
 
 class ProtEmantomoBase(EMProtocol, ProtTomoBase):
-    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
