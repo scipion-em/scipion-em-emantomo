@@ -36,7 +36,7 @@ from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
 # from .protocol_pca_kmeans_classify_subtomos import EmanProtPcaKMeansClassifySubtomos
 # from .protocol_estimate_ctf import EmanProtEstimateCTF
 from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
-from .protocol_resize_tomograms import EmanProtTomoResize
+from .protocol_clip_tomograms import EmanProtTomoClip
 from .protocol_average_subtomos import EmanProtSubTomoAverage
 # from .protocol_ts_align_and_tomo_rec import EmanProtTsAlignTomoRec
 
