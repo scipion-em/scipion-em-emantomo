@@ -1,11 +1,7 @@
-v4.0.0:
-  - EMAN's per particle per tilt workflow with all the new programs integrated.
-  - Classic template matching protocol renewed.
-  - Unused or obsolete protocols removed.
-v3.1.6:
+v3.2.0:
   - Template matching protocol added.
-  - Remove some non-used or deprecated protocols: resize tomograms, pca classification, fill missing wedge,
-    tilt refine, boxing conv net.
+  - Remove some non-used or deprecated protocols: pca classification, tilt refine.
+
 v3.1.5:
   - Fix: viewer now only show the particle classes from the selected tomogram, not from all the set.
 v3.1.4:

@@ -39,7 +39,7 @@ import emantomo
 
 class EmanProtTomoResize(ProtTomoBase, EMProtocol):
     """ Tomogram resize using e2proc3d """
-    _label = 'resize tomos'
+    _label = 'resize tomograms'
     _devStatus = BETA
 
     def __init__(self, **kwargs):
