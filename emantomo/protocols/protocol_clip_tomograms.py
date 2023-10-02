@@ -29,8 +29,9 @@ from os.path import join, basename
 from emantomo import Plugin
 from emantomo.constants import TOMOGRAMS_DIR
 from emantomo.protocols.protocol_base import IN_TOMOS, ProtEmantomoBase
+from pwem.objects import Transform
 from pyworkflow import BETA
-from pyworkflow.protocol.params import PointerParam, IntParam
+from pyworkflow.protocol.params import PointerParam, IntParam, GT
 from pyworkflow.utils import runJob, makePath, createLink
 from pyworkflow.utils.properties import Message
 from tomo.objects import SetOfTomograms, Tomogram
@@ -41,7 +42,8 @@ class clipTomogramsOuts(Enum):
 
 
 class EmanProtTomoClip(ProtEmantomoBase):
-    """Make the output have this size by padding/clipping using e2proc3d.py"""
+    """Make the output have this size by padding/clipping and re-centered using e2proc3d.py. Both
+    new center and new dimensions are referred to the original position and dimensions, respectively."""
     IN_TOMOGRAMS_DIR = 'inTomograms'
     _possibleOutputs = clipTomogramsOuts
     _label = 'clip tomograms'
@@ -62,33 +64,30 @@ class EmanProtTomoClip(ProtEmantomoBase):
                       label="Input tomograms",
                       important=True)
 
-        group = form.addGroup('New size')
-        group.addParam('xDim', IntParam,
-                       label="New X dimension (pix.)",
-                       allowsNull=True,
-                       help='If empty, the original dimension will be used.')
-        group.addParam('yDim', IntParam,
-                       label="New Y dimension (pix.)",
-                       allowsNull=True,
-                       help='If empty, the original dimension will be used.')
-        group.addParam('zDim', IntParam,
-                       label="New Z dimension (pix.)",
-                       allowsNull=True,
-                       help='If empty, the original dimension will be used.')
+        line = form.addLine('New center coordinates [pix.] (opt.)',
+                            help='For each empty coordinate, the correspònding original center coordinate '
+                                 'will be used.')
+        line.addParam('xc', IntParam,
+                      label="cx",
+                      allowsNull=True)
+        line.addParam('yc', IntParam,
+                      label="cy",
+                      allowsNull=True)
+        line.addParam('zc', IntParam,
+                      label="cz",
+                      allowsNull=True)
 
-        group = form.addGroup('New center')
-        group.addParam('xc', IntParam,
-                       label="New center x coordinate (pix.)",
-                       allowsNull=True,
-                       help='If empty, the original center current coordinate will be used.')
-        group.addParam('yc', IntParam,
-                       label="New center y coordinate (pix.)",
-                       allowsNull=True,
-                       help='If empty, the original center current coordinate will be used.')
-        group.addParam('zc', IntParam,
-                       label="New center z coordinate (pix.)",
-                       allowsNull=True,
-                       help='If empty, the original center current coordinate will be used.')
+        line = form.addLine('New dimensions [pix.] (opt.)',
+                            help='For each empty dimension, the original corresponding dimension will be used.')
+        line.addParam('xDim', IntParam,
+                      label="dx",
+                      allowsNull=True)
+        line.addParam('yDim', IntParam,
+                      label="dy",
+                      allowsNull=True)
+        line.addParam('zDim', IntParam,
+                      label="dz",
+                      allowsNull=True)
 
     # --------------------------- STEPS functions -----------------------------
     def _insertAllSteps(self):
@@ -125,21 +124,24 @@ class EmanProtTomoClip(ProtEmantomoBase):
 
     def createOutputStep(self, tomo):
         sr = self.samplingRate
+        # Create the output set if it does not exist yet
         if not self.outSet:
             inTomos = self.getObjByName(IN_TOMOS)
             self.outSet = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
             self.outSet.copyInfo(inTomos)
             self.outSet.setSamplingRate(sr)
         outTomo = Tomogram()
+        outTomo.copyInfo(tomo)
         outTomo.setFileName(self._getExtraPath(self._getOutFileName(tomo.getFileName())))
-        outTomo.setSamplingRate(sr)
-        ix, iy, iz = tomo.getShiftsFromOrigin()
-        sx, sy, sz = self.tomoSizeAndCenterDict[tomo.getTsId()][3::]  # The first 3 elements are the new size,
-        # while the 3 last are the new center
-        # TODO: check if an invert Y axis options should be included for the de-centering, depending on the ref system were the use measured the new center
-        outTomo.setShiftsInOrigin(x=(ix + sx) * sr,
-                                  y=(iy + sy) * sr,
-                                  z=(iz + sz) * sr)
+        # Update the origin if necessary
+        if self._shiftCenter():
+            sizeAndCenter = self.tomoSizeAndCenterDict[tomo.getTsId()]
+            sx, sy, sz = sizeAndCenter[3::]
+            origin = Transform()
+            origin.setShifts(-sx * sr,
+                             -sy * sr,
+                             -sz * sr)
+            outTomo.setOrigin(origin)
         self.outSet.append(outTomo)
 
     def closingStep(self):
@@ -151,23 +153,29 @@ class EmanProtTomoClip(ProtEmantomoBase):
         methodsMsgs = ["Tomogram clipping using e2proc3d.py"]
         return methodsMsgs
 
-    # def _summary(self):
-    #     summary = []
-    #     if self.getOutputsSize() < 1:
-    #         summary.append(Message.TEXT_NO_OUTPUT_CO)
-    #     else:
-    #         summary.append("A total of %d Tomograms were resized to dimensions (%d,%d,%d)"
-    #                        % (self.resizedTomograms.getSize(), self.xDim.get(),
-    #                           self.yDim.get(), self.zDim.get()))
-    #     return summary
+    def _validate(self):
+        errorMsg = []
+        inVals = [self.xDim.get(), self.yDim.get(), self.zDim.get(), self.xc.get(), self.yc.get(), self.zc.get()]
+        if all(x is None for x in inVals):
+            errorMsg.append('At least one of the new center coordinates or the new dimensions must be filled.')
+        else:
+            for val in inVals:
+                if val is not None:
+                    if val < 1:
+                        errorMsg.append('The introduced values must be greater than 1.')
+                        break
+        return errorMsg
 
     # --------------------------- UTILS functions -----------------------------
+    def _shiftCenter(self):
+        return True if self.xc.get() or self.yc.get() or self.zc.get() else False
 
-    def _getSizeAndCenter(self, tomo, newDimsAndCenter):
-        sr = self.samplingRate
+    @staticmethod
+    def _getSizeAndCenter(tomo, newDimsAndCenter):
+        # sr = self.samplingRate
         origXDim, origYDim, origZDim = tomo.getDimensions()  # In pixels
         origVals = [origXDim, origYDim, origZDim,
-                    origXDim / 2, origYDim / 2, origZDim / 2]   # In pixels
+                    origXDim / 2, origYDim / 2, origZDim / 2]  # In pixels
         valSize = len(origVals)
         finalVals = [None] * valSize  # List pre-allocating
         for i, newVal in enumerate(newDimsAndCenter):
