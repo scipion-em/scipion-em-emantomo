@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es) [1]
 # *
 # * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -23,58 +24,96 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-
 import os
-import glob
+from enum import Enum
+from os.path import basename, join
 
+from emantomo.constants import TOMOGRAMS_DIR
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TOMOS
 from pyworkflow import BETA
-from pyworkflow.protocol import params
+from pyworkflow.protocol import PointerParam, IntParam, FloatParam, LEVEL_ADVANCED
+from pyworkflow.utils import makePath, createLink, removeBaseExt
 from pyworkflow.utils.properties import Message
-
 from pwem.protocols import EMProtocol
-
-from tomo.protocols import ProtTomoBase
 from tomo.objects import Tomogram, SetOfTomograms
-
 import emantomo
 
 
-class EmanProtTomoFillMW(ProtTomoBase, EMProtocol):
+class fillMWOutputs(Enum):
+    tomograms = SetOfTomograms
+
+
+class EmanProtTomoFillMW(ProtEmantomoBase):
     """
     This protocol is a wrapper of *e2tomo_mwfill*.
 
     This program can be used to fill in the missing wedge of a SetOfTomograms with useful information
     based on a neural network
     """
-    _label = 'tomo fill mw'
+    _label = 'tomo fill missing wedge'
+    _possibleOutputs = fillMWOutputs
     _devStatus = BETA
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
+        self.trainTomoFiles = None
+        self.tomos2DenoiseFiles = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
-        form.addParam('inputTomograms', params.PointerParam,
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam(IN_TOMOS, PointerParam,
                       pointerClass='SetOfTomograms',
-                      label="Input Tomograms", important=True,
-                      help='Select the SetOfTomograms to be processed')
+                      label="Tomograms for training",
+                      important=True)
+        form.addParam('tomos2denoise', PointerParam,
+                      pointerClass='SetOfTomograms',
+                      label="Tomograms to be denoised (opt.)",
+                      allowsNull=True,
+                      help='If empty, they will be the same as the tomograms used for training.')
+        form.addParam('boxSize', IntParam,
+                      default=64,
+                      label='Box size of the training volumes')
+        form.addParam('nSamples', IntParam,
+                      default=2000,
+                      label='Number of samples to extract')
+        form.addParam('learnRate', FloatParam,
+                      default=2e-4,
+                      label='Learning rate',
+                      expertLevel=LEVEL_ADVANCED)
 
         # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('createCommandStep')
-        self._insertFunctionStep('createOutputStep')
+        self._initialize()
+        self._insertFunctionStep(self.convertInputStep)
+        self._insertFunctionStep(self.fillMWStep)
+        self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-    def createCommandStep(self):
-        tomograms = self.inputTomograms.get()
-        files = [os.path.abspath(tomo) for tomo in tomograms.getFiles()]
-        files_join = ",".join(files)
-        args = "--train %s --applyto %s" % (files[0], files_join)
+    def _initialize(self):
+        makePath(self.getTomogramsDir())
+
+    def convertInputStep(self):
+        tomos2Denoise = self.tomos2denoise.get()
+        trainTomos = self.getAttrib(IN_TOMOS)
+        sRate = trainTomos.getSamplingRate()
+        trainTomoFiles = [tomo.getFileName() for tomo in trainTomos]
+        tomo2DenoiseFiles = [tomo.getFileName() for tomo in tomos2Denoise] if tomos2Denoise else trainTomoFiles[:]
+        files2link = set(trainTomoFiles + tomo2DenoiseFiles)
+        [self.convertOrLink(iFile, removeBaseExt(iFile), TOMOGRAMS_DIR, sRate) for iFile in files2link]
+        # [createLink(iFile, self._getExtraPath(TOMOGRAMS_DIR, basename(iFile))) for iFile in files2link]
+        self.trainTomoFiles = [self._getFilePathForEman(iFile) for iFile in trainTomoFiles]
+        self.tomos2DenoiseFiles = [self._getFilePathForEman(iFile) for iFile in tomo2DenoiseFiles] if not (
+            tomos2Denoise) else self.trainTomoFiles[:]
+
+    def fillMWStep(self):
+        args = '--train %s ' % ','.join(self.trainTomoFiles)
+        args += '--applyto %s ' % ','.join(self.tomos2DenoiseFiles)
+        args += '--boxsz %i ' % self.boxSize.get()
+        args += '--nsample %i ' % self.nSamples.get()
+        args += '--learnrate %s ' % self.learnRate.get()
         program = emantomo.Plugin.getProgram("e2tomo_mwfill.py")
-        self._log.info('Launching: ' + program + ' ' + args)
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def createOutputStep(self):
@@ -126,3 +165,8 @@ class EmanProtTomoFillMW(ProtTomoBase, EMProtocol):
                 msg = self.getInfo(output)
                 summary.append("%s: \n %s" % (self.getObjectTag(output), msg))
         return summary
+
+    @staticmethod
+    def _getFilePathForEman(iFile):
+        return join(TOMOGRAMS_DIR, removeBaseExt(iFile) + '.hdf')
+        # return join(TOMOGRAMS_DIR, basename(iFile))

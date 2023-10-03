@@ -24,12 +24,8 @@
 # *
 # **************************************************************************
 from pyworkflow.utils import magentaStr
-from tomo.constants import TR_EMAN
-from tomo.protocols import ProtTomoExtractCoords
-from tomo.protocols.protocol_extract_coordinates import Output3dCoordExtraction
 from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
 from ..protocols import EmanProtTomoClip
-from ..protocols.protocol_extraction_from_tomo import OTHER
 
 
 class TestEmanTomoClipTomograms(TestEmantomoStaClassicBase):
