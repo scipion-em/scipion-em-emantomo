@@ -24,17 +24,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import os
 from enum import Enum
-from os.path import basename, join
+from os.path import basename, join, splitext
+from random import randint
 
 from emantomo.constants import TOMOGRAMS_DIR
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TOMOS
 from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, LEVEL_ADVANCED
-from pyworkflow.utils import makePath, createLink, removeBaseExt
+from pyworkflow.utils import makePath, createLink, replaceExt
 from pyworkflow.utils.properties import Message
-from pwem.protocols import EMProtocol
 from tomo.objects import Tomogram, SetOfTomograms
 import emantomo
 
@@ -43,12 +42,26 @@ class fillMWOutputs(Enum):
     tomograms = SetOfTomograms
 
 
+class MWDataObj:
+
+    def __init__(self, tomo=None, inLinkedScipionFile=None, inEmanFile=None, outEmanFile=None, outScipionFile=None):
+        self.tomo = tomo
+        self.inLinkedScipionFile = inLinkedScipionFile
+        self.inEmanFile = inEmanFile
+        self.outEmanFile = outEmanFile
+        self.outScipionFile = outScipionFile
+
+
 class EmanProtTomoFillMW(ProtEmantomoBase):
     """
     This protocol is a wrapper of *e2tomo_mwfill*.
 
     This program can be used to fill in the missing wedge of a SetOfTomograms with useful information
-    based on a neural network
+    based on a neural network.
+
+    Fill the missing wedge of Tomograms with somewhat meaningful information using a deep learning based tool.
+    The idea is similar to a "style transform" that makes the features in the x-z 2D slice views similar to
+    the x-y slice views.'
     """
     _label = 'tomo fill missing wedge'
     _possibleOutputs = fillMWOutputs
@@ -56,27 +69,26 @@ class EmanProtTomoFillMW(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.trainTomoFiles = None
-        self.tomos2DenoiseFiles = None
+        self.tomoFiles = []
+        self.sRate = None
+        self.emanMdList = []
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
+        form.addLine('IMPORTANT: This EMAN protocol uses GPU Id 0 and does not allow to select another.')
         form.addParam(IN_TOMOS, PointerParam,
                       pointerClass='SetOfTomograms',
                       label="Tomograms for training",
-                      important=True)
-        form.addParam('tomos2denoise', PointerParam,
-                      pointerClass='SetOfTomograms',
-                      label="Tomograms to be denoised (opt.)",
-                      allowsNull=True,
-                      help='If empty, they will be the same as the tomograms used for training.')
+                      important=True,
+                      help='One of the tomograms from the set will be used for to train and the result will be '
+                           'applied to all the tomograms from the introduced set.')
         form.addParam('boxSize', IntParam,
                       default=64,
-                      label='Box size of the training volumes')
+                      label='Box size of the training volumes.')
         form.addParam('nSamples', IntParam,
                       default=2000,
-                      label='Number of samples to extract')
+                      label='Number of samples to extract.')
         form.addParam('learnRate', FloatParam,
                       default=2e-4,
                       label='Learning rate',
@@ -88,85 +100,64 @@ class EmanProtTomoFillMW(ProtEmantomoBase):
         self._initialize()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.fillMWStep)
+        self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
+        inTomos = self.getAttrib(IN_TOMOS)
+        inTomoList = [tomo.clone() for tomo in inTomos]
+        for tomo in inTomoList:
+            inEmanFile = self._getFilePathForEman(tomo.getFileName())
+            outEmanFile = splitext(inEmanFile)[0] + '_mw.hdf'
+            self.emanMdList.append(
+                MWDataObj(
+                    tomo=tomo,
+                    inLinkedScipionFile=self._getExtraPath(inEmanFile),
+                    inEmanFile=inEmanFile,
+                    outEmanFile=outEmanFile,
+                    outScipionFile=self._getExtraPath(replaceExt(outEmanFile, 'mrc'))
+                )
+            )
+            self.tomoFiles.append(inEmanFile)
+        self.sRate = inTomos.getSamplingRate()
         makePath(self.getTomogramsDir())
 
     def convertInputStep(self):
-        tomos2Denoise = self.tomos2denoise.get()
-        trainTomos = self.getAttrib(IN_TOMOS)
-        sRate = trainTomos.getSamplingRate()
-        trainTomoFiles = [tomo.getFileName() for tomo in trainTomos]
-        tomo2DenoiseFiles = [tomo.getFileName() for tomo in tomos2Denoise] if tomos2Denoise else trainTomoFiles[:]
-        files2link = set(trainTomoFiles + tomo2DenoiseFiles)
-        [self.convertOrLink(iFile, removeBaseExt(iFile), TOMOGRAMS_DIR, sRate) for iFile in files2link]
-        # [createLink(iFile, self._getExtraPath(TOMOGRAMS_DIR, basename(iFile))) for iFile in files2link]
-        self.trainTomoFiles = [self._getFilePathForEman(iFile) for iFile in trainTomoFiles]
-        self.tomos2DenoiseFiles = [self._getFilePathForEman(iFile) for iFile in tomo2DenoiseFiles] if not (
-            tomos2Denoise) else self.trainTomoFiles[:]
+        [createLink(mdObj.tomo.getFileName(), mdObj.inLinkedScipionFile) for mdObj in self.emanMdList]
 
     def fillMWStep(self):
-        args = '--train %s ' % ','.join(self.trainTomoFiles)
-        args += '--applyto %s ' % ','.join(self.tomos2DenoiseFiles)
+        args = '--train %s ' % self._getTomoFile4Training()
+        args += '--applyto %s ' % ','.join(self.tomoFiles)
         args += '--boxsz %i ' % self.boxSize.get()
         args += '--nsample %i ' % self.nSamples.get()
         args += '--learnrate %s ' % self.learnRate.get()
         program = emantomo.Plugin.getProgram("e2tomo_mwfill.py")
         self.runJob(program, args, cwd=self._getExtraPath())
 
+    def convertOutputStep(self):
+        [self.convertBetweenHdfAndMrc(mdObj.outEmanFile, replaceExt(mdObj.outEmanFile, 'mrc'), extraArgs=f'--apix {self.sRate:.3f}')
+         for mdObj in self.emanMdList]
+
     def createOutputStep(self):
-        pass
-        # tilt_series = self.tiltSeries.get()
-        #
-        # sampling_rate = tilt_series.getSamplingRate()
-        # if self.outsize.get() == 0:
-        #     sampling_rate *= 4
-        # elif self.outsize.get() == 1:
-        #     sampling_rate *= 2
-        #
-        # # Output 1: Main tomograms
-        # tomograms_paths = self._getOutputTomograms()
-        # tomograms = self._createSet(SetOfTomograms, 'tomograms%s.sqlite', "")
-        # tomograms.copyInfo(tilt_series)
-        # tomograms.setSamplingRate(sampling_rate)
-        #
-        # for tomogram_path in tomograms_paths:
-        #     self._log.info('Main tomogram: ' + tomogram_path)
-        #     tomogram = Tomogram()
-        #     tomogram.setFileName(tomogram_path)
-        #     tomogram.copyInfo(tilt_series)
-        #     tomogram.setSamplingRate(sampling_rate)
-        #     tomograms.append(tomogram)
-        #
-        # self._defineOutputs(tomograms=tomograms)
-        # self._defineSourceRelation(self.tiltSeries, tomograms)
+        inTomosPointer = self.getAttrib(IN_TOMOS, getPointer=True)
+        outTomos = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
+        outTomos.copyInfo(inTomosPointer.get())
+        for mdObj in self.emanMdList:
+            outTomo = Tomogram()
+            outTomo.copyInfo(mdObj.tomo)
+            outTomo.setFileName(mdObj.outScipionFile)
+            outTomos.append(outTomo)
 
-    # --------------------------- INFO functions -----------------------------
-    def _methods(self):
-        return [
-            'Fill the missing wedge of Tomograms with somewhat meaningful information using a '
-            'deep learning based tool. ',
-            'The idea is similar to a "style transform" that makes the features in the x-z '
-            '2D slice views similar to the x-y slice views'
-        ]
+        self._defineOutputs(**{self._possibleOutputs.tomograms.name: outTomos})
+        self._defineSourceRelation(inTomosPointer, outTomos)
 
-    def getInfo(self, output):
-        msg = '\t A total of *%d* were process to fill their missing wedge' % output.getSize()
-        return msg
-
-    def _summary(self):
-        summary = []
-        if self.getOutputsSize() < 1:
-            summary.append(Message.TEXT_NO_OUTPUT_CO)
-        else:
-            for key, output in self.iterOutputAttributes():
-                msg = self.getInfo(output)
-                summary.append("%s: \n %s" % (self.getObjectTag(output), msg))
-        return summary
-
+    # --------------------------- UTIL functions -----------------------------------
     @staticmethod
     def _getFilePathForEman(iFile):
-        return join(TOMOGRAMS_DIR, removeBaseExt(iFile) + '.hdf')
-        # return join(TOMOGRAMS_DIR, basename(iFile))
+        return join(TOMOGRAMS_DIR, basename(iFile))
+
+    def _getTomoFile4Training(self):
+        """Pick a random tomograms from the set if it has more than one element"""
+        nTomos = len(self.tomoFiles)
+        return self.tomoFiles[0] if nTomos == 1 else self.tomoFiles[randint(0, nTomos - 1)]
