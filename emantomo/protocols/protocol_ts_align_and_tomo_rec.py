@@ -176,7 +176,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addParam('nIters', StringParam,
                       default='2,1,1,1',
                       condition=recCond,
-                      label='Number of iterations for bin8, bin4, bin2 images')
+                      label='No. iterations for bin8, bin4, bin2 images')
         form.addParam('clipz', IntParam,
                       default=-1,
                       condition=recCond,
@@ -310,6 +310,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tomogram.setOrigin(newOrigin=False)
             outTomoSet = self.getOutputSetOfTomograms()
             outTomoSet.append(tomogram)
+            outTomoSet.update(tomogram)
             outTomoSet.write()
 
         self._store()
@@ -444,6 +445,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             # Append the current tilt image to the corresponding tilt series
             tiltSeries.append(outTi)
 
+        outTsSet.update(tiltSeries)
         return outTsSet
 
     def _createOutputTsInterpolated(self, mdObj, alignParams):
@@ -461,6 +463,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setTiltAngle(alignParams[idx][3])  # Refined tilt angle
             tiltSeries.append(outTi)
 
+        outTsSet.update(tiltSeries)
         return outTsSet
 
     @staticmethod
