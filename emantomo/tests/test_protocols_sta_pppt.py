@@ -23,17 +23,17 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from emantomo.protocols import EmanProtTsAlignTomoRec
+from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF
+from pwem import ALIGN_2D
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
 from tomo.objects import TomoAcquisition
-from tomo.protocols import ProtImportTs, ProtImportTsBase
+from tomo.protocols import ProtImportTs
 from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
 
-class TestEmanTsAlignAndTomoRec(TestBaseCentralizedLayer):
-
+class TestEmanBasePPPT(TestBaseCentralizedLayer):
     ds = None
     importedTs = None
 
@@ -50,7 +50,7 @@ class TestEmanTsAlignAndTomoRec(TestBaseCentralizedLayer):
                                        filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
                                        filesPattern=DataSetRe4STATuto.tsPattern.value,
                                        exclusionWords=DataSetRe4STATuto.exclusionWords.value,
-                                       anglesFrom=ProtImportTsBase.ANGLES_FROM_TLT,
+                                       anglesFrom=2,  # From tlt file
                                        voltage=DataSetRe4STATuto.voltage.value,
                                        magnification=DataSetRe4STATuto.magnification.value,
                                        sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
@@ -64,6 +64,9 @@ class TestEmanTsAlignAndTomoRec(TestBaseCentralizedLayer):
         tsImported = getattr(protImportTs, 'outputTiltSeries', None)
         cls.assertIsNotNone(tsImported, "There was a problem importing the tilt series")
         return tsImported
+
+
+class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
 
     def test_ts_align_tomo_rec(self):
         print(magentaStr("\n==> Aligning the tilt series and reconstructing the tomograms:"))
@@ -88,5 +91,38 @@ class TestEmanTsAlignAndTomoRec(TestBaseCentralizedLayer):
                                   dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value,
                                   accumDose=DataSetRe4STATuto.accumDose.value
                                   )
-        self.checkTiltSeries(tsAligned)
+        self.checkTiltSeries(tsAligned,
+                             expectedSetSize=1,
+                             expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
+                             expectedDimensions=[3710, 3838, 40],
+                             testAcqObj=testAcq,
+                             alignment=ALIGN_2D,
+                             hasAlignment=True,
+                             anglesCount=40,
+                             )
         # Check the tomograms
+        self.checkTomograms(tomosRec,
+                            expectedSetSize=1,
+                            expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value * 4,  # Bin 4
+                            expectedDimensions=[1050, 1000, 250]
+                            )
+
+
+class TestEmanEstimateCtf(TestEmanBasePPPT):
+
+    def test_estimate_ctf(self):
+        print(magentaStr("\n==> Estimating the CTF:"))
+        protEstimateCtf = self.newProtocol(EmanProtEstimateCTF,
+                                           inputTS=self.importedTs,
+                                           minDefocus=2,
+                                           maxDefocus=4,
+                                           stepDefocus=0.02,
+                                           tilesize=512,
+                                           numberOfThreads=8)
+        self.launchProtocol(protEstimateCtf)
+        outCtfs = getattr(protEstimateCtf, protEstimateCtf._possibleOutputs.CTFs.name, None)
+        self.assertIsNotNone(outCtfs, "There was a problem estimating the CTFs")
+        # Check the CTFs
+        self.checkCTFs(outCtfs, expectedSetSize=1)
+
+

@@ -292,11 +292,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             jsonDict = loadJson(mdObj.jsonFile)
             aliLoss = jsonDict[ALI_LOSS]
             alignParams = jsonDict[TLT_PARAMS]
-            outTsSet = self._createOutputTs(mdObj, alignParams, aliLoss)
-            outTsSet.write()
+            self._createOutputTs(mdObj, alignParams, aliLoss)
             if self.genInterpolatedTs.get():
-                outTsSetInterp = self._createOutputTsInterpolated(mdObj, alignParams)
-                outTsSetInterp.write()
+                self._createOutputTsInterpolated(mdObj, alignParams)
 
         # Tomogram reconstruction
         if self.doRec.get():
@@ -311,7 +309,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTomoSet = self.getOutputSetOfTomograms()
             outTomoSet.append(tomogram)
             outTomoSet.update(tomogram)
-            outTomoSet.write()
 
         self._store()
 
@@ -463,6 +460,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setTiltAngle(alignParams[idx][3])  # Refined tilt angle
             tiltSeries.append(outTi)
 
+        outTsSet.setAlignment2D()
         outTsSet.update(tiltSeries)
         return outTsSet
 
