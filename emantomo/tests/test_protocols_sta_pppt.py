@@ -23,12 +23,18 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF
+from cistem.protocols import CistemProtTsImportCtf
+
+from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF, EmanProtTSExtraction
+from imod.protocols import ProtImodImportTransformationMatrix
+from imod.protocols.protocol_base import OUTPUT_TILTSERIES_NAME
 from pwem import ALIGN_2D
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
+from reliontomo.protocols import ProtImportCoordinates3DFromStar
 from tomo.objects import TomoAcquisition
-from tomo.protocols import ProtImportTs
+from tomo.protocols import ProtImportTs, ProtImportTomograms
+from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 
@@ -41,15 +47,14 @@ class TestEmanBasePPPT(TestBaseCentralizedLayer):
     def setUpClass(cls):
         setupTestProject(cls)
         cls.ds = DataSet.getDataSet(RE4_STA_TUTO)
-        cls.importedTs = cls._runPreviousProtocols()
 
     @classmethod
-    def _runPreviousProtocols(cls):
+    def _runImportTs(cls, exclusionWords=DataSetRe4STATuto.exclusionWordsTs03.value):
         print(magentaStr("\n==> Importing the tilt series:"))
         protImportTs = cls.newProtocol(ProtImportTs,
                                        filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
                                        filesPattern=DataSetRe4STATuto.tsPattern.value,
-                                       exclusionWords=DataSetRe4STATuto.exclusionWords.value,
+                                       exclusionWords=exclusionWords,
                                        anglesFrom=2,  # From tlt file
                                        voltage=DataSetRe4STATuto.voltage.value,
                                        magnification=DataSetRe4STATuto.magnification.value,
@@ -67,6 +72,11 @@ class TestEmanBasePPPT(TestBaseCentralizedLayer):
 
 
 class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.importedTs = cls._runImportTs()
 
     def test_ts_align_tomo_rec(self):
         print(magentaStr("\n==> Aligning the tilt series and reconstructing the tomograms:"))
@@ -110,6 +120,11 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
 
 class TestEmanEstimateCtf(TestEmanBasePPPT):
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.importedTs = cls._runImportTs()
+
     def test_estimate_ctf(self):
         print(magentaStr("\n==> Estimating the CTF:"))
         protEstimateCtf = self.newProtocol(EmanProtEstimateCTF,
@@ -126,3 +141,87 @@ class TestEmanEstimateCtf(TestEmanBasePPPT):
         self.checkCTFs(outCtfs, expectedSetSize=1)
 
 
+class TestEmanExtractParticlesFromTs(TestEmanBasePPPT):
+    tsWithAlignment = None
+    importedCtfs = None
+    importedTomos = None
+    importedCoords = None
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._runPreviousProtocols()
+
+    @classmethod
+    def _runPreviousProtocols(cls):
+        cls.importedTs = cls._runImportTs(exclusionWords=DataSetRe4STATuto.exclusionWordsTs03ts54.value)
+        cls.tsWithAlignment = cls._runImportTrMatrix()
+        cls.importedCtfs = cls._runImportCtfs()
+        cls.importedTomos = cls._runImportTomograms()
+        cls.importedCoords = cls._runImportCoordinatesFromStar()
+
+    @classmethod
+    def _runImportTrMatrix(cls):
+        print(magentaStr("\n==> Importing the TS' transformation matrices with IMOD:"))
+        protImportTrMatrix = cls.newProtocol(ProtImodImportTransformationMatrix,
+                                             filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                             filesPattern=DataSetRe4STATuto.transformPattern.value,
+                                             inputSetOfTiltSeries=cls.importedTs)
+        cls.launchProtocol(protImportTrMatrix)
+        outTsSet = getattr(protImportTrMatrix, OUTPUT_TILTSERIES_NAME, None)
+        cls.assertIsNotNone(outTsSet, "There was a problem importing the transformation matrices")
+        return outTsSet
+
+    @classmethod
+    def _runImportCtfs(cls):
+        print(magentaStr("\n==> Importing the TS' CTFs with Cistem:"))
+        protImportCtfs = cls.newProtocol(CistemProtTsImportCtf,
+                                         filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                         filesPattern=DataSetRe4STATuto.ctfPattern.value,
+                                         inputSetOfTiltSeries=cls.importedTs)
+        cls.launchProtocol(protImportCtfs)
+        outCtfSet = getattr(protImportCtfs, CistemProtTsImportCtf._possibleOutputs.outputCTFs.name, None)
+        cls.assertIsNotNone(outCtfSet, "There was a problem importing the estimated CTFs")
+        return outCtfSet
+
+    @classmethod
+    def _runImportTomograms(cls):
+        print(magentaStr("\n==> Importing the tomograms:"))
+        protImportTomos = cls.newProtocol(ProtImportTomograms,
+                                          filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
+                                          filesPattern=DataSetRe4STATuto.tomosPattern.value,
+                                          samplingRate=DataSetRe4STATuto.tomosSRate.value)  # Bin 4
+        cls.launchProtocol(protImportTomos)
+        outTomos = getattr(protImportTomos, OUTPUT_NAME, None)
+        cls.assertIsNotNone(outTomos, "There was a problem importing the tomograms")
+        return outTomos
+
+    @classmethod
+    def _runImportCoordinatesFromStar(cls):
+        print(magentaStr("\n==> Importing the coordinates with Relion:"))
+        protImportCoords = cls.newProtocol(ProtImportCoordinates3DFromStar,
+                                           starFile=cls.ds.getFile(DataSetRe4STATuto.coordsStar.value),
+                                           inTomos=cls.importedTomos,
+                                           samplingRate=DataSetRe4STATuto.unbinnedPixSize.value)
+        cls.launchProtocol(protImportCoords)
+        outCoords = getattr(protImportCoords, ProtImportCoordinates3DFromStar._possibleOutputs.coordinates.name, None)
+        cls.assertIsNotNone(outCoords, "There was a problem importing the coordinates with Relion")
+        return outCoords
+
+    @classmethod
+    def _runExtractParticlesFromTs(cls):
+        print(magentaStr("\n==> Extracting the particles from the TS:"))
+        protExtractFromTs = cls.newProtocol(EmanProtTSExtraction,
+                                            inputSubtomos=cls.importedCoords,
+                                            inputCTF=cls.importedCtfs,
+                                            inputTS=cls.tsWithAlignment,
+                                            boxSize=120,
+                                            shrink=4,
+                                            numberOfThreads=8)
+        cls.launchProtocol(protExtractFromTs)
+        # outCoords = getattr(protExtractFromTs, ProtImportCoordinates3DFromStar._possibleOutputs.coordinates.name, None)
+        # cls.assertIsNotNone(outCoords, "There was a problem importing the coordinates with Relion")
+        # return outCoords
+
+    def test_extract_particles_from_ts(self):
+        self._runExtractParticlesFromTs()

@@ -97,22 +97,22 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         form.addParam('shrink', FloatParam,
                       default=1,
                       label='Binning factor')
-        form.addParam('editSet', BooleanParam,
-                      label='Apply post transformations?',
-                      default=False)
-        group = form.addGroup('Post transformations', condition='editSet')
-        group.addParam('shiftx', IntParam,
-                       label='X shift (pix.)',
-                       default=0)
-        group.addParam('shifty', IntParam,
-                       label='Y shift (pix.)',
-                       default=0)
-        group.addParam('shiftz', IntParam,
-                       label='Z shift (pix.)',
-                       default=0)
-        group.addParam('postSym', StringParam,
-                       label='Symmetry',
-                       default='c1')
+        # form.addParam('editSet', BooleanParam,
+        #               label='Apply post transformations?',
+        #               default=False)
+        # group = form.addGroup('Post transformations', condition='editSet')
+        # group.addParam('shiftx', IntParam,
+        #                label='X shift (pix.)',
+        #                default=0)
+        # group.addParam('shifty', IntParam,
+        #                label='Y shift (pix.)',
+        #                default=0)
+        # group.addParam('shiftz', IntParam,
+        #                label='Z shift (pix.)',
+        #                default=0)
+        # group.addParam('postSym', StringParam,
+        #                label='Symmetry',
+        #                default='c1')
         form.addParam('maxTilt', IntParam,
                       default=100,
                       label='Max tilt',
@@ -228,11 +228,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         stack3d = join(PARTICLES_3D_DIR, fName)
         self.unstackParticles(stack3d)
         fixVolume(glob.glob(join(self.getStack3dDir(), f"{removeExt(fName)}*.mrc")))
-        # Convert the 2d particles HDF stack into MRC for visualization purposes (compatibility with viewers)
-        stack2d = join(PARTICLES_DIR, fName)
-        inFile = join(PARTICLES_DIR, basename(stack2d))
-        outFile = replaceExt(inFile, 'mrc')
-        self.convertBetweenHdfAndMrc(inFile, outFile)
+        # # Convert the 2d particles HDF stack into MRC for visualization purposes (compatibility with viewers)
+        # stack2d = join(PARTICLES_DIR, fName)
+        # inFile = join(PARTICLES_DIR, basename(stack2d))
+        # outFile = replaceExt(inFile, 'mrc')
+        # self.convertBetweenHdfAndMrc(inFile, outFile)
 
     def createOutputStep(self, mdObjDict):
         inCoordsPointer = getattr(self, IN_SUBTOMOS)
@@ -403,10 +403,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             '--append',
             '--verbose=9'
         ]
-        if self.editSet.get():
-            args.append(f'--postxf={self.postSym.get()},{self.shiftx.get()},{self.shifty.get()},{self.shiftz.get()}')
-        # if exists(self._getExtraPath(align2dFile)):
-        #     args.append(f'--loadali2d={align2dFile}')
+        # if self.editSet.get():
+        #     args.append(f'--postxf={self.postSym.get()},{self.shiftx.get()},{self.shifty.get()},{self.shiftz.get()}')
+        # # if exists(self._getExtraPath(align2dFile)):
+        # #     args.append(f'--loadali2d={align2dFile}')
         return ' '.join(args)
 
     def unstackParticles(self, stackFile, outExt='mrc'):
