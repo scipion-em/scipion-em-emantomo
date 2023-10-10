@@ -101,7 +101,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
                       help='It will actually align more particles and use the number of particles specified by the '
                            'batch size parameter. Default = 1 means that all the particles are kept.')
         form.addParam('learningRate', FloatParam,
-                      default=0.1,
+                      default=0.2,
                       expertLevel=LEVEL_ADVANCED,
                       label='Learning Rate',
                       help="In the context of stochastic gradient descent (SGD), the learning rate is a hyperparameter "
@@ -124,7 +124,6 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
         self._insertFunctionStep(self.convertRefVolStep)
-        # self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.createInitialModelStep)
         self._insertFunctionStep(self.createOutputStep)
 

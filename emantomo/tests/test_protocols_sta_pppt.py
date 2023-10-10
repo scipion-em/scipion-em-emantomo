@@ -23,16 +23,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from os.path import exists, basename
+
 from cistem.protocols import CistemProtTsImportCtf
 
-from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF, EmanProtTSExtraction
+from emantomo.constants import TOMOBOX
+from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF, EmanProtTSExtraction, \
+    EmanProtTomoInitialModelNew
+from emantomo.utils import getPresentPrecedents
 from imod.protocols import ProtImodImportTransformationMatrix
 from imod.protocols.protocol_base import OUTPUT_TILTSERIES_NAME
 from pwem import ALIGN_2D
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
 from reliontomo.protocols import ProtImportCoordinates3DFromStar
-from tomo.objects import TomoAcquisition
+from tomo.constants import TR_EMAN
+from tomo.objects import TomoAcquisition, Coordinate3D
 from tomo.protocols import ProtImportTs, ProtImportTomograms
 from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
@@ -42,6 +48,8 @@ from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 class TestEmanBasePPPT(TestBaseCentralizedLayer):
     ds = None
     importedTs = None
+    particlesUnbinnedBoxSize = 120
+    particlesExtractedBoxSize = 32
 
     @classmethod
     def setUpClass(cls):
@@ -67,7 +75,6 @@ class TestEmanBasePPPT(TestBaseCentralizedLayer):
 
         cls.launchProtocol(protImportTs)
         tsImported = getattr(protImportTs, 'outputTiltSeries', None)
-        cls.assertIsNotNone(tsImported, "There was a problem importing the tilt series")
         return tsImported
 
 
@@ -141,7 +148,7 @@ class TestEmanEstimateCtf(TestEmanBasePPPT):
         self.checkCTFs(outCtfs, expectedSetSize=1)
 
 
-class TestEmanExtractParticlesFromTs(TestEmanBasePPPT):
+class TestEmanPPPTRefineCycle(TestEmanBasePPPT):
     tsWithAlignment = None
     importedCtfs = None
     importedTomos = None
@@ -169,7 +176,6 @@ class TestEmanExtractParticlesFromTs(TestEmanBasePPPT):
                                              inputSetOfTiltSeries=cls.importedTs)
         cls.launchProtocol(protImportTrMatrix)
         outTsSet = getattr(protImportTrMatrix, OUTPUT_TILTSERIES_NAME, None)
-        cls.assertIsNotNone(outTsSet, "There was a problem importing the transformation matrices")
         return outTsSet
 
     @classmethod
@@ -181,7 +187,6 @@ class TestEmanExtractParticlesFromTs(TestEmanBasePPPT):
                                          inputSetOfTiltSeries=cls.importedTs)
         cls.launchProtocol(protImportCtfs)
         outCtfSet = getattr(protImportCtfs, CistemProtTsImportCtf._possibleOutputs.outputCTFs.name, None)
-        cls.assertIsNotNone(outCtfSet, "There was a problem importing the estimated CTFs")
         return outCtfSet
 
     @classmethod
@@ -190,22 +195,20 @@ class TestEmanExtractParticlesFromTs(TestEmanBasePPPT):
         protImportTomos = cls.newProtocol(ProtImportTomograms,
                                           filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
                                           filesPattern=DataSetRe4STATuto.tomosPattern.value,
-                                          samplingRate=DataSetRe4STATuto.tomosSRate.value)  # Bin 4
+                                          samplingRate=DataSetRe4STATuto.sRateBin4.value)  # Bin 4
         cls.launchProtocol(protImportTomos)
         outTomos = getattr(protImportTomos, OUTPUT_NAME, None)
-        cls.assertIsNotNone(outTomos, "There was a problem importing the tomograms")
         return outTomos
 
     @classmethod
     def _runImportCoordinatesFromStar(cls):
         print(magentaStr("\n==> Importing the coordinates with Relion:"))
         protImportCoords = cls.newProtocol(ProtImportCoordinates3DFromStar,
-                                           starFile=cls.ds.getFile(DataSetRe4STATuto.coordsStar.value),
+                                           starFile=cls.ds.getFile(DataSetRe4STATuto.coordsStarSubset.value),
                                            inTomos=cls.importedTomos,
                                            samplingRate=DataSetRe4STATuto.unbinnedPixSize.value)
         cls.launchProtocol(protImportCoords)
         outCoords = getattr(protImportCoords, ProtImportCoordinates3DFromStar._possibleOutputs.coordinates.name, None)
-        cls.assertIsNotNone(outCoords, "There was a problem importing the coordinates with Relion")
         return outCoords
 
     @classmethod
@@ -215,13 +218,93 @@ class TestEmanExtractParticlesFromTs(TestEmanBasePPPT):
                                             inputSubtomos=cls.importedCoords,
                                             inputCTF=cls.importedCtfs,
                                             inputTS=cls.tsWithAlignment,
-                                            boxSize=120,
+                                            boxSize=cls.particlesUnbinnedBoxSize,
                                             shrink=4,
                                             numberOfThreads=8)
         cls.launchProtocol(protExtractFromTs)
-        # outCoords = getattr(protExtractFromTs, ProtImportCoordinates3DFromStar._possibleOutputs.coordinates.name, None)
-        # cls.assertIsNotNone(outCoords, "There was a problem importing the coordinates with Relion")
-        # return outCoords
+        outParticles = getattr(protExtractFromTs, protExtractFromTs._possibleOutputs.subtomograms.name, None)
+        return outParticles
 
-    def test_extract_particles_from_ts(self):
-        self._runExtractParticlesFromTs()
+    @classmethod
+    def _runNewInitialModel(cls, inEmanParticles):
+        print(magentaStr("\n==> Generating the initial model:"))
+        protNewInitModel = cls.newProtocol(EmanProtTomoInitialModelNew,
+                                           inputSubtomos=inEmanParticles,
+                                           nIters=10,
+                                           nClasses=1,
+                                           symmetry='c6',
+                                           numberOfThreads=8)
+        cls.launchProtocol(protNewInitModel)
+        outAvgs = getattr(protNewInitModel, EmanProtTomoInitialModelNew._possibleOutputs.averages.name, None)
+        return outAvgs[1]  # There's only one element in the set of averages as the no. classes requested is 1
+
+    def checkEmanParticles(self, inCoords, outParticles, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
+                           convention=TR_EMAN, orientedParticles=False, hasEman2dAliFile=False, hasEman3dAliFile=False):
+        """Checks exhaustively the Eman particles generated after having carried out a particle extraction from TS
+        with EMAN.
+
+        :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
+        :param outParticles: the resulting SetOfSubTomograms.
+        :param expectedSetSize: expected set site to check.
+        :param expectedBoxSize: expected box size, in pixels, to check.
+        :param expectedSRate: expected sampling rate, in Å/pix, to check.
+        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
+        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
+        eye matrix (False) or not (True).
+        :param hasEman2dAliFile: used to indicate if the 2d particles have been aligned by EMAN or not.
+        :param hasEman3dAliFile: the same as hasEmanAli2dFile, but for 3d particles.
+        """
+
+        def _checkEmanFile(inFile, expectedBaseName):
+            self.assertTrue(exists(inFile), msg=f'{inFile} does not exist')
+            self.assertEqual(basename(inFile), expectedBaseName)
+
+        # Check the subtomograms attributes as EmanSetOfParticles inherits from SetOfSubTomograms
+        self.checkExtractedSubtomos(inCoords, outParticles,
+                                    expectedSetSize=expectedSetSize,
+                                    expectedSRate=expectedSRate,
+                                    expectedBoxSize=expectedBoxSize,
+                                    convention=convention,
+                                    orientedParticles=orientedParticles)
+        # Check the specific attributes of EmanSetOfParticles and EmanParticle objects
+        ali2dFile = outParticles.getAli2dLstFile()
+        self.assertTrue(exists(ali2dFile)) if hasEman2dAliFile else self.assertIsNone(ali2dFile)
+        ali3dFile = outParticles.getAli3dLstFile()
+        self.assertTrue(exists(ali3dFile)) if hasEman3dAliFile else self.assertIsNone(ali3dFile)
+        presentTsIds = inCoords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
+        for tomo in getPresentPrecedents(inCoords, presentTsIds):
+            tomoId = tomo.getTsId()
+            expectedInfoJson = f'{tomoId}_info.json'
+            expectedTsBaseName = f'{tomoId}.hdf'  # Converted into HDF
+            expectedHdfStacksBaseName = f'{tomoId}__{TOMOBOX}_bin4.hdf'
+            for particle in outParticles.iterSubtomos(volume=tomo):
+                infoJson = particle.getInfoJson()
+                _checkEmanFile(infoJson, expectedInfoJson)
+                tsHdfFile = particle.getTsHdf()
+                _checkEmanFile(tsHdfFile, expectedTsBaseName)
+                stack2dFile = particle.getStack2dHdf()
+                _checkEmanFile(stack2dFile, expectedHdfStacksBaseName)
+                stack3dFile = particle.getStack3dHdf()
+                _checkEmanFile(stack3dFile, expectedHdfStacksBaseName)
+
+    def test_pppt_refine_cycle(self):
+        # [1] EXTRACT PARTICLES FROM THE TS
+        outParticles = self._runExtractParticlesFromTs()
+        # Check the results
+        expectedSetSize = DataSetRe4STATuto.nCoordsFromTs03.value + DataSetRe4STATuto.nCoordsFromTs54.value
+        self.checkEmanParticles(self.importedCoords, outParticles,
+                                expectedSetSize=expectedSetSize,
+                                expectedSRate=DataSetRe4STATuto.sRateBin4.value,
+                                expectedBoxSize=self.particlesExtractedBoxSize,
+                                convention=TR_EMAN,
+                                orientedParticles=True,  # The tutorial dataset provides them oriented
+                                hasEman2dAliFile=False,
+                                hasEman3dAliFile=False,  # False as EMAN has not aligned them. The orientations
+                                # provided will be used as initial condition for the refinement
+                                )
+        # [2] NEW INITIAL VOLUME
+        initModel = self._runNewInitialModel(outParticles)
+        self.checkAverage(initModel,
+                          expectedSRate=DataSetRe4STATuto.sRateBin4.value,
+                          expectedBoxSize=self.particlesExtractedBoxSize,
+                          hasHalves=False)  # EMAN's e2spt_sgd_new.py does not generate the halves

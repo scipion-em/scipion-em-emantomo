@@ -82,7 +82,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         self.createInitEmanPrjDirs()
         infoDir = self.getInfoDir()
         tsDir = self.getTsDir()
-        tomoDir = self.getTomogramsDir()
+        # tomoDir = self.getTomogramsDir()
         stack2dDir = self.getStack2dDir()
         stack3dDir = self.getStack3dDir()
         makePath(self.getSetsDir(), stack2dDir, stack3dDir, self.getRefineDir())
@@ -93,14 +93,14 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                                                EmanParticle.STACK_2D_HDF,
                                                EmanParticle.STACK_3D_HDF])
         # Link the files
-        for infoJson, tsFile, tomoFile, stack2d, stack3d in zip(dataDict[EmanParticle.INFO_JSON],
-                                                                dataDict[EmanParticle.TS_HDF],
-                                                                dataDict[EmanParticle.TOMO_HDF],
-                                                                dataDict[EmanParticle.STACK_2D_HDF],
-                                                                dataDict[EmanParticle.STACK_3D_HDF]):
+        for infoJson, tsFile, stack2d, stack3d in zip(dataDict[EmanParticle.INFO_JSON],
+                                                      dataDict[EmanParticle.TS_HDF],
+                                                      # dataDict[EmanParticle.TOMO_HDF],
+                                                      dataDict[EmanParticle.STACK_2D_HDF],
+                                                      dataDict[EmanParticle.STACK_3D_HDF]):
             createLink(infoJson, join(infoDir, basename(infoJson)))
             createLink(tsFile, join(tsDir, basename(tsFile)))
-            createLink(tomoFile, join(tomoDir, basename(tomoFile)))
+            # createLink(tomoFile, join(tomoDir, basename(tomoFile)))
             createLink(stack2d, join(stack2dDir, basename(stack2d)))
             createLink(stack3d, join(stack3dDir, basename(stack3d)))
 

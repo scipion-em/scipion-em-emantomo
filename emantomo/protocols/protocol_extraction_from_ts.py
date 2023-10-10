@@ -34,11 +34,10 @@ from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_CTF, IN_TS, IN
 from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
 from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
-from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam, \
-    StringParam
-from pyworkflow.utils import Message, replaceExt, removeExt, makePath, createLink
-from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json, getApixUnbinnedFromMd
-from tomo.constants import TR_EMAN, BOTTOM_LEFT_CORNER
+from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
+from pyworkflow.utils import Message, replaceExt, removeExt, createLink
+from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
+from tomo.constants import TR_EMAN
 from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D
 
 
@@ -60,7 +59,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.sphAb = None
         self.voltage = None
         self.scaleFactor = None
-        self.isReExtraction = False
         self.projectionsDict = {}
         self.currentBoxSize = None
         self.currentSRate = None
@@ -149,13 +147,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
-        if self.isReExtraction:
-            self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
-            # self._insertFunctionStep(self.buildEmanSetsStep)
-        else:
-            self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
-            for mdObj in mdObjDict.values():
-                self._insertFunctionStep(self.convertTsStep, mdObj)
+        self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObjDict)
+        for mdObj in mdObjDict.values():
+            self._insertFunctionStep(self.convertTsStep, mdObj)
         self._insertFunctionStep(self.writeData2JsonFileStep, mdObjDict)
         self._insertFunctionStep(self.extractParticlesStep, mdObjDict)
         for mdObj in mdObjDict.values():
@@ -171,11 +165,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         typeInParticles = type(inParticles)
         if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
             coords = inParticles
-        elif typeInParticles == SetOfSubTomograms:  # Extraction from classic subtomograms
-            coords = inParticles.getCoordinates3D()
-        else:  # Re-extraction case (from EmanSetOfParticles)
-            self.isReExtraction = True
-            self.inParticles = inParticles
+        else:  # Extraction from particles
             coords = inParticles.getCoordinates3D()
         self.currentBoxSize = self.getAttrib(IN_BOXSIZE) / binFactor
         self.currentSRate = inTsSet.getSamplingRate() * binFactor
@@ -194,20 +184,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # Create project dir structure
         self.createInitEmanPrjDirs()
         tomogramsDir = self.getTomogramsDir()
-        # TS must be in HDF (in EMAN's native code it is searched in harcoded HDF format based on the tomogram
+        # TS must be in HDF (in EMAN's native code it is searched in hardcoded HDF format based on the tomogram
         # basename), so it will be converted later. However, the tomograms can be linked in MRC without any problem
-        if self.isReExtraction:
-            makePath(self.getSetsDir(), self.getRefineDir())
-            # infoDir = self.getInfoDir()
-            for mdObj in mdObjDict.values():
-                # infoJson = mdObj.jsonFile
-                tomoFName = mdObj.inTomo.getFileName()
-                # createLink(infoJson, join(infoDir, basename(infoJson)))
-                createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
-        else:
-            for mdObj in mdObjDict.values():
-                tomoFName = mdObj.inTomo.getFileName()
-                createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
+        for mdObj in mdObjDict.values():
+            tomoFName = mdObj.inTomo.getFileName()
+            createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
 
     def writeData2JsonFileStep(self, mdObjDict):
         for mdObj in mdObjDict.values():
@@ -217,8 +198,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
     def extractParticlesStep(self, mdObjDict):
-        if self.isReExtraction:
-            self.buildEmanSets(outAliPath=None)
+        # if self.isReExtraction:
+        #     self.buildEmanSets(outAliPath=None)
         program = Plugin.getProgram('e2spt_extract.py')
         self.runJob(program, self._genExtractArgs(mdObjDict), cwd=self._getExtraPath())
 
@@ -259,7 +240,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             subtomoFiles = sorted(glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId)))
             stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
             stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
-            eh = EmanHdf5Handler(stack3d)
             # Get the projections
             tsProjections = self.getProjections(mdObj)
             landmarkModelGaps = self.createLandmarkModelGaps(mdObj.ts, tsProjections, fiducialSize)
@@ -273,59 +253,19 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
                 subtomogram.setSamplingRate(self.currentSRate)
                 subtomogram.setVolName(mdObj.tsId)
-                if self.isReExtraction:
-                    subtomogram.setTransform(coord.getTransform())
-                    iCoord = coord.getCoordinate3D()
-                    emanParticleInfo = eh._imgObjList[str(particleCounter)]
-                    emanCoord = emanParticleInfo.attrs['EMAN.ptcl_source_coord']
-                    x, y, z = emanCoord[0], emanCoord[1], emanCoord[2]
-                    ###########################################################################################
-                    # From EMAN's e2spt_boxer (this is how it stores the coordinates picked):
-                    # def SaveJson(self):
-                    #
-                    #     info = js_open_dict(self.jsonfile)
-                    #     sx, sy, sz = (self.data["nx"] // 2, self.data["ny"] // 2, self.data["nz"] // 2)
-                    #     if "apix_unbin" in info:
-                    #         bxs = []
-                    #         for b0 in self.boxes:
-                    #             b = [(b0[0] - sx) * self.apix_cur / self.apix_unbin,
-                    #                  (b0[1] - sy) * self.apix_cur / self.apix_unbin,
-                    #                  (b0[2] - sz) * self.apix_cur / self.apix_unbin,
-                    #                  b0[3], b0[4], b0[5]]
-                    #             bxs.append(b)
-                    ###########################################################################################
-                    # In this case, we have to determine b0[0], b0[1] and b0[2], as b is what is read from the HDF
-                    # file header
-                    tomo = mdObj.inTomo
-                    apix = tomo.getSamplingRate()
-                    apixUnbin = getApixUnbinnedFromMd(mdObj)
-                    nx, ny, nz = tomo.getDim()
-                    sx = nx // 2
-                    sy = ny // 2
-                    sz = nz // 2
-                    scaleFactor = apix / apixUnbin
-                    zInvertFactor = -1 if self.doFlipZInTomo.get() else 1
-                    xf = sx + x / scaleFactor
-                    yf = sy + y / scaleFactor
-                    zf = sz + z / (scaleFactor * zInvertFactor)  # The Z is inverted if the reconstruction wasn't made with EMAN
-
-                    iCoord.setPosition(xf, yf, zf, originFunction=BOTTOM_LEFT_CORNER)
-                    subtomogram.setCoordinate3D(iCoord)
-                else:
-                    subtomogram.setCoordinate3D(coord)
-                    M = coord.getMatrix()
-                    shift_x = M[0, 3]
-                    shift_y = M[1, 3]
-                    shift_z = M[2, 3]
-                    transform.setMatrix(M)
-                    transform.setShifts(self.scaleFactor * shift_x,
-                                        self.scaleFactor * shift_y,
-                                        self.scaleFactor * shift_z)
-                    subtomogram.setTransform(transform, convention=TR_EMAN)
+                subtomogram.setCoordinate3D(coord)
+                M = coord.getMatrix()
+                shift_x = M[0, 3]
+                shift_y = M[1, 3]
+                shift_z = M[2, 3]
+                transform.setMatrix(M)
+                transform.setShifts(self.scaleFactor * shift_x,
+                                    self.scaleFactor * shift_y,
+                                    self.scaleFactor * shift_z)
+                subtomogram.setTransform(transform, convention=TR_EMAN)
                 # Fill EmanParticle own attributes
                 subtomogram.setInfoJson(mdObj.jsonFile)
                 subtomogram.setTsHdf(self._getExtraPath(mdObj.tsHdfName))
-                subtomogram.setTomoHdf(self._getExtraPath(mdObj.tomoHdfName))
                 subtomogram.setStack2dHdf(stack2d)
                 subtomogram.setStack3dHdf(stack3d)
                 subtomogram.setAbsIndex(absParticleCounter)
@@ -341,7 +281,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self._defineSourceRelation(inTsPointer, subtomoSet)
         self._defineSourceRelation(inTsPointer, fiducialModelGaps)
 
-    # --------------------------- INFO functions --------------------------------
+    # --------------------------- INFO functions -----------------------------------
+    def _validate(self):
+        errorMsg = []
+        if not self.getAttrib(IN_TS).hasAlignment():
+            errorMsg.append('The introduced tilt series do not have an alignment transformation associated.')
+        return errorMsg
 
     # --------------------------- UTILS functions ----------------------------------
     def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
@@ -403,10 +348,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             '--append',
             '--verbose=9'
         ]
-        # if self.editSet.get():
-        #     args.append(f'--postxf={self.postSym.get()},{self.shiftx.get()},{self.shifty.get()},{self.shiftz.get()}')
-        # # if exists(self._getExtraPath(align2dFile)):
-        # #     args.append(f'--loadali2d={align2dFile}')
         return ' '.join(args)
 
     def unstackParticles(self, stackFile, outExt='mrc'):
@@ -420,16 +361,16 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self.runJob(program, ' '.join(args), cwd=self._getExtraPath())
 
     def _getEmanFName(self, tsId):
-        if self.isReExtraction:
-            partFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, f'{tsId}*_reextract.hdf'))
-            return basename(partFiles[0])
-        else:
-            shrink = self.shrink.get()
-            pattern = f'__{TOMOBOX}'
-            if shrink:
-                if shrink > 1:
-                    pattern += f'_bin{int(self.shrink.get())}'
-            return tsId + pattern + '.hdf'
+        # if self.isReExtraction:
+        #     partFiles = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, f'{tsId}*_reextract.hdf'))
+        #     return basename(partFiles[0])
+        # else:
+        shrink = self.shrink.get()
+        pattern = f'__{TOMOBOX}'
+        if shrink:
+            if shrink > 1:
+                pattern += f'_bin{int(self.shrink.get())}'
+        return tsId + pattern + '.hdf'
 
     def getProjections(self, mdObj):
         """load the corresponding HDF 2d stack file and read from the header the required data to create later a
