@@ -46,7 +46,6 @@ from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_
 class EmanMultiRefineNewOutputs(Enum):
     subtomograms = SetOfSubTomograms
     classes = SetOfClassesSubTomograms
-    FSCs = SetOfFSCs
 
 
 class EmanProtMultiRefinementNew(ProtEmantomoBase):
@@ -270,9 +269,10 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def getNoRefs(self):
         nClasses = self.nClasses.get()
         refs = self.getAttrib(REF_VOL)
-        if refs:
-            lenRefs = 1 if isinstance(refs, SubTomogram) else len(refs)
-        return nClasses if nClasses > 0 else lenRefs
+        if nClasses > 0:
+            return nClasses
+        else:
+            return 1 if isinstance(refs, SubTomogram) else len(refs)
 
     def getOutputAvgFile(self, classNum):
         return self.getOutputFile(classNum, THREED, 'hdf')
@@ -301,9 +301,13 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         representative.setLocation(self.getOutputThreed(item.getObjId(), 'mrc'))
 
     # --------------------------- INFO functions --------------------------------
-    # def _validate(self):
-    #     errorMsg = []
+    def _validate(self):
+        errorMsg = []
+        nClasses = self.nClasses.get()
+        refs = self.getAttrib(REF_VOL)
+        if nClasses <= 0 and not refs:
+            errorMsg.append('At least a number of classes or a set of references is required.')
     #     inTrMatrix = self.getAttrib(IN_SUBTOMOS).getFirstItem().getTransform().getMatrix()
     #     if np.allclose(inTrMatrix, np.eye(4), atol=1e-4):
     #         errorMsg.append('No alignment was detected in the introduced particles.')
-    #     return errorMsg
+        return errorMsg

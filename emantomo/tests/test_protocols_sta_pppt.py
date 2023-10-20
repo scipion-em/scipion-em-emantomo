@@ -23,22 +23,23 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists, basename
+from os.path import exists, basename, dirname, join
 
 from cistem.protocols import CistemProtTsImportCtf
 
-from emantomo.constants import TOMOBOX
+from emantomo.constants import TOMOBOX, SPT_00_DIR
 from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF, EmanProtTSExtraction, \
-    EmanProtTomoInitialModelNew
+    EmanProtTomoInitialModelNew, EmanProtTomoRefinementNew, EmanProtMultiRefinementNew
 from emantomo.utils import getPresentPrecedents
 from imod.protocols import ProtImodImportTransformationMatrix
 from imod.protocols.protocol_base import OUTPUT_TILTSERIES_NAME
 from pwem import ALIGN_2D
+from pwem.protocols import ProtSubSet, ProtImportVolumes
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
 from reliontomo.protocols import ProtImportCoordinates3DFromStar
 from tomo.constants import TR_EMAN
-from tomo.objects import TomoAcquisition, Coordinate3D
+from tomo.objects import TomoAcquisition, Coordinate3D, SetOfCoordinates3D
 from tomo.protocols import ProtImportTs, ProtImportTomograms
 from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
@@ -148,11 +149,13 @@ class TestEmanEstimateCtf(TestEmanBasePPPT):
         self.checkCTFs(outCtfs, expectedSetSize=1)
 
 
-class TestEmanPPPTRefineCycle(TestEmanBasePPPT):
+class TestBaseRefineCyclePPPT(TestEmanBasePPPT):
+    expectedSetSize = DataSetRe4STATuto.nCoordsFromTs03.value + DataSetRe4STATuto.nCoordsFromTs54.value
     tsWithAlignment = None
     importedCtfs = None
     importedTomos = None
     importedCoords = None
+    extractedParticles = None
 
     @classmethod
     def setUpClass(cls):
@@ -225,32 +228,11 @@ class TestEmanPPPTRefineCycle(TestEmanBasePPPT):
         outParticles = getattr(protExtractFromTs, protExtractFromTs._possibleOutputs.subtomograms.name, None)
         return outParticles
 
-    @classmethod
-    def _runNewInitialModel(cls, inEmanParticles):
-        print(magentaStr("\n==> Generating the initial model:"))
-        protNewInitModel = cls.newProtocol(EmanProtTomoInitialModelNew,
-                                           inputSubtomos=inEmanParticles,
-                                           nIters=10,
-                                           nClasses=1,
-                                           symmetry='c6',
-                                           numberOfThreads=8)
-        cls.launchProtocol(protNewInitModel)
-        outAvgs = getattr(protNewInitModel, EmanProtTomoInitialModelNew._possibleOutputs.averages.name, None)
-        return outAvgs[1]  # There's only one element in the set of averages as the no. classes requested is 1
+    def checkEmanParticles(self, inSet, outParticles, hasEman2dAliFile=False, hasEman3dAliFile=False):
+        """Check the specific attributes of EmanSetOfParticles and EmanParticle objects.
 
-    def checkEmanParticles(self, inCoords, outParticles, expectedSetSize=-1, expectedSRate=-1, expectedBoxSize=-1,
-                           convention=TR_EMAN, orientedParticles=False, hasEman2dAliFile=False, hasEman3dAliFile=False):
-        """Checks exhaustively the Eman particles generated after having carried out a particle extraction from TS
-        with EMAN.
-
-        :param inCoords: SetOf3DCoordinates introduced for the subtomo extraction.
+        :param inSet: SetOf3DCoordinates or SetOfSubTomograms introduced.
         :param outParticles: the resulting SetOfSubTomograms.
-        :param expectedSetSize: expected set site to check.
-        :param expectedBoxSize: expected box size, in pixels, to check.
-        :param expectedSRate: expected sampling rate, in Å/pix, to check.
-        :param convention: TR_SCIPION by default. Convention of the coordinates. See scipion-em-tomo/tomo/constants.py
-        :param orientedParticles: False by default. Used to specify if the expected transformation matrix should be an
-        eye matrix (False) or not (True).
         :param hasEman2dAliFile: used to indicate if the 2d particles have been aligned by EMAN or not.
         :param hasEman3dAliFile: the same as hasEmanAli2dFile, but for 3d particles.
         """
@@ -259,14 +241,7 @@ class TestEmanPPPTRefineCycle(TestEmanBasePPPT):
             self.assertTrue(exists(inFile), msg=f'{inFile} does not exist')
             self.assertEqual(basename(inFile), expectedBaseName)
 
-        # Check the subtomograms attributes as EmanSetOfParticles inherits from SetOfSubTomograms
-        self.checkExtractedSubtomos(inCoords, outParticles,
-                                    expectedSetSize=expectedSetSize,
-                                    expectedSRate=expectedSRate,
-                                    expectedBoxSize=expectedBoxSize,
-                                    convention=convention,
-                                    orientedParticles=orientedParticles)
-        # Check the specific attributes of EmanSetOfParticles and EmanParticle objects
+        inCoords = inSet if type(inSet) is SetOfCoordinates3D else inSet.getCoordinates3D()
         ali2dFile = outParticles.getAli2dLstFile()
         self.assertTrue(exists(ali2dFile)) if hasEman2dAliFile else self.assertIsNone(ali2dFile)
         ali3dFile = outParticles.getAli3dLstFile()
@@ -287,24 +262,150 @@ class TestEmanPPPTRefineCycle(TestEmanBasePPPT):
                 stack3dFile = particle.getStack3dHdf()
                 _checkEmanFile(stack3dFile, expectedHdfStacksBaseName)
 
-    def test_pppt_refine_cycle(self):
-        # [1] EXTRACT PARTICLES FROM THE TS
-        outParticles = self._runExtractParticlesFromTs()
+
+class TestEmanExtractParticlesFromTS(TestBaseRefineCyclePPPT):
+
+    def test_extract_particle_from_ts(self):
+        extractedParticles = self._runExtractParticlesFromTs()
         # Check the results
         expectedSetSize = DataSetRe4STATuto.nCoordsFromTs03.value + DataSetRe4STATuto.nCoordsFromTs54.value
-        self.checkEmanParticles(self.importedCoords, outParticles,
-                                expectedSetSize=expectedSetSize,
-                                expectedSRate=DataSetRe4STATuto.sRateBin4.value,
-                                expectedBoxSize=self.particlesExtractedBoxSize,
-                                convention=TR_EMAN,
-                                orientedParticles=True,  # The tutorial dataset provides them oriented
+        expectedSRate = DataSetRe4STATuto.sRateBin4.value
+        expectedBozxSize = self.particlesExtractedBoxSize
+        # Check the subtomograms attributes as EmanSetOfParticles inherits from SetOfSubTomograms
+        self.checkExtractedSubtomos(self.importedCoords, extractedParticles,
+                                    expectedSetSize=expectedSetSize,
+                                    expectedSRate=expectedSRate,
+                                    expectedBoxSize=expectedBozxSize,
+                                    convention=TR_EMAN,
+                                    orientedParticles=True)  # The tutorial dataset provides them oriented
+        self.checkEmanParticles(self.importedCoords, extractedParticles,
                                 hasEman2dAliFile=False,
                                 hasEman3dAliFile=False,  # False as EMAN has not aligned them. The orientations
                                 # provided will be used as initial condition for the refinement
                                 )
-        # [2] NEW INITIAL VOLUME
-        initModel = self._runNewInitialModel(outParticles)
+
+
+class TestEmanInitialVolumeNew(TestBaseRefineCyclePPPT):
+
+    @classmethod
+    def _runPreviousProtocols(cls):
+        super()._runPreviousProtocols()
+        cls.extractedParticles = cls._runExtractParticlesFromTs()
+
+    @classmethod
+    def _runNewInitialModel(cls, inEmanParticles):
+        print(magentaStr("\n==> Generating the initial model:"))
+        protNewInitModel = cls.newProtocol(EmanProtTomoInitialModelNew,
+                                           inputSubtomos=inEmanParticles,
+                                           nIters=10,
+                                           nClasses=1,
+                                           symmetry='c6',
+                                           numberOfThreads=8)
+        cls.launchProtocol(protNewInitModel)
+        outAvgs = getattr(protNewInitModel, EmanProtTomoInitialModelNew._possibleOutputs.averages.name, None)
+        return outAvgs
+
+    def test_new_initial_volume(self):
+        initModels = self._runNewInitialModel(self.extractedParticles)
+        initModel = initModels[1]  # There's only one element in the set of averages as the no. classes requested is 1
+        # Check the results
+        expectedSRate = DataSetRe4STATuto.sRateBin4.value
+        expectedBozxSize = self.particlesExtractedBoxSize
         self.checkAverage(initModel,
-                          expectedSRate=DataSetRe4STATuto.sRateBin4.value,
-                          expectedBoxSize=self.particlesExtractedBoxSize,
+                          expectedSRate=expectedSRate,
+                          expectedBoxSize=expectedBozxSize,
                           hasHalves=False)  # EMAN's e2spt_sgd_new.py does not generate the halves
+
+
+class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
+    importedRef = None
+
+    @classmethod
+    def _runPreviousProtocols(cls):
+        super()._runPreviousProtocols()
+        cls.extractedParticles = cls._runExtractParticlesFromTs()
+        cls.importedRef = cls._runImportReference()
+
+    @classmethod
+    def _runImportReference(cls):
+        print(magentaStr("\n==> Importing the reference volume:"))
+        protImportRef = cls.newProtocol(ProtImportVolumes,
+                                        filesPath=cls.ds.getFile(DataSetRe4STATuto.initVolByEman.name),
+                                        samplingRate=DataSetRe4STATuto.sRateBin4.value)
+        cls.launchProtocol(protImportRef)
+        return getattr(protImportRef, ProtImportVolumes._possibleOutputs.outputVolume.name, None)
+
+    @classmethod
+    def _runSubtomoRefineNew(cls, inEmanParticles, refVol):
+        print(magentaStr("\n==> Refining the particles:"))
+        protNewRefine = cls.newProtocol(EmanProtTomoRefinementNew,
+                                        inputSubtomos=inEmanParticles,
+                                        refVol=refVol,
+                                        iters='p2,t',  # Only 3 to avoid the test taking too long
+                                        symmetry='c6',
+                                        numberOfThreads=8)
+        cls.launchProtocol(protNewRefine)
+        outAvg = getattr(protNewRefine, EmanProtTomoRefinementNew._possibleOutputs.average.name, None)
+        outParticles = getattr(protNewRefine, EmanProtTomoRefinementNew._possibleOutputs.subtomograms.name, None)
+        outFscs = getattr(protNewRefine, EmanProtTomoRefinementNew._possibleOutputs.FSCs.name, None)
+        return outAvg, outParticles, outFscs
+
+    @classmethod
+    def _runMultiRefClassif(cls, inEmanParticles, doAlignment=None, labelMsg='', nClasses=-1, ref=None):
+        print(magentaStr(f"\n==> Running the multi fef classification {labelMsg}:"))
+        inputDict = {
+            'inputSubtomos': inEmanParticles,
+            'maxRes': 30,
+            'symmetry': 'c6'
+        }
+        if nClasses > 0:
+            inputDict['nClasses'] = nClasses
+        if ref:
+            inputDict['refVol'] = ref
+        if doAlignment:
+            inputDict['doAlignment'] = True
+        protMultiCl = cls.newProtocol(EmanProtMultiRefinementNew, **inputDict)
+        cls.launchProtocol(protMultiCl)
+        protMultiCl.setObjLabel(f'MultiRefCl {labelMsg}')
+        outParticles = getattr(protMultiCl, EmanProtMultiRefinementNew._possibleOutputs.subtomograms.name, None)
+        outClasses = getattr(protMultiCl, EmanProtMultiRefinementNew._possibleOutputs.classes.name, None)
+        return outParticles, outClasses
+
+    def test_refine_and_classify(self):
+        expectedSRate = DataSetRe4STATuto.sRateBin4.value
+        expectedBozxSize = self.particlesExtractedBoxSize
+        # [1] REFINEMENT
+        refinedAvg, refinedParticles, outFscs = self._runSubtomoRefineNew(self.extractedParticles, self.importedRef)
+        # Check the average
+        self.checkAverage(refinedAvg,
+                          expectedSRate=expectedSRate,
+                          expectedBoxSize=expectedBozxSize,
+                          hasHalves=True)
+        # Check the particles
+        self.checkRefinedSubtomograms(self.extractedParticles, refinedParticles,
+                                      expectedSetSize=self.expectedSetSize,
+                                      expectedBoxSize=expectedBozxSize,
+                                      expectedSRate=expectedSRate,
+                                      convention=TR_EMAN,
+                                      orientedParticles=True)
+        self.checkEmanParticles(self.extractedParticles, refinedParticles,
+                                hasEman2dAliFile=True,
+                                hasEman3dAliFile=True)
+        # Check the FSCs
+        nRefineIters = 3  # p2,t
+        pathFSCs = join(dirname(outFscs._mapperPath), 'extra', SPT_00_DIR)
+        expectedBaseNamesFSCs = [f'fsc_masked_{nRefineIters:02}.txt',
+                                 f'fsc_unmasked_{nRefineIters:02}.txt',
+                                 f'fsc_maskedtight_{nRefineIters:02}.txt']
+        nFSCs = len(expectedBaseNamesFSCs)
+        self.assertSetSize(outFscs, size=nFSCs)
+        for fscName in expectedBaseNamesFSCs:
+            self.assertTrue(exists(join(pathFSCs, fscName)))
+
+        # [2A] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 1, NO REF
+        nClasses = 1
+        outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+                                                            doAlignment=False,
+                                                            nClasses=1,
+                                                            labelMsg='no ali, 1 cl, no ref')
+        # TODO: add the required methods to the centralized layer

@@ -51,7 +51,7 @@ mapFilterDict = dict(zip(filteringKeys, range(len(filteringKeys))))
 
 class EmanRefineNewOutputs(Enum):
     subtomograms = SetOfSubTomograms
-    subtomogramAverage = AverageSubTomogram
+    average = AverageSubTomogram
     FSCs = SetOfFSCs
 
 
@@ -240,7 +240,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         fscs = self.genFscs(self.noIters)
 
         # Define outputs and relations
-        outputs = {self._possibleOutputs.subtomogramAverage.name: averageSubTomogram,
+        outputs = {self._possibleOutputs.average.name: averageSubTomogram,
                    self._possibleOutputs.subtomograms.name: outParticles,
                    self._possibleOutputs.FSCs.name: fscs}
         self._defineOutputs(**outputs)

@@ -142,18 +142,17 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def getTs(self):
         """If the user provides a set of tilt series, use them. If not (expected behaviour), get the non-interpolated
         tilt series from the introduced coordinates."""
-        tsSet = getattr(self, IN_TS).get()
-        return tsSet if tsSet else getNonInterpolatedTsFromRelations(getattr(self, IN_COORDS), self)
+        tsSet = self.getAttrib(IN_TS)
+        return tsSet if tsSet else getNonInterpolatedTsFromRelations(self.getAttrib(IN_COORDS), self)
 
     def getBoxSize(self):
         """If the user provides a box size value. If not (expected behaviour), read it from the set of subtomograms
         introduced."""
-        boxSizeFromForm = getattr(self, IN_BOXSIZE).get()
-        return boxSizeFromForm if boxSizeFromForm else getattr(self, IN_SUBTOMOS).get().getCoordinates3D().getBoxSize()
+        boxSizeFromForm = self.getAttrib(IN_BOXSIZE)
+        return boxSizeFromForm if boxSizeFromForm else self.getAttrib(IN_SUBTOMOS).getCoordinates3D().getBoxSize()
 
     def getRefVol(self):
-        refVol = getattr(self, REF_VOL, None)
-        return refVol.get() if refVol else None
+        return self.getAttrib(REF_VOL)
 
     def createInitEmanPrjDirs(self):
         """Create in the current protocol's extra path the initial directory structure of an EMAN tomo project: info,
