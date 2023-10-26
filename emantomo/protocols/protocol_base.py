@@ -89,7 +89,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         # Get the unique values of the files to be linked
         dataDict = inSubtomos.getUniqueValues([EmanParticle.INFO_JSON,
                                                EmanParticle.TS_HDF,
-                                               EmanParticle.TOMO_HDF,
+                                               # EmanParticle.TOMO_HDF,
                                                EmanParticle.STACK_2D_HDF,
                                                EmanParticle.STACK_3D_HDF])
         # Link the files

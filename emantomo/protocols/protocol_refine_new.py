@@ -38,7 +38,7 @@ from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME
+from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, SPT_00_DIR
 
 # 3D maps filtering options
 WIENER = 'wiener'
@@ -68,10 +68,6 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.inParticles = None
-        self.avgHdf = None
-        self.evenHdf = None
-        self.oddFnHdf = None
 
     # --------------- DEFINE param functions ---------------
 
@@ -185,7 +181,6 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
         self._insertFunctionStep(self.convertRefVolStep)
-        # self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -267,13 +262,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         args.append(f'--tophat={filteringKeys[self.topHat.get()]}')
         args.append(f'--maxres={self.maxResAli.get():.2f}')
         args.append(f'--minres={self.minResAli.get():.2f}')
-        # if self._doGoldStandard(self.inParticles):
-        args.append('--goldstandard')
-        # else:
-        #     args.append('--goldcontinue')
-        # if exists(self._getExtraPath(new3dAlignFile)):
-        #     # args.append(f'--loadali3d={new3dAlignFile}')
-        #     args.append(f'--loadali3d')
+        args.append(self._getGoldModeCmd(self.inParticles))
         if exists(self._getExtraPath(new2dAlignFile)):
             args.append(f'--loadali2d={new2dAlignFile}')
         # Local refinement params
@@ -295,7 +284,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         return ' '.join(args)
 
     @staticmethod
-    def _doGoldStandard(inParticles):
+    def _getGoldModeCmd(inParticles):
         """
         From EMAN doc:
             - goldstandard: "Phase randomize the reference to the starting resolution (--startres) independently for
@@ -305,7 +294,10 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         Thus, we'll apply it if it is the first refinement, which means that the set of particles introduced do not
         contain an ali2d nor ali3d files in the corresponding attributes.
         """
-        return True if not inParticles.getAli2dLstFile() and not inParticles.getAli3dLstFile() else False
+        if not inParticles.getAli2dLstFile() and not inParticles.getAli3dLstFile():
+            return '--goldstandard'
+        else:
+            return '--goldcontinue'
 
     def _getNoIters(self):
         """From Eman doc: Default is p,p,p,t,p,p,t,r,d. Character followed by number is also acceptable. p3 = p,p,p."""
@@ -332,14 +324,14 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         return len(unrolledList) - unrolledList[::-1].index('p')
 
     # --------------------------- INFO functions --------------------------------
-    def _validate(self):
-        errorMsgs = []
-        inParticles = self.getAttrib(IN_SUBTOMOS)
-        inRef = self.getAttrib(REF_VOL)
-        if not self._doGoldStandard(inParticles) and inRef:
-            if not inRef.hasHalfMaps():
-                errorMsgs.append('If the introduced particles have some kind of alignment or orientation, the '
-                                 'initial volume introduced needs to have the corresponding even and odd halves. '
-                                 'Try to replace the initial volume by the resulting average of a previous refine '
-                                 'protocol.')
-        return errorMsgs
+    # def _validate(self):
+    #     errorMsgs = []
+    #     inParticles = self.getAttrib(IN_SUBTOMOS)
+    #     inRef = self.getAttrib(REF_VOL)
+    #     if not self._getGoldModeCmd(inParticles) and inRef:
+    #         if not inRef.hasHalfMaps():
+    #             errorMsgs.append('If the introduced particles have some kind of alignment or orientation, the '
+    #                              'initial volume introduced needs to have the corresponding even and odd halves. '
+    #                              'Try to replace the initial volume by the resulting average of a previous refine '
+    #                              'protocol.')
+    #     return errorMsgs

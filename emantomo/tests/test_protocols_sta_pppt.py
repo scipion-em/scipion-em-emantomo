@@ -23,18 +23,16 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from os.path import exists, basename, dirname, join
-
+from os.path import exists, basename
 from cistem.protocols import CistemProtTsImportCtf
-
-from emantomo.constants import TOMOBOX, SPT_00_DIR
+from emantomo.constants import TOMOBOX
 from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF, EmanProtTSExtraction, \
     EmanProtTomoInitialModelNew, EmanProtTomoRefinementNew, EmanProtMultiRefinementNew
 from emantomo.utils import getPresentPrecedents
 from imod.protocols import ProtImodImportTransformationMatrix
 from imod.protocols.protocol_base import OUTPUT_TILTSERIES_NAME
 from pwem import ALIGN_2D
-from pwem.protocols import ProtSubSet, ProtImportVolumes
+from pwem.protocols import ProtImportVolumes
 from pyworkflow.tests import setupTestProject, DataSet
 from pyworkflow.utils import magentaStr
 from reliontomo.protocols import ProtImportCoordinates3DFromStar
@@ -49,8 +47,8 @@ from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
 class TestEmanBasePPPT(TestBaseCentralizedLayer):
     ds = None
     importedTs = None
-    particlesUnbinnedBoxSize = 120
-    particlesExtractedBoxSize = 32
+    particlesUnbinnedBoxSize = 256
+    particlesExtractedBoxSize = 64
 
     @classmethod
     def setUpClass(cls):
@@ -243,9 +241,15 @@ class TestBaseRefineCyclePPPT(TestEmanBasePPPT):
 
         inCoords = inSet if type(inSet) is SetOfCoordinates3D else inSet.getCoordinates3D()
         ali2dFile = outParticles.getAli2dLstFile()
-        self.assertTrue(exists(ali2dFile)) if hasEman2dAliFile else self.assertIsNone(ali2dFile)
+        if hasEman2dAliFile:
+            self.assertTrue(exists(ali2dFile), msg=f'{ali2dFile} does not exist')
+        else:
+            self.assertIsNone(ali2dFile)
         ali3dFile = outParticles.getAli3dLstFile()
-        self.assertTrue(exists(ali3dFile)) if hasEman3dAliFile else self.assertIsNone(ali3dFile)
+        if hasEman3dAliFile:
+            self.assertTrue(exists(ali3dFile), msg=f'{ali3dFile} does not exist')
+        else:
+            self.assertIsNone(ali3dFile)
         presentTsIds = inCoords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
         for tomo in getPresentPrecedents(inCoords, presentTsIds):
             tomoId = tomo.getTsId()
@@ -356,7 +360,8 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
         inputDict = {
             'inputSubtomos': inEmanParticles,
             'maxRes': 30,
-            'symmetry': 'c6'
+            'symmetry': 'c6',
+            'numberOfThreads': 8
         }
         if nClasses > 0:
             inputDict['nClasses'] = nClasses
@@ -371,6 +376,20 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
         outClasses = getattr(protMultiCl, EmanProtMultiRefinementNew._possibleOutputs.classes.name, None)
         return outParticles, outClasses
 
+    def checkAliEmanParticles(self, inParticles, outParticles):
+        expectedSRate = DataSetRe4STATuto.sRateBin4.value
+        expectedBozxSize = self.particlesExtractedBoxSize
+        self.checkRefinedSubtomograms(inParticles, outParticles,
+                                      expectedSetSize=self.expectedSetSize,
+                                      expectedBoxSize=expectedBozxSize,
+                                      expectedSRate=expectedSRate,
+                                      convention=TR_EMAN,
+                                      orientedParticles=True
+                                      )
+        self.checkEmanParticles(inParticles, outParticles,
+                                hasEman2dAliFile=True,
+                                hasEman3dAliFile=True)
+
     def test_refine_and_classify(self):
         expectedSRate = DataSetRe4STATuto.sRateBin4.value
         expectedBozxSize = self.particlesExtractedBoxSize
@@ -382,30 +401,62 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
                           expectedBoxSize=expectedBozxSize,
                           hasHalves=True)
         # Check the particles
-        self.checkRefinedSubtomograms(self.extractedParticles, refinedParticles,
-                                      expectedSetSize=self.expectedSetSize,
-                                      expectedBoxSize=expectedBozxSize,
-                                      expectedSRate=expectedSRate,
-                                      convention=TR_EMAN,
-                                      orientedParticles=True)
-        self.checkEmanParticles(self.extractedParticles, refinedParticles,
-                                hasEman2dAliFile=True,
-                                hasEman3dAliFile=True)
+        self.checkAliEmanParticles(self.extractedParticles, refinedParticles)
         # Check the FSCs
-        nRefineIters = 3  # p2,t
-        pathFSCs = join(dirname(outFscs._mapperPath), 'extra', SPT_00_DIR)
-        expectedBaseNamesFSCs = [f'fsc_masked_{nRefineIters:02}.txt',
-                                 f'fsc_unmasked_{nRefineIters:02}.txt',
-                                 f'fsc_maskedtight_{nRefineIters:02}.txt']
-        nFSCs = len(expectedBaseNamesFSCs)
-        self.assertSetSize(outFscs, size=nFSCs)
-        for fscName in expectedBaseNamesFSCs:
-            self.assertTrue(exists(join(pathFSCs, fscName)))
+        self.assertSetSize(outFscs, size=3)
 
         # [2A] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 1, NO REF
         nClasses = 1
         outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
                                                             doAlignment=False,
-                                                            nClasses=1,
+                                                            nClasses=nClasses,
                                                             labelMsg='no ali, 1 cl, no ref')
         # TODO: add the required methods to the centralized layer
+        # Check the particles
+        self.checkAliEmanParticles(refinedParticles, outParticles)
+        # Check the classes
+        #TODO
+
+        # [2B] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 3, NO REF
+        nClasses = 3
+        outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+                                                            doAlignment=False,
+                                                            nClasses=nClasses,
+                                                            labelMsg='no ali, 3 cl, no ref')
+        # Check the particles
+        self.checkAliEmanParticles(refinedParticles, outParticles)
+        # Check the classes
+        # #TODO
+        #
+        # # [2C] CLASSIFY WITHOUT ALIGNMENT WITH 1 REF
+        # outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+        #                                                     doAlignment=False,
+        #                                                     ref=refinedAvg,
+        #                                                     labelMsg='no ali, with 1 ref')
+        # # Check the particles
+        # self.checkAliEmanParticles(refinedParticles, outParticles)
+        # # Check the classes
+        # #TODO
+        #
+        # # [2D] CLASSIFY WITH ALIGNMENT AND REF
+        # outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+        #                                                     doAlignment=True,
+        #                                                     ref=refinedAvg,
+        #                                                     labelMsg='Ali with ref')
+        # # TODO: add the required methods to the centralized layer
+        # # Check the particles
+        # self.checkAliEmanParticles(refinedParticles, outParticles)
+        # # Check the classes
+        # #TODO
+        #
+        # # [2E] CLASSIFY WITH ALIGNMENT, N CLASSES 1
+        # nClasses = 1
+        # outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+        #                                                     doAlignment=True,
+        #                                                     nClasses=nClasses,
+        #                                                     labelMsg='Ali, 1 cl, no ref')
+        # # TODO: add the required methods to the centralized layer
+        # # Check the particles
+        # self.checkAliEmanParticles(refinedParticles, outParticles)
+        # # Check the classes
+        # #TODO

@@ -27,15 +27,11 @@
 import shutil
 from enum import Enum
 from os.path import exists, join, abspath
-
-import numpy as np
-
 from emantomo import Plugin
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
 from pwem.convert.headers import fixVolume
-from pwem.objects import SetOfFSCs
-from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
+from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SubTomogram
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
@@ -61,9 +57,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.convertedRefDict = None
-        self.numClasses = None
-        self.refFiles = None
 
     # --------------- DEFINE param functions ---------------
     def _defineParams(self, form):
@@ -156,7 +149,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     def _insertAllSteps(self):
         self._initialize()
         self._insertFunctionStep(self.createEmanPrjPostExtractionStep)
-        # self._insertFunctionStep(self.buildEmanSetsStep)
         self._insertFunctionStep(self.refineMultiStep)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
@@ -208,8 +200,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
                                 updateClassCallback=self._updateClass,
                                 itemDataIterator=iter(align3dData))
 
-        # TODO: check if the FSCs and halves are generated if alignment is selected
-
         # Define outputs and relations
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outParticles,
                                self._possibleOutputs.classes.name: classes3d})
@@ -221,7 +211,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         refMask = self.maskRef.get()
         alignMask = self.maskAlign.get()
         breakSym = self.breakSym.get()
-        new2dAlignFile = self.getNewAliFile(is3d=False)
+        new2dAlignFile = self.getNewAliFile(is3d=False, outPath=SPT_00_DIR)
         nClasses = self.nClasses.get()
         args = [
             ' '.join(self.refFiles) if self.refFiles else '',
