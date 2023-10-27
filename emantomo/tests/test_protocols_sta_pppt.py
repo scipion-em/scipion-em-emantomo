@@ -393,7 +393,7 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
     def test_refine_and_classify(self):
         expectedSRate = DataSetRe4STATuto.sRateBin4.value
         expectedBozxSize = self.particlesExtractedBoxSize
-        # [1] REFINEMENT
+        # [1] REFINEMENT ###############################################################################################
         refinedAvg, refinedParticles, outFscs = self._runSubtomoRefineNew(self.extractedParticles, self.importedRef)
         # Check the average
         self.checkAverage(refinedAvg,
@@ -405,19 +405,18 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
         # Check the FSCs
         self.assertSetSize(outFscs, size=3)
 
-        # [2A] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 1, NO REF
+        # [2A] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 1, NO REF #########################################################
         nClasses = 1
         outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
                                                             doAlignment=False,
                                                             nClasses=nClasses,
                                                             labelMsg='no ali, 1 cl, no ref')
-        # TODO: add the required methods to the centralized layer
         # Check the particles
         self.checkAliEmanParticles(refinedParticles, outParticles)
         # Check the classes
-        #TODO
+        self.checkClasses(outClasses, expectedSetSize=nClasses, expectedSRate=expectedSRate)
 
-        # [2B] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 3, NO REF
+        # [2B] CLASSIFY WITHOUT ALIGNMENT, N CLASSES 3, NO REF #########################################################
         nClasses = 3
         outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
                                                             doAlignment=False,
@@ -426,37 +425,37 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
         # Check the particles
         self.checkAliEmanParticles(refinedParticles, outParticles)
         # Check the classes
-        # #TODO
-        #
-        # # [2C] CLASSIFY WITHOUT ALIGNMENT WITH 1 REF
-        # outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
-        #                                                     doAlignment=False,
-        #                                                     ref=refinedAvg,
-        #                                                     labelMsg='no ali, with 1 ref')
-        # # Check the particles
-        # self.checkAliEmanParticles(refinedParticles, outParticles)
-        # # Check the classes
-        # #TODO
-        #
-        # # [2D] CLASSIFY WITH ALIGNMENT AND REF
-        # outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
-        #                                                     doAlignment=True,
-        #                                                     ref=refinedAvg,
-        #                                                     labelMsg='Ali with ref')
-        # # TODO: add the required methods to the centralized layer
-        # # Check the particles
-        # self.checkAliEmanParticles(refinedParticles, outParticles)
-        # # Check the classes
-        # #TODO
-        #
-        # # [2E] CLASSIFY WITH ALIGNMENT, N CLASSES 1
-        # nClasses = 1
-        # outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
-        #                                                     doAlignment=True,
-        #                                                     nClasses=nClasses,
-        #                                                     labelMsg='Ali, 1 cl, no ref')
-        # # TODO: add the required methods to the centralized layer
-        # # Check the particles
-        # self.checkAliEmanParticles(refinedParticles, outParticles)
-        # # Check the classes
-        # #TODO
+        self.checkClasses(outClasses, expectedSetSize=nClasses, expectedSRate=expectedSRate)
+
+        # [2C] CLASSIFY WITHOUT ALIGNMENT WITH 1 REF ###################################################################
+        nClasses = 1
+        outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+                                                            doAlignment=False,
+                                                            ref=refinedAvg,
+                                                            labelMsg='no ali, with 1 ref')
+        # Check the particles
+        self.checkAliEmanParticles(refinedParticles, outParticles)
+        # Check the classes
+        self.checkClasses(outClasses, expectedSetSize=nClasses, expectedSRate=expectedSRate)
+
+        # [2D] CLASSIFY WITH ALIGNMENT AND REF #########################################################################
+        nClasses = 1
+        outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+                                                            doAlignment=True,
+                                                            ref=refinedAvg,
+                                                            labelMsg='Ali with ref')
+        # Check the particles
+        self.checkAliEmanParticles(refinedParticles, outParticles)
+        # Check the classes
+        self.checkClasses(outClasses, expectedSetSize=nClasses, expectedSRate=expectedSRate)
+
+        # [2E] CLASSIFY WITH ALIGNMENT, N CLASSES 1 ####################################################################
+        nClasses = 1
+        outParticles, outClasses = self._runMultiRefClassif(refinedParticles,
+                                                            doAlignment=True,
+                                                            nClasses=nClasses,
+                                                            labelMsg='Ali, 1 cl, no ref')
+        # Check the particles
+        self.checkAliEmanParticles(refinedParticles, outParticles)
+        # Check the classes
+        self.checkClasses(outClasses, expectedSetSize=nClasses, expectedSRate=expectedSRate)
