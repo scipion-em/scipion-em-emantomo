@@ -23,6 +23,12 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
+from pwem.viewers import DataViewer, MODE, MODE_MD, VISIBLE
 from .viewers_data import EmanDataViewer
+from ..objects import EmanSetOfParticles
+
+DataViewer.registerConfig(EmanSetOfParticles,
+                          config={MODE: MODE_MD,
+                                  VISIBLE: 'id _filename _volName _coordinate._x _coordinate._y _coordinate._z '
+                                           '_transform._matrix '})
 
