@@ -50,7 +50,6 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     """
 
     _label = 'Initial model'
-    _devStatus = BETA
 
     def __init__(self, **kwargs):
         EMProtocol.__init__(self, **kwargs)

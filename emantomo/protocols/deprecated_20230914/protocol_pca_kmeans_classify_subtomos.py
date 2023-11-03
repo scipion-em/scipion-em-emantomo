@@ -35,8 +35,8 @@ from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, IntParam, StringParam, LEVEL_ADVANCED, FloatParam, \
     BooleanParam
 from pyworkflow.utils import makePath, removeBaseExt, removeExt
-from ..constants import SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR, SPT_00_DIR, INPUT_PTCLS_LST, SPTCLS_00_DIR
-from ..convert import writeSetOfSubTomograms, refinement2Json, loadJson
+from emantomo.constants import SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR, SPT_00_DIR, INPUT_PTCLS_LST, SPTCLS_00_DIR
+from emantomo.convert import writeSetOfSubTomograms, refinement2Json, loadJson
 import emantomo
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SetOfAverageSubTomograms

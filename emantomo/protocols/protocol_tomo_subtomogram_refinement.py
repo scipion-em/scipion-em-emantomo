@@ -64,7 +64,6 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     _outputClassName = 'SubTomogramRefinement'
     _label = 'subtomogram refinement'
-    _devStatus = BETA
     _possibleOutputs = EmanTomoRefinementOutputs
 
     def __init__(self, **kwargs):

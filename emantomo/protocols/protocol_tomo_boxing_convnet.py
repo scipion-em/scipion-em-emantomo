@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
 # * Authors:     David Herreros Calero (dherreros@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es) [1]
 # *
 # * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -26,12 +27,17 @@
 
 import os
 import glob
+from os.path import join
 
-
+from emantomo.constants import TOMOGRAMS_DIR, APIX_UNBIN, TS_FILE, TS_DIR
+from emantomo.objects import EmanMetaData
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TOMOS
+from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pwem.emlib.image import ImageHandler
 
 from pyworkflow import BETA
 import pyworkflow.utils as pwutils
+from pyworkflow.utils import createLink, getExt
 from pyworkflow.utils.properties import Message
 from pyworkflow.protocol.params import IntParam, BooleanParam, StringParam, USE_GPU, GPU_LIST, LEVEL_ADVANCED
 
@@ -39,11 +45,12 @@ from tomo.protocols import ProtTomoPicking
 from tomo.objects import SetOfCoordinates3D
 import tomo.constants as const
 
-from emantomo.convert import loadJson, readSetOfCoordinates3D
+from emantomo.convert import loadJson, readSetOfCoordinates3D, writeJson
 import emantomo
+from tomo.utils import getNonInterpolatedTsFromRelations
 
 
-class EmanProtTomoConvNet(ProtTomoPicking):
+class EmanProtTomoConvNet(ProtTomoPicking, ProtEmantomoBase):
     """Eman Deep Learning based picking for Tomography
     """
     _label = 'tomo boxer convnet'
@@ -51,7 +58,7 @@ class EmanProtTomoConvNet(ProtTomoPicking):
     # nn_boxSize = 96
 
     def __init__(self, **kwargs):
-        ProtTomoPicking.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -60,46 +67,84 @@ class EmanProtTomoConvNet(ProtTomoPicking):
                        label="Use GPU for execution",
                        help="This protocol has both CPU and GPU implementation.\
                            Select the one you want to use.")
-        form.addHidden(GPU_LIST, StringParam, default='0',
-                       expertLevel=LEVEL_ADVANCED,
-                       label="Choose GPU IDs",
-                       help="Add a list of GPU devices that can be used")
         form.addParam('boxSize', IntParam, label="Box Size",
                       default=96,
                       help='Final box size for the coordinates')
         form.addParam('groupId', IntParam, label="GroupId", default=1,
                       help="Select a group ID that will be given to the particles. This value is useful to indentify "
                            "different structures in a SetOfCoordinates3D when different sets are joint.")
+        form.addHidden(GPU_LIST, StringParam, default='0',
+                       expertLevel=LEVEL_ADVANCED,
+                       label="Choose GPU IDs",
+                       help="Add a list of GPU devices that can be used")
 
     # --------------------------- STEPS functions -----------------------------
     def _insertAllSteps(self):
-        self._insertFunctionStep('convertInputStep')
-        self._insertFunctionStep('launchBoxingGUIStep', interactive=True)
+        mdObjDict = self._initialize()
+        self._insertFunctionStep(self.convertInputStep, mdObjDict)
+        self._insertFunctionStep(self.launchBoxingGUIStep, interactive=True)
 
-    def convertInputStep(self):
-        out_path = self._getExtraPath('tomograms')
-        info_path = self._getExtraPath('info')
-        pwutils.makePath(out_path)
-        pwutils.makePath(info_path)
-        # program = emantomo.Plugin.getProgram("e2proc3d.py")
-        for tomo in self.inputTomograms.get().iterItems():
-            tomo_file = tomo.getFileName()
-            # tomo_file_hdf = pwutils.removeBaseExt(tomo_file) + ".hdf"
-            # dim = tomo.getDimensions()
-            # Only rescale Tomomgrams if needed. Otherwise create a symbolic link to save space
-            # if self.minBoxSize.get() < self.nn_boxSize:
-            #     out_file = os.path.join(out_path, pwutils.removeBaseExt(tomo_file) + ".mrc")
-            #     factor = self.nn_boxSize / self.minBoxSize.get()
-            #     ImageHandler.scaleSplines(tomo_file + ':mrc', out_file, factor)
-            # else:
-            #     args = "%s %s --process normalize --clip 927,927,300" % (tomo_file, os.path.join(out_path, tomo_file_hdf))
-            #     pwutils.runJob(None, program, args, env=emantomo.Plugin.getEnviron())
-            # args = "%s %s --process normalize --clip %d,%d,%d" \
-            #        % (tomo_file, os.path.join(out_path, tomo_file_hdf), max(dim), max(dim), dim[2])
-            # pwutils.runJob(None, program, args, env=emantomo.Plugin.getEnviron())
-            out_file = os.path.join(out_path, pwutils.removeBaseExt(tomo_file))
-            pwutils.createLink(tomo_file, out_file)
-            self.writeInfoJson(tomo_file, info_path)
+    def _initialize(self):
+        inTomoSet = self.inputTomograms.get()
+        # inTsSet = getNonInterpolatedTsFromRelations(getattr(self, IN_TOMOS), self)
+        self.createInitEmanPrjDirs()
+        # Manage the tomograms
+        presentTsIds = set(getPresentTsIdsInSet(inTomoSet))
+        # tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
+        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in inTomoSet if tomo.getTsId() in presentTsIds}
+
+        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
+        mdObjDict = {}
+        for tomoId in presentTsIds:
+            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
+                                             # ts=tsIdsDict[tomoId],
+                                             tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
+                                             inTomo=tomoIdsDict[tomoId],
+                                             tomoHdfName=join(TOMOGRAMS_DIR, f'{tomoId}.hdf'),
+                                             jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
+        return mdObjDict
+
+    def convertInputStep(self, mdObjDict):
+        for mdObj in mdObjDict.values():
+            inFile = mdObj.inTomo.getFileName()
+            outFile = self._getExtraPath(TOMOGRAMS_DIR, mdObj.tsId + getExt(inFile))
+            createLink(inFile, outFile)
+            # We have to write each json file with the minimum info required without having to ask for the TS,
+            # which is:
+            # {
+            # "apix_unbin": 3.929999828338623,
+            # "tlt_file": "tiltseries/tomoa.hdf"
+            # }
+            jsonDict = {
+                APIX_UNBIN: 3.93,
+                TS_FILE: mdObj.tsHdfName
+            }
+            writeJson(jsonDict, mdObj.jsonFile)
+
+    # def convertInputStep(self):
+    #     out_path = self._getExtraPath('tomograms')
+    #     info_path = self._getExtraPath('info')
+    #     pwutils.makePath(out_path)
+    #     pwutils.makePath(info_path)
+    #     # program = emantomo.Plugin.getProgram("e2proc3d.py")
+    #     for tomo in self.inputTomograms.get().iterItems():
+    #         tomo_file = tomo.getFileName()
+    #         # tomo_file_hdf = pwutils.removeBaseExt(tomo_file) + ".hdf"
+    #         # dim = tomo.getDimensions()
+    #         # Only rescale Tomomgrams if needed. Otherwise create a symbolic link to save space
+    #         # if self.minBoxSize.get() < self.nn_boxSize:
+    #         #     out_file = os.path.join(out_path, pwutils.removeBaseExt(tomo_file) + ".mrc")
+    #         #     factor = self.nn_boxSize / self.minBoxSize.get()
+    #         #     ImageHandler.scaleSplines(tomo_file + ':mrc', out_file, factor)
+    #         # else:
+    #         #     args = "%s %s --process normalize --clip 927,927,300" % (tomo_file, os.path.join(out_path, tomo_file_hdf))
+    #         #     pwutils.runJob(None, program, args, env=emantomo.Plugin.getEnviron())
+    #         # args = "%s %s --process normalize --clip %d,%d,%d" \
+    #         #        % (tomo_file, os.path.join(out_path, tomo_file_hdf), max(dim), max(dim), dim[2])
+    #         # pwutils.runJob(None, program, args, env=emantomo.Plugin.getEnviron())
+    #         out_file = os.path.join(out_path, pwutils.removeBaseExt(tomo_file))
+    #         pwutils.createLink(tomo_file, out_file)
+    #         self.writeInfoJson(tomo_file, info_path)
 
     def launchBoxingGUIStep(self):
         program = emantomo.Plugin.getProgram("e2spt_boxer_convnet.py")
