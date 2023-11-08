@@ -118,7 +118,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
                       display=EnumParam.DISPLAY_COMBO,
                       default=mapFilterDict[WIENER],
                       label='3D map filtering',
-                      help='Options to to filter the 3D maps:\n\n'
+                      help='Options to filter the 3D maps:\n\n'
                            '\t- wiener: wiener filter based on FSC curve. default mode in most programs.\n'
                            '\t- global: tophat filter across the map at the resolution cutoff 0.143 from '
                            'fsc_masked_xx.txt.\n'

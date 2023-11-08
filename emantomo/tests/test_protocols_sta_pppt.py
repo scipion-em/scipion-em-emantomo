@@ -356,7 +356,7 @@ class TestEmanRefinementAndClassif(TestBaseRefineCyclePPPT):
 
     @classmethod
     def _runMultiRefClassif(cls, inEmanParticles, doAlignment=None, labelMsg='', nClasses=-1, ref=None):
-        print(magentaStr(f"\n==> Running the multi fef classification {labelMsg}:"))
+        print(magentaStr(f"\n==> Running the multi ref classification {labelMsg}:"))
         inputDict = {
             'inputSubtomos': inEmanParticles,
             'maxRes': 30,

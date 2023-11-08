@@ -56,17 +56,32 @@ Protocols
 =========
 The integrated protocols are:
 
-1. Template matching picking.
+1. Tilt series alignment and tomograms reconstruction.
 
-2. Average subtomograms.
+2. CTF estimation.
 
-3. Subtomograms manual picking.
+3. Tomogram clipping.
 
-4. Subtomograms extraction from tomogram.
+4. Subtomograms manual picking.
 
-5. Initial model.
+5. Template matching picking.
 
-6. Subtomograms refinement.
+6. Average subtomograms.
+
+7. Subtomograms extraction from the tomograms.
+
+8. Subtomograms extraction from the tilt series.
+
+9. Initial model.
+
+10. New initial model (from particles extracted from the tilt series).
+
+11. Subtomograms refinement.
+
+12. New subtomograms refinement (from particles extracted from the tilt series).
+
+13. New multi-reference classification of subtomograms (from particles extracted from the tilt series).
+
 
 =====
 Tests

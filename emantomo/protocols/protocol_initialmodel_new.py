@@ -149,7 +149,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
             # Convert the output to MRC
             initModelFile = self.getInitialModelHdfFile(iVol)
             outFile = self.getInitialModelMrcFile(iVol)
-            args = '--apix %d' % self.inSamplingRate
+            args = '--apix %.3f' % self.inSamplingRate
             convertBetweenHdfAndMrc(self, initModelFile, outFile, args)
             # Generate the corresponding output
             averageSubTomogram = AverageSubTomogram()

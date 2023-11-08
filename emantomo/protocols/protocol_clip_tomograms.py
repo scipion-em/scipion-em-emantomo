@@ -30,7 +30,6 @@ from emantomo import Plugin
 from emantomo.constants import TOMOGRAMS_DIR
 from emantomo.protocols.protocol_base import IN_TOMOS, ProtEmantomoBase
 from pwem.objects import Transform
-from pyworkflow import BETA
 from pyworkflow.protocol.params import PointerParam, IntParam, GT
 from pyworkflow.utils import runJob, makePath, createLink
 from pyworkflow.utils.properties import Message
@@ -47,7 +46,6 @@ class EmanProtTomoClip(ProtEmantomoBase):
     IN_TOMOGRAMS_DIR = 'inTomograms'
     _possibleOutputs = clipTomogramsOuts
     _label = 'clip tomograms'
-    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

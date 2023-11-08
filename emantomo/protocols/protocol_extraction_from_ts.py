@@ -31,7 +31,8 @@ from emantomo import Plugin
 from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX, TOMOGRAMS_DIR, TS_DIR
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_CTF, IN_TS, IN_BOXSIZE, IN_SUBTOMOS
-from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName
+from emantomo.utils import getFromPresentObjects, genEmanGrouping, getPresentTsIdsInSet, genJsonFileName, \
+    getPresentPrecedents
 from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam
@@ -141,7 +142,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       label='Minimum distance between particles (Å)',
                       default=10,
                       validators=[GE(0)],
-                      expertLevel=LEVEL_ADVANCED,)
+                      expertLevel=LEVEL_ADVANCED, )
         form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -178,7 +179,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # Calculate the scale factor
         self.scaleFactor = inParticles.getSamplingRate() / inTsSet.getSamplingRate()
         # Generate the md object data units as a dict
-        return self.genMdObjDict(inTsSet, inCtfSet, coords=coords)
+        return self.genMdObjDict(inTsSet, inCtfSet, coords)
 
     def createExtractionEmanPrjStep(self, mdObjDict):
         # Create project dir structure
@@ -193,7 +194,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def writeData2JsonFileStep(self, mdObjDict):
         for mdObj in mdObjDict.values():
             mode = 'a' if exists(mdObj.jsonFile) else 'w'
-            coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(), mode=mode)
+            coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(),
+                        mode=mode)
             ts2Json(mdObj, mode='a')
             ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
@@ -250,7 +252,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
-                subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
+                subtomogram.setLocation(particleCounter, subtomoFile)  # The index is stored to be used as
+                # the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
                 subtomogram.setSamplingRate(self.currentSRate)
                 subtomogram.setVolName(mdObj.tsId)
                 subtomogram.setCoordinate3D(coord)
@@ -289,22 +292,25 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         return errorMsg
 
     # --------------------------- UTILS functions ----------------------------------
-    def genMdObjDict(self, inTsSet, inCtfSet, tomograms=None, coords=None):
+    def genMdObjDict(self, inTsSet, inCtfSet, coords):
         self.createInitEmanPrjDirs()
-        if type(coords) == SetOfSubTomograms:
+        if type(coords) is SetOfSubTomograms:
             coords = coords.getCoordinates3D()
         # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
         # which means the intersection of the tsId lists
-        tomograms = tomograms if tomograms and not coords else coords.getPrecedents()
+
         presentCtfTsIds = set(getPresentTsIdsInSet(inCtfSet))
         presentTsSetTsIds = set(getPresentTsIdsInSet(inTsSet))
-        presentTomoSetTsIds = set(getPresentTsIdsInSet(tomograms))
+        presentTomoSetTsIds = set(coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR))
         presentTsIds = presentCtfTsIds & presentTsSetTsIds & presentTomoSetTsIds
+        # The tomograms are obtained as the coordinates precedents. Operating this way, the code considers the case of
+        # subsets of coordinates
+        presentTomograms = getPresentPrecedents(coords, presentTsIds)
 
         # Manage the TS, CTF tomo Series and tomograms
         tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
         ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet if ctf.getTsId() in presentTsIds}
-        tomoIdsDict = {tomo.getTsId(): tomo.clone() for tomo in tomograms if tomo.getTsId() in presentTsIds}
+        tomoIdsDict = {tomo.getTsId(): tomo for tomo in presentTomograms}
 
         # Get the required acquisition data
         self.sphAb = inTsSet.getAcquisition().getSphericalAberration()

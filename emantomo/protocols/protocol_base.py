@@ -38,6 +38,7 @@ from emantomo.convert.lstConvert import EmanLstReader, EmanLstWriter
 from emantomo.objects import EmanParticle, EmanSetOfParticles
 from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
+from pyworkflow import BETA
 from pyworkflow.object import Pointer, String
 from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
@@ -53,6 +54,8 @@ REF_VOL = 'refVol'
 
 
 class ProtEmantomoBase(EMProtocol, ProtTomoBase):
+
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
