@@ -41,7 +41,7 @@ from pyworkflow.object import Set, Float
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, \
     EnumParam, StringParam, GT, LE
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import makePath, createLink, Message
+from pyworkflow.utils import makePath, createLink, Message, replaceExt
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, TiltImage, TiltSeries, Tomogram
 
 # Tomo size choices
@@ -271,20 +271,26 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def convertOutputStep(self, mdObj):
         tsId = mdObj.tsId
-        hdfTs = self.getCurrentHdfFile(TS_DIR, tsId)
+        hdfTs = [self.getCurrentHdfFile(TS_DIR, tsId)]
         hdfTomo = self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId)
-        files2Convert = [hdfTs, hdfTomo]
-        extraArgs = '--apix %.3f ' % mdObj.ts.getSamplingRate()
         if self.genInterpolatedTs.get():
             tsHdfInterpFinalLoc = self.getTsInterpFinalLoc(tsId)
             createLink(self._getInterpTsFile(mdObj), tsHdfInterpFinalLoc)
-            files2Convert.append(tsHdfInterpFinalLoc)
-        for hdfFile in files2Convert:
-            convertBetweenHdfAndMrc(self, hdfFile, hdfFile.replace('.hdf', '.mrc'), extraArgs=extraArgs)
+            hdfTs.append(tsHdfInterpFinalLoc)
+        # TS
+        extraArgs = '--apix %.3f ' % mdObj.ts.getSamplingRate()
+        for hdfFile in hdfTs:
+            convertBetweenHdfAndMrc(self, hdfFile, replaceExt(hdfFile, 'mrc'), extraArgs=extraArgs)
             # Delete de HDF files if requested
             if not self.keepHdfFile.get():
                 remove(hdfFile)
-        fixVolume(hdfTomo.replace('.hdf', '.mrc'))
+        # Tomograms
+        extraArgs = '--apix %.3f ' % mdObj.inTomo.getSamplingRate()
+        convertBetweenHdfAndMrc(self, hdfTomo, replaceExt(hdfTomo, 'mrc'), extraArgs=extraArgs)
+        # Delete de HDF files if requested
+        if not self.keepHdfFile.get():
+            remove(hdfTomo)
+        fixVolume(replaceExt(hdfTomo, 'mrc'))
 
     def createOutputStep(self, mdObj):
         # TS alignment
@@ -525,6 +531,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return ' '.join(args)
 
     def getFinalSampligRate(self):
+        # TODO: creo que esto se puede calcular al principio una única vez --> MEJOR LEERLO DE LA CABECERA DEL HDF
         # It has to be recalculated due to EMAN size management
         if not self._finalSamplingRate:
             tsSet = self.inputTS.get()
