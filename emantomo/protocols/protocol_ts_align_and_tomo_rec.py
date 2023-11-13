@@ -31,7 +31,7 @@ import numpy as np
 import emantomo
 from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS
 from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
-from emantomo.objects import EmanMetaData
+from emantomo.objects import EmanMetaData, EmanHdf5Handler
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName, getPresentTsIdsInSet
 from pwem.convert.headers import fixVolume
@@ -271,25 +271,21 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def convertOutputStep(self, mdObj):
         tsId = mdObj.tsId
-        hdfTs = [self.getCurrentHdfFile(TS_DIR, tsId)]
+        hdfTs = self.getCurrentHdfFile(TS_DIR, tsId)
         hdfTomo = self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId)
+        filesToConvert = [hdfTs, hdfTomo]
         if self.genInterpolatedTs.get():
             tsHdfInterpFinalLoc = self.getTsInterpFinalLoc(tsId)
             createLink(self._getInterpTsFile(mdObj), tsHdfInterpFinalLoc)
-            hdfTs.append(tsHdfInterpFinalLoc)
-        # TS
-        extraArgs = '--apix %.3f ' % mdObj.ts.getSamplingRate()
-        for hdfFile in hdfTs:
+            filesToConvert.append(tsHdfInterpFinalLoc)
+        for hdfFile in filesToConvert:
+            eh = EmanHdf5Handler(hdfFile)
+            extraArgs = '--apix %.3f ' % eh.getSamplingRate()
             convertBetweenHdfAndMrc(self, hdfFile, replaceExt(hdfFile, 'mrc'), extraArgs=extraArgs)
             # Delete de HDF files if requested
             if not self.keepHdfFile.get():
                 remove(hdfFile)
-        # Tomograms
-        extraArgs = '--apix %.3f ' % mdObj.inTomo.getSamplingRate()
-        convertBetweenHdfAndMrc(self, hdfTomo, replaceExt(hdfTomo, 'mrc'), extraArgs=extraArgs)
-        # Delete de HDF files if requested
-        if not self.keepHdfFile.get():
-            remove(hdfTomo)
+        # Fix the converted tomogram file headerTomograms
         fixVolume(replaceExt(hdfTomo, 'mrc'))
 
     def createOutputStep(self, mdObj):

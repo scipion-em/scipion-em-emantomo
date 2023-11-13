@@ -73,6 +73,11 @@ class EmanHdf5Handler:
                              (shrink * img.attrs['EMAN.ptcl_source_coord'][:-1]).tolist())
         return projsList
 
+    def getSamplingRate(self):
+        """Reads the sampling rate from the HDF header"""
+        return self._imgObjList['0']['apix_x']
+
+
 
 class EmanParticle(SubTomogram):
     INFO_JSON = '_infoJson'

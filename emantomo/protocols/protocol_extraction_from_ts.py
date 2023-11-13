@@ -96,22 +96,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         form.addParam('shrink', FloatParam,
                       default=1,
                       label='Binning factor')
-        # form.addParam('editSet', BooleanParam,
-        #               label='Apply post transformations?',
-        #               default=False)
-        # group = form.addGroup('Post transformations', condition='editSet')
-        # group.addParam('shiftx', IntParam,
-        #                label='X shift (pix.)',
-        #                default=0)
-        # group.addParam('shifty', IntParam,
-        #                label='Y shift (pix.)',
-        #                default=0)
-        # group.addParam('shiftz', IntParam,
-        #                label='Z shift (pix.)',
-        #                default=0)
-        # group.addParam('postSym', StringParam,
-        #                label='Symmetry',
-        #                default='c1')
         form.addParam('maxTilt', IntParam,
                       default=100,
                       label='Max tilt',
