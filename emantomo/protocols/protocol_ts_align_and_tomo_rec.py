@@ -282,9 +282,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             eh = EmanHdf5Handler(hdfFile)
             extraArgs = '--apix %.3f ' % eh.getSamplingRate()
             convertBetweenHdfAndMrc(self, hdfFile, replaceExt(hdfFile, 'mrc'), extraArgs=extraArgs)
-            # Delete de HDF files if requested
-            if not self.keepHdfFile.get():
-                remove(hdfFile)
         # Fix the converted tomogram file headerTomograms
         fixVolume(replaceExt(hdfTomo, 'mrc'))
 
@@ -301,9 +298,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         # Tomogram reconstruction
         if self.doRec.get():
             tsId = mdObj.tsId
+            eh = EmanHdf5Handler(self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId))
             tomogram = Tomogram()
             tomogram.setFileName(self._getOutTomoName(tsId))
-            tomogram.setSamplingRate(self.getFinalSampligRate())
+            tomogram.setSamplingRate(eh.getSamplingRate())
             tomogram.setTsId(tsId)
             tomogram.setAcquisition(mdObj.ts.getAcquisition())
             # Set default tomogram origin
@@ -331,6 +329,15 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTomoSet = self.getOutputSetOfTomograms()
             outTomoSet.setStreamState(Set.STREAM_CLOSED)
             outPutDict[outputObjects.tomograms.name] = outTomoSet
+
+        # Remove HDF files if requested
+        # Delete de HDF files if requested
+        if not self.keepHdfFile.get():
+            hdfExt = '*.hdf'
+            tsHdfs = glob.glob(join(self.getTsDir(), hdfExt))
+            tomoHdfs = glob.glob(join(self.getTomogramsDir(), hdfExt))
+            for hdfFile in tsHdfs + tomoHdfs:
+                remove(hdfFile)
 
         # Define outputs and relations
         self._defineOutputs(**outPutDict)
@@ -526,16 +533,15 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
         return ' '.join(args)
 
-    def getFinalSampligRate(self):
-        # TODO: creo que esto se puede calcular al principio una única vez --> MEJOR LEERLO DE LA CABECERA DEL HDF
-        # It has to be recalculated due to EMAN size management
-        if not self._finalSamplingRate:
-            tsSet = self.inputTS.get()
-            sizeX = tsSet.getDimensions()[0]
-            exponent = np.ceil(np.log2(sizeX / RESOLUTION[OUT_TOMO_SIZE_CHOICES[self.outsize.get()]]).clip(min=0))
-            binning = 2 ** exponent
-            self._finalSamplingRate = binning * tsSet.getSamplingRate()
-        return self._finalSamplingRate
+    # def getFinalSampligRate(self):
+    #     # It has to be recalculated due to EMAN size management
+    #     if not self._finalSamplingRate:
+    #         tsSet = self.inputTS.get()
+    #         sizeX = tsSet.getDimensions()[0]
+    #         exponent = np.ceil(np.log2(sizeX / RESOLUTION[OUT_TOMO_SIZE_CHOICES[self.outsize.get()]]).clip(min=0))
+    #         binning = 2 ** exponent
+    #         self._finalSamplingRate = binning * tsSet.getSamplingRate()
+    #     return self._finalSamplingRate
 
     def _getOutTomoName(self, tsId):
         return glob.glob(self._getExtraPath(TOMOGRAMS_DIR, '%s*.mrc' % tsId))[0]
@@ -548,7 +554,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         else:
             tomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
             tomograms.copyInfo(self.inputTS.get())
-            tomograms.setSamplingRate(self.getFinalSampligRate())
+            # Get the sampling rate from the header of a HDF file present in the tomograms directory
+            eh = EmanHdf5Handler(glob.glob(join(self.getTomogramsDir(), '*.hdf'))[0])
+            tomograms.setSamplingRate(eh.getSamplingRate())
             tomograms.setStreamState(Set.STREAM_OPEN)
             self.setTomograms(tomograms)
 
