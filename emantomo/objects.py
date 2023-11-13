@@ -75,7 +75,7 @@ class EmanHdf5Handler:
 
     def getSamplingRate(self):
         """Reads the sampling rate from the HDF header"""
-        return self._imgObjList['0']['apix_x']
+        return self._imgObjList['0'].attrs['EMAN.apix_x']
 
 
 
