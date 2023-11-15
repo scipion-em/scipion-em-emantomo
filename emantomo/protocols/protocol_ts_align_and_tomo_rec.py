@@ -367,7 +367,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         tsFile = glob.glob(self._getExtraPath(TS_DIR, '%s*' % tsId))[0]
         return join(TS_DIR, basename(tsFile))
 
-    def getTiltAxisAngle(self):
+    def getTAxisAngle(self):
         """The tilt axis angles is expected to be in the metadata at this point, but the user can introduce it manually
         if necessary. The hierarchy to choose the tilt axis angle value is: if no tilt axis value is introduced, it
         will be read from the tilt series metadata. If it is not contained in the metadata, it will be estimated by EMAN"""
@@ -380,7 +380,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return self._tiltAxisAngle
 
     def _getAlignArgs(self, tsId):
-        tAx = self.getTiltAxisAngle()
+        tAx = self.getTAxisAngle()
         args = [
             f'--npk={self.nLandmarks.get()}',
             f'--pkkeep={self.pkKeep.get():.2f}',

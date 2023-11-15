@@ -218,7 +218,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
         # The fiducial size is the diameter in angstroms
-        fiducialSize = round(self.currentBoxSize / self.currentSRate)
+        fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getTs().getSamplingRate() / 2
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
