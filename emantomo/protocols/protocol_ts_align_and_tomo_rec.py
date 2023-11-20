@@ -41,7 +41,7 @@ from pyworkflow.object import Set, Float
 from pyworkflow.protocol import PointerParam, BooleanParam, IntParam, FloatParam, LEVEL_ADVANCED, \
     EnumParam, StringParam, GT, LE
 from pwem.protocols import EMProtocol
-from pyworkflow.utils import makePath, createLink, Message, replaceExt
+from pyworkflow.utils import makePath, createLink, Message, replaceExt, getExt
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, TiltImage, TiltSeries, Tomogram
 
 # Tomo size choices
@@ -80,6 +80,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         self._tiltAxisAngle = None
         self._finalSamplingRate = None
         self.inTsSet = None
+        self._doUpdateTiltAxisAng = False  # If the user introduces a value manually, it must be updated in the metadata
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -89,9 +90,16 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
-                      label="Tilt Series", important=True,
+                      label="Tilt Series",
+                      important=True,
                       help='Select the set of tilt series to be aligned and/or to reconstruct the corresponding '
                            'tomograms.')
+        form.addParam('compressBits', IntParam,
+                      default=8,
+                      label='Bit compression',
+                      expertLevel=LEVEL_ADVANCED,
+                      help='Number of bits of precision in outputs with lossless compression. Value -1 means '
+                           'uncompressed float')
         form.addParam('keepHdfFile', BooleanParam,
                       default=False,
                       label='Keep hdf files?',
@@ -182,6 +190,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       condition=recCond,
                       label='Thickness (pix.)',
                       help='Z thickness of the final tomogram output. default is -1, (5/16 of tomogram length).')
+        form.addParam('tltkeep', FloatParam,
+                      default=0.9,
+                      label='Fraction of tilts to keep in the reconstruction',
+                      validators=[GT(0), LE(1)])
         form.addParam('bytile', BooleanParam,
                       default=True,
                       condition=recCond,
@@ -237,6 +249,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         tltDir = self._getExtraPath(TLT_DIR)
         self.createInitEmanPrjDirs()
         makePath(tltDir)
+        if self.tiltAxisAngle.get():  # Value from form
+            self._doUpdateTiltAxisAng = True
 
         mdObjList = []
         presentTsIds = getPresentTsIdsInSet(self.inTsSet)
@@ -253,6 +267,21 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                                           processingInd=counter))
             counter += 1
         return mdObjList
+
+    def convertTsStep(self, mObj):
+        ts = mObj.ts
+        inFile = ts.getFirstItem().getFileName()
+        outFile = mObj.tsId + getExt(inFile)
+        createLink(inFile, self._getExtraPath(outFile))
+        program = emantomo.Plugin.getProgram("e2import.py")
+        cmd = [
+            f'{outFile}',
+            f'--apix={ts.getSamplingRate():.2f}',
+            '--import_tiltseries',
+            f'--compressbits={self.compressBits.get()}',
+            '--importation=copy'
+        ]
+        self.runJob(program, ' '.join(cmd), cwd=self._getExtraPath())
 
     def writeData2JsonFileStep(self, mdObj):
         # Generate initial json file required by EMAN for the reconstruction considering a previous alignment
@@ -303,7 +332,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tomogram.setFileName(self._getOutTomoName(tsId))
             tomogram.setSamplingRate(eh.getSamplingRate())
             tomogram.setTsId(tsId)
-            tomogram.setAcquisition(mdObj.ts.getAcquisition())
+            acq = mdObj.ts.getAcquisition()
+            if self._doUpdateTiltAxisAng:
+                acq.setTiltAxisAngle(self._tiltAxisAngle)
+            tomogram.setAcquisition(acq)
             # Set default tomogram origin
             tomogram.setOrigin(newOrigin=False)
             outTomoSet = self.getOutputSetOfTomograms()
@@ -370,7 +402,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     def getTAxisAngle(self):
         """The tilt axis angles is expected to be in the metadata at this point, but the user can introduce it manually
         if necessary. The hierarchy to choose the tilt axis angle value is: if no tilt axis value is introduced, it
-        will be read from the tilt series metadata. If it is not contained in the metadata, it will be estimated by EMAN"""
+        will be read from the tilt series metadata."""
         if not self._tiltAxisAngle:
             ts = self.inTsSet.getFirstItem()
             if self.tiltAxisAngle.get():  # Value from form
@@ -385,7 +417,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             f'--npk={self.nLandmarks.get()}',
             f'--pkkeep={self.pkKeep.get():.2f}',
             f'--bxsz={self.boxSizeTrk.get()}',
-            f'--patchtrack={self.patchTrack.get()}'
+            f'--patchtrack={self.patchTrack.get()}',
+            f'--compressbits={self.compressBits.get()}'
         ]
         if self.letEmanEstimateTilts.get():
             # Introduce angular step and zero id
@@ -498,6 +531,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tiltSeries.setOrigin(self.genUpdateTsInterpOrigin(dims, sr))
         else:
             tiltSeries.copyInfo(ts)
+        if self._doUpdateTiltAxisAng:
+            acq = ts.getAcquisition()
+            acq.setTiltAxisAngle(self._tiltAxisAngle)
+            tiltSeries.setAcquisition(acq)
         return tiltSeries
 
     def _getInterpTsFile(self, mdObj):
@@ -511,7 +548,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 f'--niter={self.nIters.get()}',
                 f'--clipz={self.clipz.get()}',
                 f'--filterres={self.filterres.get():.2f}',
-                f'--rmbeadthr={self.rmbeadthr.get():.2f}']
+                f'--rmbeadthr={self.rmbeadthr.get():.2f}',
+                f'--tltkeep={self.tltkeep.get()}']
 
         if self.doRec.get() and not self.doAlignment.get():
             args.append('--load')  # Load existing tilt parameters
