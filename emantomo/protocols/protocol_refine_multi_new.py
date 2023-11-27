@@ -50,7 +50,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     Multi-reference classification for the new (2021) SPT refinement protocol.
     """
 
-    _label = 'Multi-reference classification'
+    _label = 'Multi-reference classification pppt'
     _possibleOutputs = EmanMultiRefineNewOutputs
     maskRefOutName = 'maskRef'
     maskAlignOutName = 'maskAlign'

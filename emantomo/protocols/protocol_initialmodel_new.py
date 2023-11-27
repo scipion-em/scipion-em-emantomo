@@ -48,7 +48,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
     It generates an initial model from subtomograms using stochastic gradient descent.
     """
 
-    _label = 'New initial model'
+    _label = 'Initial model pppt'
     _possibleOutputs = OutputsInitModelNew
 
     def __init__(self, **kwargs):

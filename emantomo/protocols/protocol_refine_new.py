@@ -63,7 +63,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     particle motion by considering the motion trajectory of each particle along with its neighbor.
     """
 
-    _label = 'subtomogram refinement new'
+    _label = 'subtomogram refinement pppt'
     _possibleOutputs = EmanRefineNewOutputs
 
     def __init__(self, **kwargs):
