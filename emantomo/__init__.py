@@ -22,14 +22,15 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-import eman2
-
 __version__ = "3.2.0"
 _logo = "eman2_logo.png"
 _references = ['GALAZMONTOYA2015279', 'BELL201625']
 _url = "https://github.com/scipion-em/scipion-em-emantomo"
 
+try:
+    import eman2
+    class Plugin(eman2.Plugin):
+        pass
 
-class Plugin(eman2.Plugin):
+except Exception as e:
     pass
