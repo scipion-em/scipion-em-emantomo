@@ -25,7 +25,7 @@
 
 import eman2
 
-__version__ = "3.1.6"
+__version__ = "3.2.0"
 _logo = "eman2_logo.png"
 _references = ['GALAZMONTOYA2015279', 'BELL201625']
 _url = "https://github.com/scipion-em/scipion-em-emantomo"

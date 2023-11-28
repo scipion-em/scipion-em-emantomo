@@ -1,2 +1,3 @@
+scipion-em-eman2
 scipion-em-tomo
 h5py==3.8.0
