@@ -29,7 +29,8 @@ from os import remove
 from os.path import join, getctime, basename
 import numpy as np
 import emantomo
-from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS
+from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS, \
+    EMAN_OFF_TILT_AXIS
 from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData, EmanHdf5Handler
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
@@ -498,7 +499,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setTsId(outTi.getTsId() + '_interp')
             outTi.setIndex(ti.getIndex())
             outTi.setFileName(finalName)
-            outTi.tiltAngleAxis = Float(alignParams[idx][4])  # Off tilt axis angle, extended parameter
+            setattr(outTi, EMAN_OFF_TILT_AXIS, Float(alignParams[idx][4]))  # Off tilt axis angle, extended parameter
             outTi.setTiltAngle(alignParams[idx][3])  # Refined tilt angle
             tiltSeries.append(outTi)
 
@@ -639,8 +640,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         transform.setMatrix(matrix)
         outTi.setTransform(transform)
         outTi.setTiltAngle(tiltAngleRefined)
-        outTi.tiltAngleAxis = Float(offTiltAngle)  # Extended parameter
-        # TODO: rename the extended param to _emanOffTiltAxis
+        setattr(outTi, EMAN_OFF_TILT_AXIS, Float(offTiltAngle))  # Extended parameter
 
     def doAutoclipXY(self):
         """Code behavior expected for EMAN's option autoclipxy to be automatic.

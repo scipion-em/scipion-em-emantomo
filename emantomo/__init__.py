@@ -29,8 +29,14 @@ _url = "https://github.com/scipion-em/scipion-em-emantomo"
 
 try:
     import eman2
+
+
     class Plugin(eman2.Plugin):
-        pass
+
+        @classmethod
+        def defineBinaries(cls, env):
+            pass
+
 
 except Exception as e:
     pass

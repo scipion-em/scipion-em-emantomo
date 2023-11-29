@@ -78,7 +78,6 @@ class EmanHdf5Handler:
         return self._imgObjList['0'].attrs['EMAN.apix_x']
 
 
-
 class EmanParticle(SubTomogram):
     INFO_JSON = '_infoJson'
     TS_HDF = '_tsHdf'
@@ -87,6 +86,7 @@ class EmanParticle(SubTomogram):
     STACK_3D_HDF = '_stack3dHdf'
     EMAN_SCORE = '_emanScore'
     ABS_INDEX = '_absIndex'  # Absolute index within the whole particles from all the tomograms (required for the 2d/3d
+
     # particle matching and sub-setting)
 
     def __init__(self, infoJson=None, tsHdf=None, tomoHdf=None, stack2dHdf=None, stack3dHdf=None,

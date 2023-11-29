@@ -43,7 +43,7 @@ from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D
 from tomo.constants import TR_EMAN
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
-    TS_FILE
+    TS_FILE, EMAN_OFF_TILT_AXIS
 
 
 def loadJson(jsonFn):
@@ -494,7 +494,7 @@ def tltParams2Json(json_files, tltSeries, mode="w"):
             tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
             a1 = numpy.rad2deg(numpy.arccos(tr_matrix[0, 0]))
             a2 = tiltImage.getTiltAngle()
-            a3 = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
+            a3 = getattr(tiltImage, EMAN_OFF_TILT_AXIS, 0.0)
             s1, s2 = tr_matrix[0, 2], tr_matrix[1, 2]
             tlt_params.append([s1, s2, a1, a2, a3])
         tlt_files = abspath(tilt_serie[1].getFileName())
@@ -663,7 +663,7 @@ def ts2Json(mdObj, mode="w"):
         sx = trMatrixInv[0, 2] * shiftsScale
         sy = trMatrixInv[1, 2] * shiftsScale
         rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
-        offTiltAngle = getattr(tiltImage, 'tiltAngleAxis', Float(0.0)).get()
+        offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
         rotz = rotzCorrected + offTiltAngle
         # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
         # opposite sign

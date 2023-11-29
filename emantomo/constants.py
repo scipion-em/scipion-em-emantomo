@@ -25,13 +25,14 @@
 # *
 # **************************************************************************
 # Supported versions
-VERSIONS = ['2.99.47', '2.99.52']
+VERSIONS = ['2.99.52']
 EMAN_DEFAULT_VER_NUM = VERSIONS[-1]
 
 # Extra attributes for refinement
 EMAN_SCORE = '_eman_score'
 EMAN_COVERAGE = '_eman_coverage'
 EMAN_ALI_LOSS = '_eman_ali_loss'
+EMAN_OFF_TILT_AXIS = '_eman_off_tilt_axis'
 
 # Norm options
 PROC_NORMALIZE = 0
