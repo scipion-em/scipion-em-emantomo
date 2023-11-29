@@ -1,3 +1,18 @@
+v3.2.0:
+Users:
+  - Template matching protocol added.
+  - Clip tomograms protocol added.
+  - CTF estimation protocol improved.
+  - Tilt Series alignment and Tomogram reconstruction protocol added, all together as in EMAN. TS alignment converted
+    to Scipion convention, so they can be used to feed other plugins (interoperability).
+  - STA per particle per tilt approach protocols added:
+    > Particle extraction from TS.
+    > New initial model generation.
+    > New subtomogram refinment.
+    > New multi reference alignment and classification.
+  - Remove some non-used or deprecated protocols: pca classification, tilt refine.
+  Developers:
+  - Tests written used the Test Centralization Layer from scipion-em-tomo.
 v3.1.5:
   - Fix: viewer now only show the particle classes from the selected tomogram, not from all the set.
 v3.1.4:

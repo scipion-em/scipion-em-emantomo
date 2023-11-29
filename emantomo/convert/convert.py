@@ -1,8 +1,6 @@
 # **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
-# *              Laura del Cano (ldelcano@cnb.csic.es) [1]
-# *              Josue Gomez Blanco (josue.gomez-blanco@mcgill.ca) [1]
+# * Authors:     Scipion Team (scipion@cnb.csic.es) [1]
 # *              Grigory Sharov (gsharov@mrc-lmb.cam.ac.uk) [2]
 # *
 # * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
@@ -31,27 +29,21 @@
 import glob
 import itertools
 import json
-from os.path import join
-
+from os.path import join, abspath, splitext, dirname, isfile, basename
 import numpy as np
-
-import emantomo
 import numpy
-import os
 from ast import literal_eval
-
 import pwem.constants as emcts
 from pwem.objects import FSC
 import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
-
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D
 from tomo.constants import TR_EMAN
-
 from .. import Plugin
-from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE
+from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
+    TS_FILE, EMAN_OFF_TILT_AXIS
 
 
 def loadJson(jsonFn):
@@ -65,7 +57,7 @@ def loadJson(jsonFn):
 def writeJson(jsonDict, jsonFn, indent=None):
     """ This function write a Json dictionary """
     with open(jsonFn, 'w') as outfile:
-        json.dump(jsonDict, outfile, indent=indent)
+        json.dump(jsonDict, outfile, indent=2)
 
 
 def appendJson(jsonDict, jsonFn, indent=None):
@@ -74,7 +66,7 @@ def appendJson(jsonDict, jsonFn, indent=None):
         data = json.load(outfile)
         data.update(jsonDict)
         outfile.seek(0)
-        json.dump(data, outfile, indent=indent)
+        json.dump(data, outfile, indent=2)
 
 
 def readCTFModel(ctfModel, filename):
@@ -114,47 +106,6 @@ def setWrongDefocus(ctfModel):
     ctfModel.setDefocusAngle(-999)
 
 
-def writeCTFModel(ctfObj, filename):
-    """ Write a CTFModel object as Xmipp .ctfparam"""
-    pass
-
-
-def jsonToCtfModel(ctfJsonFn, ctfModel):
-    """ Create a CTFModel from a json file """
-    mdFn = str(ctfJsonFn).replace('particles', 'info')
-    mdFn = mdFn.split('__ctf_flip')[0] + '_info.json'
-    if pwutils.exists(mdFn):
-        readCTFModel(ctfModel, mdFn)
-
-
-# def readSetOfCoordinates(workDir, micSet, coordSet, invertY=False, newBoxer=False):
-#     """ Read from Eman .json files.
-#     Params:
-#         workDir: where the Eman boxer output files are located.
-#         micSet: the SetOfMicrographs to associate the .json, which
-#             name should be the same of the micrographs.
-#         coordSet: the SetOfCoordinates that will be populated.
-#     """
-#     if newBoxer:
-#         # read boxSize from info/project.json
-#         jsonFnbase = pwutils.join(workDir, 'info', 'project.json')
-#         jsonBoxDict = loadJson(jsonFnbase)
-#         size = int(jsonBoxDict["global.boxsize"])
-#     else:
-#         # read boxSize from e2boxercache/base.json
-#         jsonFnbase = pwutils.join(workDir, 'e2boxercache', 'base.json')
-#         jsonBoxDict = loadJson(jsonFnbase)
-#         size = int(jsonBoxDict["box_size"])
-#
-#     jsonFninfo = pwutils.join(workDir, 'info/')
-#
-#     for mic in micSet:
-#         micBase = pwutils.removeBaseExt(mic.getFileName())
-#         micPosFn = ''.join(glob.glob(jsonFninfo + '*' + micBase + '_info.json'))
-#         readCoordinates(mic, micPosFn, coordSet, invertY)
-#     coordSet.setBoxSize(size)
-
-
 def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None,
                            origin=const.BOTTOM_LEFT_CORNER, scale=1, groupId=None):
     if "boxes_3d" in jsonBoxDict.keys():
@@ -176,25 +127,6 @@ def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=No
                 updateItem(newCoord)
 
             coord3DSet.append(newCoord)
-
-
-# def readCoordinates(mic, fileName, coordsSet, invertY=False):
-#     if pwutils.exists(fileName):
-#         jsonPosDict = loadJson(fileName)
-#
-#         if "boxes" in jsonPosDict:
-#             boxes = jsonPosDict["boxes"]
-#
-#             for box in boxes:
-#                 x, y = box[:2]
-#
-#                 if invertY:
-#                     y = mic.getYDim() - y
-#
-#                 coord = Coordinate()
-#                 coord.setPosition(x, y)
-#                 coord.setMicrograph(mic)
-#                 coordsSet.append(coord)
 
 
 def readCoordinate3D(box, inputTomo, origin=const.BOTTOM_LEFT_CORNER, scale=1):
@@ -226,7 +158,7 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         proc = Plugin.createEmanProcess(args='write')
 
         for subtomo in subtomogramSet.iterItems(orderBy=['_volId', 'id'], direction='ASC'):
-            volName, _ = os.path.splitext(os.path.basename(subtomo.getVolName()))
+            volName, _ = splitext(basename(subtomo.getVolName()))
 
             objDict = subtomo.getObjDict()
 
@@ -261,116 +193,6 @@ def writeSetOfSubTomograms(subtomogramSet, path, **kwargs):
         proc.kill()
 
 
-# def writeSetOfMicrographs(micSet, filename):
-#     """ Simplified function borrowed from xmipp. """
-#     mdata = md.MetaData()
-#
-#     for img in micSet:
-#         objId = mdata.addObject()
-#         imgRow = md.Row()
-#         imgRow.setValue(md.MDL_ITEM_ID, objId)
-#
-#         index, fname = img.getLocation()
-#         fn = ImageHandler.locationToXmipp((index, fname))
-#         imgRow.setValue(md.MDL_MICROGRAPH, fn)
-#
-#         if img.isEnabled():
-#             enabled = 1
-#         else:
-#             enabled = -1
-#         imgRow.setValue(md.MDL_ENABLED, enabled)
-#         imgRow.writeToMd(mdata, objId)
-#
-#     mdata.write('Micrographs@%s' % filename)
-
-
-# def readSetOfParticles(lstFile, partSet, copyOrLink, direc):
-#     for index, fn in iterLstFile(lstFile):
-#         item = Particle()
-#         # set full path to particles stack file
-#         abspath = os.path.abspath(lstFile)
-#         fn = abspath.replace('sets/%s' % os.path.basename(lstFile), '') + fn
-#         newFn = pwutils.join(direc, os.path.basename(fn))
-#         if not pwutils.exists(newFn):
-#             copyOrLink(fn, newFn)
-#
-#         item.setLocation(index, newFn)
-#         partSet.append(item)
-#
-#
-# def writeSetOfParticles(partSet, path, **kwargs):
-#     """ Convert the imgSet particles to .hdf files as expected by Eman.
-#     This function should be called from a current dir where
-#     the images in the set are available.
-#     """
-#     ext = pwutils.getExt(partSet.getFirstItem().getFileName())[1:]
-#     if ext == 'hdf':
-#         # create links if input has hdf format
-#         for fn in partSet.getFiles():
-#             newFn = pwutils.removeBaseExt(fn).split('__ctf')[0] + '.hdf'
-#             newFn = pwutils.join(path, newFn)
-#             pwutils.createLink(fn, newFn)
-#             print("   %s -> %s" % (fn, newFn))
-#     else:
-#         firstCoord = partSet.getFirstItem().getCoordinate() or None
-#         hasMicName = False
-#         if firstCoord:
-#             hasMicName = firstCoord.getMicName() or False
-#
-#         fileName = ""
-#         a = 0
-#         proc = Plugin.createEmanProcess(args='write')
-#
-#         for i, part in iterParticlesByMic(partSet):
-#             micName = micId = part.getMicId()
-#             if hasMicName:
-#                 micName = pwutils.removeBaseExt(part.getCoordinate().getMicName())
-#             objDict = part.getObjDict()
-#
-#             if not micId:
-#                 micId = 0
-#
-#             suffix = kwargs.get('suffix', '')
-#             if hasMicName and (micName != str(micId)):
-#                 objDict['hdfFn'] = pwutils.join(path,
-#                                                 "%s%s.hdf" % (micName, suffix))
-#             else:
-#                 objDict['hdfFn'] = pwutils.join(path,
-#                                                 "mic_%06d%s.hdf" % (micId, suffix))
-#
-#             alignType = kwargs.get('alignType')
-#
-#             if alignType != emcts.ALIGN_NONE:
-#                 shift, angles = alignmentToRow(part.getTransform(), alignType)
-#                 # json cannot encode arrays so I convert them to lists
-#                 # json fail if has -0 as value
-#                 objDict['_shifts'] = shift.tolist()
-#                 objDict['_angles'] = angles.tolist()
-#             objDict['_itemId'] = part.getObjId()
-#
-#             # the index in EMAN begins with 0
-#             if fileName != objDict['_filename']:
-#                 fileName = objDict['_filename']
-#                 if objDict['_index'] == 0:  # TODO: Index appears to be the problem (when not given it works ok)
-#                     a = 0
-#                 else:
-#                     a = 1
-#             objDict['_index'] = int(objDict['_index'] - a)
-#             # Write the e2converter.py process from where to read the image
-#             print(json.dumps(objDict), file=proc.stdin, flush=True)
-#             proc.stdout.readline()
-#         proc.kill()
-
-
-def getImageDimensions(imageFile):
-    """ This function will allow us to use EMAN2 to read some formats
-     not currently supported by the native image library (Xmipp).
-     Underneath, it will call a script to do the job.
-    """
-    proc = Plugin.createEmanProcess('e2ih.py', args=imageFile)
-    return tuple(map(int, proc.stdout.readline().split()))
-
-
 def convertImage(inputLoc, outputLoc):
     """ This function will allow us to use EMAN2 to write some formats
      not currently supported by the native image library (Xmipp).
@@ -391,15 +213,6 @@ def convertImage(inputLoc, outputLoc):
     proc = Plugin.createEmanProcess('e2ih.py', args='%s %s' % (_getFn(inputLoc),
                                                                _getFn(outputLoc)))
     proc.wait()
-
-
-def iterLstFile(filename):
-    with open(filename) as f:
-        for line in f:
-            if '#' not in line:
-                # Decompose Eman filename
-                index, filename = int(line.split()[0]) + 1, line.split()[1]
-                yield index, filename
 
 
 def geometryFromMatrix(matrix, inverseTransform, axes='szyz'):
@@ -475,49 +288,6 @@ def rowToAlignment(alignmentList, alignType):
     return alignment
 
 
-# def iterParticlesByMic(partSet):
-#     """ Iterate the particles ordered by micrograph """
-#     for i, part in enumerate(partSet.iterItems(orderBy=['_micId', 'id'],
-#                                                direction='ASC')):
-#         yield i, part
-
-
-def iterSubtomogramsByVol(subtomogramSet):
-    """ Iterate subtomograms ordered by tomogram """
-    items = [subtomo.clone() for subtomo in subtomogramSet.iterItems(orderBy=['_volId', 'id'], direction='ASC')]
-    for i, part in enumerate(items):
-        yield i, part
-
-
-def convertReferences(refSet, outputFn):
-    """ Simplified version of writeSetOfParticles function.
-    Writes out an hdf stack.
-    """
-    fileName = ""
-    a = 0
-    proc = Plugin.createEmanProcess(args='write')
-
-    for part in refSet:
-        objDict = part.getObjDict()
-        objDict['hdfFn'] = outputFn
-        objDict['_itemId'] = part.getObjId()
-
-        # the index in EMAN begins with 0
-        if fileName != objDict['_filename']:
-            fileName = objDict['_filename']
-            if objDict['_index'] == 0:
-                a = 0
-            else:
-                a = 1
-        objDict['_index'] = int(objDict['_index'] - a)
-
-        # Write the e2converter.py process from where to read the image
-        print(json.dumps(objDict), file=proc.stdin)
-        proc.stdin.flush()
-        proc.stdout.readline()
-    proc.kill()
-
-
 def calculatePhaseShift(ampcont):
     # calculate phase shift as in EMAN2 ctf.cpp
     if -100.0 < ampcont <= 100.0:
@@ -539,7 +309,7 @@ def getLastParticlesParams(directory):
     Value: Dict[{coverage: float, score: float, alignMatrix: list[float]}]
     """
     # JSON files with particles params: path/to/particle_parms_NN.json
-    particleParamsPaths = glob.glob(os.path.join(directory, 'particle_parms_*.json'))
+    particleParamsPaths = glob.glob(join(directory, 'particle_parms_*.json'))
     if not particleParamsPaths:
         raise Exception("Particle params files not found")
 
@@ -559,8 +329,8 @@ def getLastParticlesParams(directory):
         score = values.get("score")
         alignMatrix = values.get("xform.align3d", {}).get("matrix")
 
-        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
-            alignMatrix = literal_eval(alignMatrix)
+        # if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+        alignMatrix = literal_eval(alignMatrix)
 
         if coverage and score and alignMatrix:
             customParticleParams = dict(
@@ -607,7 +377,7 @@ def jsonFilesFromSet(setScipion, path):
             if "__" in fileBasename:
                 fnInputCoor = '%s_info.json' % fileBasename.split("__")[0]
             else:
-                parentFolder = pwutils.removeBaseExt(os.path.dirname(file))
+                parentFolder = pwutils.removeBaseExt(dirname(file))
                 fnInputCoor = '%s-%s_info.json' % (parentFolder, fileBasename)
             pathInputCoor = pwutils.join(path, fnInputCoor)
             json_files.append(pathInputCoor)
@@ -616,9 +386,9 @@ def jsonFilesFromSet(setScipion, path):
     elif isinstance(setScipion, SetOfTiltSeries):
         tlt_files = []
         for tilt_serie in setScipion.iterItems(iterate=False):
-            json_file = os.path.join(path,
-                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
-                                     '-' + tilt_serie.getTsId() + '_info.json')
+            json_file = join(path,
+                             basename(dirname(tilt_serie.getFirstItem().getFileName())) +
+                             '-' + tilt_serie.getTsId() + '_info.json')
             json_files.append(json_file)
             tlt_files.append(tilt_serie.getFirstItem().getFileName())
         return json_files, tlt_files
@@ -668,6 +438,8 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
     coord3DSetDict = {}
 
     # Subsets do not have this
+    outputname = "coordinates%s"
+    suffix = None
     if hasattr(protocol, "_getOutputSuffix"):
         suffix = protocol._getOutputSuffix(SetOfCoordinates3D)
         outputname = protocol.OUTPUT_PREFIX + suffix
@@ -678,17 +450,16 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
                 suffix = "user%s" % count
                 break
 
-    coord3DSet = SetOfCoordinates3D.create(protocol._getPath(),
-                                           prefix=outputname)
+    coord3DSet = SetOfCoordinates3D.create(protocol._getPath(), prefix=outputname, suffix=suffix)
     coord3DSet.setPrecedents(setTomograms)
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     first = True
     for tomo in setTomograms.iterItems():
         outFile = '*%s_info.json' % pwutils.removeBaseExt(tomo.getFileName().split("__")[0])
-        pattern = os.path.join(outPath, outFile)
+        pattern = join(outPath, outFile)
         files = glob.glob(pattern)
 
-        if not files or not os.path.isfile(files[0]):
+        if not files or not isfile(files[0]):
             continue
 
         jsonFnbase = files[0]
@@ -719,14 +490,14 @@ def tltParams2Json(json_files, tltSeries, mode="w"):
         tilt_serie = tltSeries[idj + 1]
         tlt_params = []
         for idx, tiltImage in enumerate(tilt_serie.iterItems()):
-            paths.append(os.path.abspath(tiltImage.getFileName()))
+            paths.append(abspath(tiltImage.getFileName()))
             tr_matrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
             a1 = numpy.rad2deg(numpy.arccos(tr_matrix[0, 0]))
             a2 = tiltImage.getTiltAngle()
-            a3 = tiltImage.tiltAngleAxis.get() if hasattr(tiltImage, 'tiltAngleAxis') else 0.0
+            a3 = getattr(tiltImage, EMAN_OFF_TILT_AXIS, 0.0)
             s1, s2 = tr_matrix[0, 2], tr_matrix[1, 2]
             tlt_params.append([s1, s2, a1, a2, a3])
-        tlt_files = os.path.abspath(tilt_serie[1].getFileName())
+        tlt_files = abspath(tilt_serie[1].getFileName())
         if tlt_params:
             tlt_dict = {"apix_unbin": sr,
                         "tlt_file": tlt_files,
@@ -776,7 +547,7 @@ def refinement2Json(protocol, subTomos, mode='w'):
 
     count = 0
     for subTomo in subTomos.iterSubtomos():
-        key = "('%s', %d)" % (os.path.abspath(lst_file), count)
+        key = "('%s', %d)" % (abspath(lst_file), count)
         count += 1
         coverage = getattr(subTomo, EMAN_COVERAGE, Float(0.0)).get()
         score = getattr(subTomo, EMAN_SCORE, Float(-0.0)).get()
@@ -793,9 +564,9 @@ def refinement2Json(protocol, subTomos, mode='w'):
         am_st[3], am_st[7], am_st[11] = matrix_st[0, 3], matrix_st[1, 3], matrix_st[2, 3]
         am_c[3], am_c[7], am_c[11] = matrix_c[0, 3], matrix_c[1, 3], matrix_c[2, 3]
 
-        if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
-            am_c = "[" + ",".join(str(a) for a in am_c) + "]"
-            am_st = "[" + ",".join(str(a) for a in am_st) + "]"
+        # if emantomo.Plugin.isVersion(emantomo.constants.V_CB):
+        am_c = "[" + ",".join(str(a) for a in am_c) + "]"
+        am_st = "[" + ",".join(str(a) for a in am_st) + "]"
 
         parms_dict[key] = {"coverage": coverage, "score": score,
                            "xform.align3d": {"__class__": "Transform",
@@ -841,6 +612,140 @@ def emanFSCsToScipion(fscSet, *fscFiles):
 
     for fscFile in fscFiles:
         res_inv, frc = _getFscValues(fscFile)
-        fsc = FSC(objLabel=os.path.basename(fscFile))
+        fsc = FSC(objLabel=basename(fscFile))
         fsc.setData(res_inv, frc)
         fscSet.append(fsc)
+
+
+def ctfTomo2Json(mdObj, sphAb, voltage, mode="w"):
+    paths = []
+    defocus = []
+    phase = []
+    jsonFile = mdObj.jsonFile
+    for ctfTi in mdObj.ctf:
+        defocus_eman = (ctfTi.getDefocusU() + ctfTi.getDefocusV()) / 20000.0
+        phaseShift = ctfTi.getPhaseShift()
+        phase.append(phaseShift if phaseShift else 0)
+        defocus.append(defocus_eman)
+
+    ctfDict = {"cs": sphAb,
+               "voltage": voltage,
+               "defocus": defocus,
+               "phase": phase
+               }
+    if mode == "w":
+        writeJson(ctfDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(ctfDict, jsonFile)
+        paths.append(jsonFile)
+    return paths
+
+
+def ts2Json(mdObj, mode="w"):
+    paths = []
+    tltParams = []
+    aliLoss = []
+    ts = mdObj.ts
+    tiltAxisAngle = ts.getAcquisition().getTiltAxisAngle()
+    apixTs = ts.getSamplingRate()
+    jsonFile = mdObj.jsonFile
+    tltFile = mdObj.tsHdfName
+    # The alignment could have been calculated using a binned TS, while the CTF is usually estimated at the original
+    # size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to
+    apixUnbinned = getApixUnbinnedFromMd(mdObj)
+    shiftsScale = apixTs / apixUnbinned
+    for tiltImage in ts:
+        paths.append(abspath(tiltImage.getFileName()))
+        tiltAngle = tiltImage.getTiltAngle()
+        trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
+        trMatrixInv = np.linalg.inv(trMatrix)
+        sx = trMatrixInv[0, 2] * shiftsScale
+        sy = trMatrixInv[1, 2] * shiftsScale
+        rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
+        offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
+        rotz = rotzCorrected + offTiltAngle
+        # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
+        # opposite sign
+        if tiltAxisAngle >= 0:
+            rotz = -rotz
+        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
+        aliLoss.append(getattr(tiltImage, EMAN_ALI_LOSS, Float(0)).get())
+    tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
+    tltDict = {ALI_LOSS: aliLoss,
+               APIX_UNBIN: apixUnbinned,
+               TS_FILE: tltFile,
+               TLT_PARAMS: tltParams}
+    if mode == "w":
+        writeJson(tltDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(tltDict, jsonFile)
+        paths.append(jsonFile)
+    return
+
+
+def coords2Json(mdObj, emanDict, groupIds, boxSize, doFlipZ=True, mode='w'):
+    paths = []
+    coords = []
+    ###########################################################################################
+    # From EMAN's e2spt_boxer (this is how it stores the coordinates picked):
+    # def SaveJson(self):
+    #
+    #     info = js_open_dict(self.jsonfile)
+    #     sx, sy, sz = (self.data["nx"] // 2, self.data["ny"] // 2, self.data["nz"] // 2)
+    #     if "apix_unbin" in info:
+    #         bxs = []
+    #         for b0 in self.boxes:
+    #             b = [(b0[0] - sx) * self.apix_cur / self.apix_unbin,
+    #                  (b0[1] - sy) * self.apix_cur / self.apix_unbin,
+    #                  (b0[2] - sz) * self.apix_cur / self.apix_unbin,
+    #                  b0[3], b0[4], b0[5]]
+    #             bxs.append(b)
+    ###########################################################################################
+    tomo = mdObj.inTomo
+    apix = tomo.getSamplingRate()
+    apixUnbin = getApixUnbinnedFromMd(mdObj)
+    nx, ny, nz = tomo.getDim()
+    sx = nx // 2
+    sy = ny // 2
+    sz = nz // 2
+    scaleFactor = apix / apixUnbin
+    jsonFile = mdObj.jsonFile
+    zInvertFactor = -1 if doFlipZ else 1
+    for coord in mdObj.coords:
+        x, y, z = coord.getPosition(const.BOTTOM_LEFT_CORNER)
+        x = (x - sx) * scaleFactor
+        y = (y - sy) * scaleFactor
+        z = (z - sz) * scaleFactor * zInvertFactor  # The Z is inverted if the reconstruction wasn't made with EMAN
+        coords.append([x, y, z, TOMOBOX, 0.0, emanDict[coord.getGroupId()]])
+    coordDict = {"boxes_3d": coords,
+                 "class_list": {}}
+
+    for i, groupId in enumerate(groupIds):
+        coordDict["class_list"]["%s" % emanDict[groupId]] = {"boxsize": boxSize,
+                                                             "name": TOMOBOX}  # ("class_%i" % i).zfill(3)}
+    if mode == "w":
+        writeJson(coordDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(coordDict, jsonFile)
+        paths.append(jsonFile)
+
+    return paths
+
+
+def convertBetweenHdfAndMrc(prot, inFile, outFile, extraArgs=''):
+    program = Plugin.getProgram("e2proc3d.py")
+    args = '%s %s ' % (inFile, outFile)
+    prot.runJob(program, args + extraArgs)
+
+
+def getApixUnbinnedFromMd(mdObj):
+    """The alignment could have been calculated using a binned TS, while the CTF is usually estimated at the original
+    size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to"""
+    ts = mdObj.ts
+    apixTs = ts.getSamplingRate()
+    ctf = mdObj.ctf
+    apixCtf = ctf.getTiltSeries().getSamplingRate() if ctf else None
+    return apixCtf if apixCtf else apixTs

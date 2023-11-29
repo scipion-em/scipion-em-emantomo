@@ -44,6 +44,9 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
+
 # Arguments marked as "Required" below must be included for upload to PyPI.
 # Fields marked as "Optional" may be commented out.
 
@@ -117,7 +120,10 @@ setup(
 
         # Specify the Python versions you support here. In particular, ensure
         # that you indicate whether you support Python 2, Python 3 or both.
-        'Programming Language :: Python :: 3'
+        'Programming Language :: Python :: 3',
+
+        # Specify Framework
+        'Framework :: Scipion :: 3'
     ],
 
     # This field adds keywords for your project which will appear on the
@@ -143,7 +149,7 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['scipion-em', 'scipion-em-tomo', 'scipion-app'],  # Optional
+    install_requires=[requirements],  # Optional
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
