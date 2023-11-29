@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     J.M. De la Rosa Trevin (delarosatrevin@scilifelab.se) [1]
+# * Authors:     Scipion Team  (scipion@cnb.csic.es) [1]
 # *
-# * [1] SciLifeLab, Stockholm University
+# * [1] Centro Nacional de Biotecnología (CSIC), Madrid, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -23,20 +23,22 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-# from .protocol_mra_refinement import EmanMraClassifySubtomos
+from .protocol_refine_multi_new import EmanProtMultiRefinementNew
+from .protocol_refine_new import EmanProtTomoRefinementNew
+from .protocol_template_matching import EmanProtTemplateMatching
 from .protocol_tomo_boxing import EmanProtTomoBoxing
 # from .protocol_tomo_boxing_convnet import EmanProtTomoConvNet   # TODO: check this
-# from .protocol_tomo_template_match import EmanProtTomoTempMatch
-from .protocol_tomo_extraction_from_tomo import EmanProtTomoExtraction
-# from .protocol_tomo_extraction_from_ts import EmanProtTSExtraction
+from .protocol_extraction_from_tomo import EmanProtTomoExtraction
+from .protocol_extraction_from_ts import EmanProtTSExtraction
+from .protocol_initialmodel_new import EmanProtTomoInitialModelNew
 from .protocol_tomo_subtomogram_refinement import EmanProtTomoRefinement
 from .protocol_tomo_initialmodel import EmanProtTomoInitialModel
-from .protocol_pca_kmeans_classify_subtomos import EmanProtPcaKMeansClassifySubtomos
-# from .protocol_tomo_reconstruction import EmanProtTomoReconstruction
-# from .protocol_align_ts import EmanProtAlignTs
-# from .protocol_estimate_ctf import EmanProtEstimateCTF
+from .protocol_estimate_ctf import EmanProtEstimateCTF
 # from .protocol_tomo_fill_mw import EmanProtTomoFillMW  # TODO: check this
-# from .protocol_tomo_tilt_refine import EmanProtRefineTS
-# from .protocol_resize_tomograms import EmanProtTomoResize
+from .protocol_clip_tomograms import EmanProtTomoClip
 from .protocol_average_subtomos import EmanProtSubTomoAverage
+from .protocol_ts_align_and_tomo_rec import EmanProtTsAlignTomoRec
+
+
+
 

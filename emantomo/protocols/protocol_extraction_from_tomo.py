@@ -36,7 +36,7 @@ from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from pwem.protocols import EMProtocol
-from tomo.constants import BOTTOM_LEFT_CORNER, TR_EMAN, TR_SCIPION
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D
 
@@ -54,7 +54,6 @@ class OutputExtraction(enum.Enum):
 class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'Subtomograms extraction from tomogram'
-    _devStatus = BETA
     _possibleOutputs = OutputExtraction
     OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
     tomoFiles = []
@@ -122,10 +121,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------------------- STEPS functions -----------------------------
-
     def _isInputASetOfSubtomograms(self):
         """ returns true if the input is a set of subtomograms"""
         return isinstance(self.inputCoordinates.get(), SetOfSubTomograms)
+
     def _getSetOfCoordinates(self):
         if self._isInputASetOfSubtomograms():
             return self.inputCoordinates.get().getCoordinates3D()
@@ -242,8 +241,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             cleanPattern(hdfFile)
 
     def createOutputStep(self):
-
-        #Note: using self.lines here prevents the protocol from continuing in case this step code fails!
+        # Note: using self.lines here prevents the protocol from continuing in case this step code fails!
         outputSet = None
         outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
         outputSubTomogramsSet.setSamplingRate(self.getOutputSamplingRate())
@@ -291,13 +289,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         return methodsMsgs
 
     def _summary(self):
-        summary = []
-        summary.append("Tomogram source: *%s*"
-                       % self.getEnumText("tomoSource"))
+        summary = ["Tomogram source: *%s*" % self.getEnumText("tomoSource")]
         if self.getOutputsSize() >= 1:
             summary.append("Particle box size: *%s*" % self.boxSize.get())
-            summary.append("Subtomogram extracted: *%s*" %
-                           self._getSetOfCoordinates().getSize())
+            summary.append("Subtomogram extracted: *%s*" % self._getSetOfCoordinates().getSize())
         else:
             summary.append("Output subtomograms not ready yet.")
         if self.doInvert:
@@ -372,7 +367,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         return warnings
 
     # --------------------------- UTILS functions ----------------------------------
-
     def _tomosOther(self):
         """ Return True if other tomograms are used for extract. """
         return self.tomoSource == OTHER
@@ -392,8 +386,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             return item
         else:
             return item.getCoordinate3D()
-    @staticmethod
 
+    @staticmethod
     def _getMatrixFromItem(item):
         """ Returns the matrix of the subtomograms otherwise the matrix of the coordinate"""
         if isinstance(item, Coordinate3D):

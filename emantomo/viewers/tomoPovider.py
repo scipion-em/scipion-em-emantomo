@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     Scipion Team (scipion@cnb.csic.es) [1]
 # *
-# * Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -23,12 +23,23 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from pwem.viewers import DataViewer, MODE, MODE_MD, VISIBLE
-from .viewers_data import EmanDataViewer
-from ..objects import EmanSetOfParticles
 
-DataViewer.registerConfig(EmanSetOfParticles,
-                          config={MODE: MODE_MD,
-                                  VISIBLE: 'id _filename _volName _coordinate._x _coordinate._y _coordinate._z '
-                                           '_transform._matrix '})
+from pyworkflow.utils import removeBaseExt
+from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 
+
+class EmantomoTomoProvider(TomogramsTreeProvider):
+    
+    def __init__(self, tomoList, path, mode):
+        super().__init__(tomoList, path, mode)
+
+    def getObjectInfo(self, tomo):
+        tomogramName = removeBaseExt(tomo)
+        if tomo.count == 0:
+            return {'key': tomogramName, 'parent': None,
+                    'text': tomogramName, 'values': (tomo.count, "TODO"),
+                    'tags': "pending"}
+        else:
+            return {'key': tomogramName, 'parent': None,
+                    'text': tomogramName, 'values': (tomo.count, "DONE"),
+                    'tags': "done"}

@@ -1,6 +1,7 @@
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es)
+# * Authors:     David Herreros Calero (dherreros@cnb.csic.es) [1]
+# *              Scipion Team (scipion@cnb.csic.es) [1]
 # *
 # * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
 # *
@@ -24,123 +25,129 @@
 # *
 # **************************************************************************
 
-
-import os
-import numpy as np
-
-import emantomo
-
-from pyworkflow import BETA
-from pyworkflow.protocol import params
-import pyworkflow.utils as pwutils
-from pyworkflow.object import Set
-
-from pwem.protocols import EMProtocol
-
-from tomo.protocols import ProtTomoBase
+from enum import Enum
+from os.path import exists, join
+from emantomo import Plugin
+from emantomo.constants import TS_DIR
+from emantomo.objects import EmanMetaData
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
+from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
+from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
+from emantomo.convert import loadJson, ts2Json
 
-from emantomo.convert import writeJson, loadJson, tltParams2Json, jsonFilesFromSet
+
+class EstimateCtfOutputs(Enum):
+    CTFs = SetOfCTFTomoSeries
 
 
-class EmanProtEstimateCTF(EMProtocol, ProtTomoBase):
+class EmanProtEstimateCTF(ProtEmantomoBase):
     """
     Protocol for CTF estimation from tilt series using e2spt_tomoctf.py
     """
     _label = 'ctf estimation'
-    _devStatus = BETA
+    _possibleOutputs = EstimateCtfOutputs
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label='Input')
-        form.addParam('tiltSeries', params.PointerParam,
+        form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
-                      label="Tilt Series", important=True,
-                      help='Select the set of tilt series from which the CTF will be '
-                           'estimated')
-        lineDefocus = form.addLine('Defocus Range (um)',
-                             help="Search range of defocus (start, end, step). Note that "
-                                  "they must be introduced in microns.")
+                      label="Tilt Series",
+                      important=True)
+        lineDefocus = form.addLine('Defocus range (μm)',
+                                   help="Search range of defocus (start, end, step). Note that "
+                                        "they must be introduced in microns.")
 
-        lineDefocus.addParam('minDefocus', params.FloatParam, default=2.0, label='min')
-        lineDefocus.addParam('maxDefocus', params.FloatParam, default=7.0, label='max')
-        lineDefocus.addParam('stepDefocus', params.FloatParam, default=0.02, label='Step')
+        lineDefocus.addParam('minDefocus', FloatParam, default=2.0, label='min')
+        lineDefocus.addParam('maxDefocus', FloatParam, default=7.0, label='max')
+        lineDefocus.addParam('stepDefocus', FloatParam, default=0.02, label='Step')
+        form.addParam('doPhaseShiftSearch', BooleanParam,
+                      label='Do phase shift search?',
+                      default=False)
+        linePhaseShift = form.addLine('Phase shift range (deg.)',
+                                      condition='doPhaseShiftSearch',
+                                      help="Search range of the phase shift (start, end, step). To avoid"
+                                           "the phase shift search use min 0.0, max 1.0, and step 1.0.")
+        linePhaseShift.addParam('minPhaseShift', FloatParam, default=0, label='min', condition='doPhaseShiftSearch')
+        linePhaseShift.addParam('maxPhaseShift', FloatParam, default=1, label='max', condition='doPhaseShiftSearch')
+        linePhaseShift.addParam('stepPhaseShift', FloatParam, default=1, label='Step', condition='doPhaseShiftSearch')
 
-        linePhaseShift = form.addLine('Phase shift Range (degrees)',
-                                   help="Search range of the phase shift (start, end, step). To avoid"
-                                        "the phase shift search use min 0.0, max 1.0, and step 1.0.")
-        linePhaseShift.addParam('minPhaseShift', params.FloatParam, default=10.0, label='min')
-        linePhaseShift.addParam('maxPhaseShift', params.FloatParam, default=15.0, label='max')
-        linePhaseShift.addParam('stepPhaseShift', params.FloatParam, default=5.0, label='Step')
-
-        form.addParam('tilesize', params.IntParam, label='Tile size',
-                      default=256,
-                      help='Size of tile to calculate FFT. Default is 256.')
-        form.addParam('nref', params.IntParam, label='Number of references',
+        form.addParam('tilesize', IntParam,
+                      label='Size of tile to calculate FFT',
+                      default=256)
+        form.addParam('nref', IntParam,
+                      label='Number of references',
                       default=15,
-                      help='Using N tilt images near the center tilt to estimate '
-                           'the range of defocus for all images. Default is 15.')
-        form.addParam('stepx', params.IntParam, label='Step in X direction',
+                      help='Using N tilt images near the center tilt to estimate the range of defocus for all images.')
+        form.addParam('stepx', IntParam,
+                      label='Step in X direction',
                       default=20,
                       help='Number of tiles to generate on x-axis (different defocus)')
-        form.addParam('stepy', params.IntParam, label='Step in Y direction',
+        form.addParam('stepy', IntParam,
+                      label='Step in Y direction',
                       default=40,
                       help='Number of tiles to generate on y-axis (same defocus)')
-        # form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=4, mpi=0)
 
         # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep('writeJsonInfo')
-        self._insertFunctionStep('createCommandStep')
-        self._insertFunctionStep('createOutputStep')
+        mdObjDict = self._initialize()
+        for mdObj in mdObjDict.values():
+            self._insertFunctionStep(self.convertTsStep, mdObj)
+            self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
+            self._insertFunctionStep(self.estimateCtfStep, mdObj)
+        self._insertFunctionStep(self.createOutputStep, mdObjDict)
 
     # --------------------------- STEPS functions -----------------------------
-    def writeJsonInfo(self):
-        self._processInput()
-        self.tlt_files = [os.path.abspath(tlt_file) for tlt_file in self.tlt_files]
+    def _initialize(self):
+        inTsSet = self.getTs()
+        self.createInitEmanPrjDirs()
+        # Manage the TS
+        presentTsIds = set(getPresentTsIdsInSet(inTsSet))
+        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
+        # Get the required acquisition data
+        self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
+        self.voltage = inTsSet.getAcquisition().getVoltage()
+        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
+        mdObjDict = {}
+        for tomoId, ts in tsIdsDict.items():
+            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
+                                             ts=ts,
+                                             tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
+                                             jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
+        return mdObjDict
 
-    def createCommandStep(self):
-        aquisition = self.tiltSeries.get().getAcquisition()
-        cs = aquisition.getSphericalAberration()
-        voltage = aquisition.getVoltage()
+    @staticmethod
+    def writeData2JsonFileStep(mdObj):
+        mode = 'a' if exists(mdObj.jsonFile) else 'w'
+        ts2Json(mdObj, mode=mode)
 
-        args = " ".join(self.tlt_files)
-        args += " --dfrange=%f,%f,%f --psrange=%f,%f,%f --tilesize=%d --voltage=%d" \
-                " --cs=%f --nref=%d --stepx=%d --stepy=%d --threads=%d" \
-                % (self.minDefocus.get(), self.maxDefocus.get(), self.stepDefocus.get(),
-                  self.minPhaseShift.get(), self.maxPhaseShift.get(), self.stepPhaseShift.get(),
-                  self.tilesize.get(), voltage, cs, self.nref.get(),
-                  self.stepx.get(), self.stepy.get(), self.numberOfThreads.get())
+    def estimateCtfStep(self, mdObj):
+        program = Plugin.getProgram('e2spt_tomoctf.py')
+        self.runJob(program, self._genCtfEstimationArgs(mdObj), cwd=self._getExtraPath())
 
-        program = emantomo.Plugin.getProgram("e2spt_tomoctf.py")
-        self.runJob(program, args, cwd=self._getExtraPath())
+    def createOutputStep(self, mdObjDict):
+        inTsSet = self.getTs()
+        outCtfSet = SetOfCTFTomoSeries.create(self._getPath(), template='CTFmodels%s.sqlite')
+        outCtfSet.setSetOfTiltSeries(inTsSet)
 
-    def createOutputStep(self):
-        set_tilt_series = self.tiltSeries.get()
-        info_path = self._getExtraPath('info')
-        outputSetOfCTFTomoSeries = SetOfCTFTomoSeries.create(self._getPath(),
-                                                             template='CTFmodels%s.sqlite')
-        outputSetOfCTFTomoSeries.setSetOfTiltSeries(set_tilt_series)
-        outputSetOfCTFTomoSeries.setStreamState(Set.STREAM_OPEN)
-
-        for tilt_serie in set_tilt_series.iterItems(iterate=False):
+        for tsId, mdObj in mdObjDict.items():
+            ts = mdObj.ts
             newCTFTomoSeries = CTFTomoSeries()
-            newCTFTomoSeries.copyInfo(tilt_serie)
-            newCTFTomoSeries.setTiltSeries(tilt_serie)
-            newCTFTomoSeries.setObjId(tilt_serie.getObjId())
-            newCTFTomoSeries.setTsId(tilt_serie.getTsId())
-            outputSetOfCTFTomoSeries.append(newCTFTomoSeries)
-            json_file = os.path.join(info_path,
-                                     os.path.basename(os.path.dirname(tilt_serie.getFirstItem().getFileName())) +
-                                     '-' + tilt_serie.getTsId() + '_info.json')
-            json_dict = loadJson(json_file)
-            defocus = json_dict['defocus']
-            phase_shift = json_dict['phase']
-            for idx, tiltImage in enumerate(tilt_serie.iterItems()):
+            newCTFTomoSeries.copyInfo(ts)
+            newCTFTomoSeries.setTiltSeries(ts)
+            newCTFTomoSeries.setObjId(ts.getObjId())
+            newCTFTomoSeries.setTsId(tsId)
+            outCtfSet.append(newCTFTomoSeries)
+            jsonDict = loadJson(mdObj.jsonFile)
+            defocus = jsonDict['defocus']
+            phase_shift = jsonDict['phase']
+            for idx, tiltImage in enumerate(ts.iterItems()):
                 defocusU = defocusV = 10000.0 * defocus[idx]
                 newCTFTomo = CTFTomo()
                 newCTFTomo.setIndex(idx + 1)
@@ -149,25 +156,27 @@ class EmanProtEstimateCTF(EMProtocol, ProtTomoBase):
                 newCTFTomo.setDefocusV(defocusV)
                 newCTFTomo.setDefocusAngle(0)
                 newCTFTomoSeries.append(newCTFTomo)
-            outputSetOfCTFTomoSeries.update(newCTFTomoSeries)
 
-        outputSetOfCTFTomoSeries.write()
-        self._store()
-        outputSetOfCTFTomoSeries.setStreamState(Set.STREAM_CLOSED)
-        self._defineOutputs(estimatedCTF=outputSetOfCTFTomoSeries)
-        self._defineSourceRelation(self.tiltSeries, outputSetOfCTFTomoSeries)
+        self._defineOutputs(**{self._possibleOutputs.CTFs.name: outCtfSet})
+        self._defineSourceRelation(getattr(self, IN_TS), outCtfSet)
 
-    def _processInput(self):
-        tilt_series = self.tiltSeries.get()
-        info_path = self._getExtraPath('info')
-        pwutils.makePath(info_path)
-        self.json_files, self.tlt_files = jsonFilesFromSet(tilt_series, info_path)
-        _ = tltParams2Json(self.json_files, tilt_series, mode="w")
+    # --------------------------- UTILS functions -----------------------------
+    def _genCtfEstimationArgs(self, mdObj):
+        args = '%s ' % mdObj.tsHdfName
+        args += '--dfrange %s ' % ','.join([str(self.minDefocus.get()),
+                                            str(self.maxDefocus.get()),
+                                            str(self.stepDefocus.get())])
+        args += '--psrange %s ' % ','.join([str(self.minPhaseShift.get()),
+                                            str(self.maxPhaseShift.get()),
+                                            str(self.stepPhaseShift.get())])
+        args += '--tilesize %i ' % self.tilesize.get()
+        args += '--voltage %i ' % self.voltage
+        args += '--cs %.2f ' % self.sphAb
+        args += '--nref %i ' % self.nref.get()
+        args += '--stepx %i ' % self.stepx.get()
+        args += '--stepy %i ' % self.stepy.get()
+        args += '--threads %i ' % self.numberOfThreads.get()
+        args += '--verbose 9 '
+        return args
 
-    def _methods(self):
-        return [
-            "CTF estimation from tilt series through e2spt_tomoctf.py"
-        ]
 
-    def _summary(self):
-        pass
