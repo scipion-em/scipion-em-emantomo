@@ -209,7 +209,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
     def convertOutputStep(self):
         # Average and halves
         inFiles = [self.avgHdf, self.evenHdf, self.oddFnHdf]
-        args = '--apix %d' % self.inSamplingRate
+        args = '--apix %.3f' % self.inSamplingRate
         for inFile in inFiles:
             outFile = inFile.replace('.hdf', '.mrc')
             convertBetweenHdfAndMrc(self, inFile, outFile, args)
