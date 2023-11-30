@@ -1,3 +1,5 @@
+v3.2.2:
+  - Remove invalid classifier from the setup
 v3.2.1:
   - Fix schedule execution
   - Fix template
