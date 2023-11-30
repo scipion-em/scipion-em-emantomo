@@ -1,3 +1,6 @@
+v3.2.1:
+  - Fix schedule execution
+  - Fix template
 v3.2.0:
 Users:
   - Template matching protocol added.
