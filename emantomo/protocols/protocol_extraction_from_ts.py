@@ -210,7 +210,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         if self.inParticles:
             subtomoSet.copyInfo(inCoords)
         else:
-            subtomoSet.setCoordinates3D(inCoords)
+            subtomoSet.setCoordinates3D(inCoordsPointer)
         subtomoSet.setSamplingRate(self.currentSRate)
 
         # Generate the fiducial model (for data visualization purpose)
