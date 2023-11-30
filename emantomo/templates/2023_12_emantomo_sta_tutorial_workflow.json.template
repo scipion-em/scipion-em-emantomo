@@ -13,7 +13,7 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "filesPath": "%(SCIPION_TESTS)s/emantomo_tutorial_ribo/",
+        "filesPath": "~Path to the tilt series|%(SCIPION_TESTS)s/emantomo_tutorial_ribo/|2|tspath~",
         "filesPattern": "{TS}.mrc",
         "exclusionWords": "",
         "mdocInfo": null,
