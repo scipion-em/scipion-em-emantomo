@@ -168,7 +168,7 @@ setup(
     # MANIFEST.in as well.
     # include_package_data=True,
     package_data={  # Optional
-       'emantomo': ['eman2_logo.png', 'protocols.conf', 'requirements/*'],
+       'emantomo': ['eman2_logo.png', 'protocols.conf', 'requirements/*', 'templates/*'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
