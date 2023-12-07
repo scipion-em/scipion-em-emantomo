@@ -1,3 +1,5 @@
+v3.3.0:
+  - Prevent viewers from locking the screen focus.
 v3.2.3:
   - Hotfix: add templates dir to package_data in setup
 v3.2.2:
