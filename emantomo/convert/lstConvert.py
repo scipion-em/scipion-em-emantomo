@@ -230,6 +230,7 @@ class EmanLstWriter:
         coords = emanParticles.getCoordinates3D()
         presentTsIds = coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR)
         presentPrecedents = getPresentPrecedents(coords, presentTsIds)
+        presentPrecedents = sorted(presentPrecedents, key=lambda t: t.getTsId())
         # Prepare contents
         lines = []
         for tomo in presentPrecedents:
