@@ -1,5 +1,6 @@
 v3.3.0:
  Users:
+  - Prevent viewers from locking the screen focus.
   - Refine new (pppt): set unmasked halves to the resulting average instead of the masked ones.
   - Initial model new (pppt): in no. initial volumes requested is one, it generates an AverageSubTomogram instead of a
     SetOfAverageSubTomograms, allowing the scheduling with a posterior refine.
