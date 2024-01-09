@@ -52,6 +52,8 @@ class EmanDialog(ToolbarListDialog):
                                    allowsEmptySelection=False,
                                    itemDoubleClick=self.doubleClickOnTomogram,
                                    allowSelect=False,
+                                   lockGui=False,
+                                   cancelButton=True,
                                    **kwargs)
 
     def refresh_gui(self):
