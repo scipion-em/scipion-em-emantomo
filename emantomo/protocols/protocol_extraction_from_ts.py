@@ -91,11 +91,18 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       help='If the reconstruction was carried out with EMAN, it would be set to No.')
         form.addParam(IN_BOXSIZE, IntParam,
                       allowsNull=False,
+                      important=True,
                       label='Box size unbinned (pix.)',
                       help='The subtomograms are extracted as a cubic box of this size.')
         form.addParam('shrink', FloatParam,
                       default=1,
-                      label='Binning factor')
+                      allowsNull=False,
+                      important=True,
+                      label='Particles binning factor',
+                      help='For example, if the unbinned box size is 160 pix and the particles binning factor '
+                           'introduced is 4, the 2D tilt particles will be cropped on the tilt series with a box of '
+                           '160 x 160 pix, and then shrink to 160 / 4 = 40 pix. Thus, both resulting 2D and 3D sets '
+                           'of particles will be of size 40 pix.')
         form.addParam('maxTilt', IntParam,
                       default=100,
                       label='Max tilt',
@@ -269,11 +276,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self._defineSourceRelation(inTsPointer, fiducialModelGaps)
 
     # --------------------------- INFO functions -----------------------------------
-    def _validate(self):
-        errorMsg = []
+    def _warnings(self):
+        warnMsg = []
         if not self.getAttrib(IN_TS).hasAlignment():
-            errorMsg.append('The introduced tilt series do not have an alignment transformation associated.')
-        return errorMsg
+            warnMsg.append('The introduced tilt series do not have an alignment transformation associated.')
+        return warnMsg
 
     # --------------------------- UTILS functions ----------------------------------
     def genMdObjDict(self, inTsSet, inCtfSet, coords):
