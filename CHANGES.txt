@@ -4,6 +4,7 @@ v3.3.0:
   - Refine new (pppt): set unmasked halves to the resulting average instead of the masked ones.
   - Initial model new (pppt): in no. initial volumes requested is one, it generates an AverageSubTomogram instead of a
     SetOfAverageSubTomograms, allowing the scheduling with a posterior refine.
+  - Fix pppt multirefine (bad assigment of the alignments detected).
  Developers:
   - lstConvert: orders alphabetically the tomograms to prevent data mismatching.
 v3.2.3:
