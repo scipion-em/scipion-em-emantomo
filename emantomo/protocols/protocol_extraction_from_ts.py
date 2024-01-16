@@ -80,7 +80,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                            'coordinates. The corresponding tilt series data will be also accessed through them.')
         form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
-                      label='Tilt series with alignment, non-interpolated',
+                      label='Tilt series',
                       # expertLevel=LEVEL_ADVANCED,
                       important=True,
                       help='Tilt series with alignment (non interpolated) used in the tomograms reconstruction.')
@@ -289,10 +289,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             coords = coords.getCoordinates3D()
         # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
         # which means the intersection of the tsId lists
-
         presentCtfTsIds = set(getPresentTsIdsInSet(inCtfSet))
+        self.info("TsIds present in the CTF tomo series are: %s" % presentCtfTsIds)
         presentTsSetTsIds = set(getPresentTsIdsInSet(inTsSet))
+        self.info("TsIds present in the tilt series are: %s" % presentTsSetTsIds)
         presentTomoSetTsIds = set(coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR))
+        self.info("TsIds present in the coordinates are: %s" % presentTomoSetTsIds)
         presentTsIds = presentCtfTsIds & presentTsSetTsIds & presentTomoSetTsIds
         # The tomograms are obtained as the coordinates precedents. Operating this way, the code considers the case of
         # subsets of coordinates
@@ -327,6 +329,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                              coords=iCoords,
                                              particles=iParticles,
                                              jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
+        if not mdObjDict:
+            raise Exception("There isn't any common tilt series among the coordinates, the CTF tomo series and "
+                            "the tilt series chosen.")
         return mdObjDict
 
     def _genExtractArgs(self, mdObjDict):
