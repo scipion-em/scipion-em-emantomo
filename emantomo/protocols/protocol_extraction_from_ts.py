@@ -39,7 +39,8 @@ from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE
 from pyworkflow.utils import Message, replaceExt, removeExt, createLink
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D
+from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D, \
+    SetOfMeshes
 
 
 class outputObjects(Enum):
@@ -152,10 +153,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def _initialize(self):
         inParticles = getattr(self, IN_SUBTOMOS).get()
         inCtfSet = getattr(self, IN_CTF).get()
-        inTsSet = self.getTs()
+        inTsSet = self.getAttrib(IN_TS)
         binFactor = self.shrink.get()
         typeInParticles = type(inParticles)
-        if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
+        if typeInParticles in [SetOfCoordinates3D, SetOfMeshes]:  # Extraction from coords
             coords = inParticles
         else:  # Extraction from particles
             coords = inParticles.getCoordinates3D()
@@ -224,8 +225,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
-        # The fiducial size is the diameter in angstroms
-        fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getTs().getSamplingRate() / 2
+        # The fiducial size is the diameter in nm
+        fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getAttrib(IN_TS).getSamplingRate() / 2
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():

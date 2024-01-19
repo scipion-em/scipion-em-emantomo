@@ -746,6 +746,7 @@ def getApixUnbinnedFromMd(mdObj):
     size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to"""
     ts = mdObj.ts
     apixTs = ts.getSamplingRate()
-    ctf = mdObj.ctf
-    apixCtf = ctf.getTiltSeries().getSamplingRate() if ctf else None
-    return apixCtf if apixCtf else apixTs
+    # ctf = mdObj.ctf
+    # apixCtf = ctf.getTiltSeries().getSamplingRate() if ctf else None
+    # return apixCtf if apixCtf else apixTs
+    return apixTs
