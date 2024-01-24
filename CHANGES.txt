@@ -7,6 +7,7 @@ v3.3.0:
   - Fix pppt multirefine (bad assigment of the alignments detected).
  Developers:
   - lstConvert: orders alphabetically the tomograms to prevent data mismatching.
+  - update tests calls to import CTFs to the new centralized protocol developed for that purpose.
 v3.2.3:
   - Hotfix: add templates dir to package_data in setup
 v3.2.2:

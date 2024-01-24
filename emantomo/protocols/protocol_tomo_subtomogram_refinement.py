@@ -219,8 +219,8 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
 
     def convertOutputStep(self):
         self.hdfToMrc("threed_\d+.hdf", self.getAverageFn())
-        self.hdfToMrc("threed_\d+_even_unmasked.hdf", self.getEvenFn())
-        self.hdfToMrc("threed_\d+_odd_unmasked.hdf", self.getOddFn())
+        self.hdfToMrc("threed_even_unmasked.hdf", self.getEvenFn())
+        self.hdfToMrc("threed_odd_unmasked.hdf", self.getOddFn())
 
     def createOutputStep(self):
         inputSetOfSubTomograms = self.inputSetOfSubTomogram.get()
