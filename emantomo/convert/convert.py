@@ -41,6 +41,7 @@ from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D
 from tomo.constants import TR_EMAN
+from tomo.utils import setWrongDefocus
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
     TS_FILE, EMAN_OFF_TILT_AXIS
@@ -98,12 +99,6 @@ def readCTFModel(ctfModel, filename):
             if pwutils.exists(psdFile):
                 ctfModel.setPsdFile(psdFile)
     ctfModel.setPhaseShift(float(ctfPhaseShift))
-
-
-def setWrongDefocus(ctfModel):
-    ctfModel.setDefocusU(-999)
-    ctfModel.setDefocusV(-1)
-    ctfModel.setDefocusAngle(-999)
 
 
 def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None,
