@@ -41,7 +41,6 @@ from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
 from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D
 from tomo.constants import TR_EMAN
-from tomo.utils import setWrongDefocus
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
     TS_FILE, EMAN_OFF_TILT_AXIS
@@ -80,7 +79,7 @@ def readCTFModel(ctfModel, filename):
     elif 'ctf' in jsonDict:
         keyPos = jsonDict['ctf'][0]
     else:
-        setWrongDefocus(ctfModel)
+        ctfModel.setWrongDefocus()
 
     if keyPos:
         defocus = float(keyPos['defocus'])

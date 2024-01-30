@@ -279,7 +279,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     # --------------------------- INFO functions -----------------------------------
     def _warnings(self):
         warnMsg = []
-        if not self.getAttrib(IN_TS).hasAlignment():
+        if not (self.getAttrib(IN_TS).hasAlignment() and not self.getAttrib(IN_TS).interpolated()):
             warnMsg.append('The introduced tilt series do not have an alignment transformation associated.')
         return warnMsg
 
