@@ -24,7 +24,6 @@
 # *
 # **************************************************************************
 from os.path import exists, basename
-from cistem.protocols import CistemProtTsImportCtf
 from emantomo.constants import TOMOBOX
 from emantomo.protocols import EmanProtTsAlignTomoRec, EmanProtEstimateCTF, EmanProtTSExtraction, \
     EmanProtTomoInitialModelNew, EmanProtTomoRefinementNew, EmanProtMultiRefinementNew
@@ -38,7 +37,8 @@ from pyworkflow.utils import magentaStr
 from reliontomo.protocols import ProtImportCoordinates3DFromStar
 from tomo.constants import TR_EMAN
 from tomo.objects import TomoAcquisition, Coordinate3D, SetOfCoordinates3D
-from tomo.protocols import ProtImportTs, ProtImportTomograms
+from tomo.protocols import ProtImportTs, ProtImportTomograms, ProtImportTsCTF
+from tomo.protocols.protocol_import_ctf import ImportChoice
 from tomo.protocols.protocol_import_tomograms import OUTPUT_NAME
 from tomo.tests import RE4_STA_TUTO, DataSetRe4STATuto
 from tomo.tests.test_base_centralized_layer import TestBaseCentralizedLayer
@@ -182,12 +182,13 @@ class TestBaseRefineCyclePPPT(TestEmanBasePPPT):
     @classmethod
     def _runImportCtfs(cls):
         print(magentaStr("\n==> Importing the TS' CTFs with Cistem:"))
-        protImportCtfs = cls.newProtocol(CistemProtTsImportCtf,
-                                         filesPath=cls.ds.getFile(DataSetRe4STATuto.tsPath.value),
-                                         filesPattern=DataSetRe4STATuto.ctfPattern.value,
+        protImportCtfs = cls.newProtocol(ProtImportTsCTF,
+                                         importFrom=ImportChoice.CTFFIND.value,
+                                         filesPath=cls.ds.getFile(DataSetRe4STATuto.cistemFilesPath.value),
+                                         filesPattern='*.txt',
                                          inputSetOfTiltSeries=cls.importedTs)
         cls.launchProtocol(protImportCtfs)
-        outCtfSet = getattr(protImportCtfs, CistemProtTsImportCtf._possibleOutputs.outputCTFs.name, None)
+        outCtfSet = getattr(protImportCtfs, protImportCtfs._possibleOutputs.CTFs.name, None)
         return outCtfSet
 
     @classmethod
@@ -306,12 +307,11 @@ class TestEmanInitialVolumeNew(TestBaseRefineCyclePPPT):
                                            symmetry='c6',
                                            numberOfThreads=8)
         cls.launchProtocol(protNewInitModel)
-        outAvgs = getattr(protNewInitModel, EmanProtTomoInitialModelNew._possibleOutputs.averages.name, None)
+        outAvgs = getattr(protNewInitModel, EmanProtTomoInitialModelNew._possibleOutputs.average.name, None)
         return outAvgs
 
     def test_new_initial_volume(self):
-        initModels = self._runNewInitialModel(self.extractedParticles)
-        initModel = initModels[1]  # There's only one element in the set of averages as the no. classes requested is 1
+        initModel = self._runNewInitialModel(self.extractedParticles)
         # Check the results
         expectedSRate = DataSetRe4STATuto.sRateBin4.value
         expectedBozxSize = self.particlesExtractedBoxSize

@@ -39,7 +39,8 @@ from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE
 from pyworkflow.utils import Message, replaceExt, removeExt, createLink
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN
-from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D
+from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D, \
+    SetOfMeshes
 
 
 class outputObjects(Enum):
@@ -80,7 +81,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                            'coordinates. The corresponding tilt series data will be also accessed through them.')
         form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
-                      label='Tilt series with alignment, non-interpolated',
+                      label='Tilt series',
                       # expertLevel=LEVEL_ADVANCED,
                       important=True,
                       help='Tilt series with alignment (non interpolated) used in the tomograms reconstruction.')
@@ -91,11 +92,18 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       help='If the reconstruction was carried out with EMAN, it would be set to No.')
         form.addParam(IN_BOXSIZE, IntParam,
                       allowsNull=False,
+                      important=True,
                       label='Box size unbinned (pix.)',
                       help='The subtomograms are extracted as a cubic box of this size.')
         form.addParam('shrink', FloatParam,
                       default=1,
-                      label='Binning factor')
+                      allowsNull=False,
+                      important=True,
+                      label='Particles binning factor',
+                      help='For example, if the unbinned box size is 160 pix and the particles binning factor '
+                           'introduced is 4, the 2D tilt particles will be cropped on the tilt series with a box of '
+                           '160 x 160 pix, and then shrink to 160 / 4 = 40 pix. Thus, both resulting 2D and 3D sets '
+                           'of particles will be of size 40 pix.')
         form.addParam('maxTilt', IntParam,
                       default=100,
                       label='Max tilt',
@@ -145,10 +153,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def _initialize(self):
         inParticles = getattr(self, IN_SUBTOMOS).get()
         inCtfSet = getattr(self, IN_CTF).get()
-        inTsSet = self.getTs()
+        inTsSet = self.getAttrib(IN_TS)
         binFactor = self.shrink.get()
         typeInParticles = type(inParticles)
-        if typeInParticles == SetOfCoordinates3D:  # Extraction from coords
+        if typeInParticles in [SetOfCoordinates3D, SetOfMeshes]:  # Extraction from coords
             coords = inParticles
         else:  # Extraction from particles
             coords = inParticles.getCoordinates3D()
@@ -217,8 +225,8 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         fiducialModelGaps = SetOfLandmarkModels.create(self._getPath(), suffix='Gaps')
         fiducialModelGaps.copyInfo(inTs)
         fiducialModelGaps.setSetOfTiltSeries(inTsPointer)
-        # The fiducial size is the diameter in angstroms
-        fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getTs().getSamplingRate() / 2
+        # The fiducial size is the diameter in nm
+        fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getAttrib(IN_TS).getSamplingRate() / 2
 
         absParticleCounter = 0
         for tsId, mdObj in mdObjDict.items():
@@ -269,11 +277,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         self._defineSourceRelation(inTsPointer, fiducialModelGaps)
 
     # --------------------------- INFO functions -----------------------------------
-    def _validate(self):
-        errorMsg = []
-        if not self.getAttrib(IN_TS).hasAlignment():
-            errorMsg.append('The introduced tilt series do not have an alignment transformation associated.')
-        return errorMsg
+    def _warnings(self):
+        warnMsg = []
+        if not (self.getAttrib(IN_TS).hasAlignment() and not self.getAttrib(IN_TS).interpolated()):
+            warnMsg.append('The introduced tilt series do not have an alignment transformation associated.')
+        return warnMsg
 
     # --------------------------- UTILS functions ----------------------------------
     def genMdObjDict(self, inTsSet, inCtfSet, coords):
@@ -282,10 +290,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             coords = coords.getCoordinates3D()
         # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
         # which means the intersection of the tsId lists
-
         presentCtfTsIds = set(getPresentTsIdsInSet(inCtfSet))
+        self.info("TsIds present in the CTF tomo series are: %s" % presentCtfTsIds)
         presentTsSetTsIds = set(getPresentTsIdsInSet(inTsSet))
+        self.info("TsIds present in the tilt series are: %s" % presentTsSetTsIds)
         presentTomoSetTsIds = set(coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR))
+        self.info("TsIds present in the coordinates are: %s" % presentTomoSetTsIds)
         presentTsIds = presentCtfTsIds & presentTsSetTsIds & presentTomoSetTsIds
         # The tomograms are obtained as the coordinates precedents. Operating this way, the code considers the case of
         # subsets of coordinates
@@ -302,7 +312,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
         # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
         mdObjDict = {}
-        for tomoId, ts in tsIdsDict.items():
+        for tomoId, ts in sorted(tsIdsDict.items()):
+            # Sorting the items before the iteration based on the tsId (key) will ensure the alphabetical order in
+            # all the data generated, preventing data mismatching between the alignment files generated by EMAN in
+            # posterior refinements and its corresponding version in Scipion format
             tomo = tomoIdsDict[tomoId]
             hdfFileBaseName = f'{tomoId}.hdf'
             iCoords = [coord.clone() for coord in coords.iterCoordinates(volume=tomo)] if coords else None
@@ -317,6 +330,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                              coords=iCoords,
                                              particles=iParticles,
                                              jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
+        if not mdObjDict:
+            raise Exception("There isn't any common tilt series among the coordinates, the CTF tomo series and "
+                            "the tilt series chosen.")
         return mdObjDict
 
     def _genExtractArgs(self, mdObjDict):

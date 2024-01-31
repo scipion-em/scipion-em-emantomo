@@ -496,7 +496,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi = TiltImage()
             finalName = self.getTsInterpFinalLoc(mdObj.tsId).replace('.hdf', '.mrc')
             outTi.copyInfo(ti, copyId=True)
-            outTi.setTsId(outTi.getTsId() + '_interp')
+            outTi.setTsId(outTi.getTsId())
             outTi.setIndex(ti.getIndex())
             outTi.setFileName(finalName)
             setattr(outTi, EMAN_OFF_TILT_AXIS, Float(alignParams[idx][4]))  # Off tilt axis angle, extended parameter
@@ -521,7 +521,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         tiltSeries = TiltSeries()
         if interpolated:
             # Avoid the copyInfo and set the origin manually to get the squared TS dims and origin correctly stored
-            tsId = ts.getTsId() + '_interp'
+            tsId = ts.getTsId()
             sr = ts.getSamplingRate()
             tiltSeries.setSamplingRate(sr)
             tiltSeries.setAcquisition(ts.getAcquisition())
