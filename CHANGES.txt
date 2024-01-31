@@ -5,6 +5,7 @@ v3.3.0:
   - Initial model new (pppt): in no. initial volumes requested is one, it generates an AverageSubTomogram instead of a
     SetOfAverageSubTomograms, allowing the scheduling with a posterior refine.
   - Fix pppt multirefine (bad assigment of the alignments detected).
+  - Fix protocol extraction from TS: the chainId in the fiducials generation is correct now.
  Developers:
   - lstConvert: orders alphabetically the tomograms to prevent data mismatching.
   - update tests calls to import CTFs to the new centralized protocol developed for that purpose.
