@@ -228,19 +228,20 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # The fiducial size is the diameter in nm
         fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getAttrib(IN_TS).getSamplingRate() / 2
 
-        absParticleCounter = 0
+        nTotalParticles = 0
         for tsId, mdObj in mdObjDict.items():
+            _, _, nImgs = mdObj.ts.getDimensions()
             coords = mdObj.particles if self.inParticles else mdObj.coords
             subtomoFiles = sorted(glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId)))
             stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
             stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
             # Get the projections
             tsProjections = self.getProjections(mdObj)
-            landmarkModelGaps = self.createLandmarkModelGaps(mdObj.ts, tsProjections, fiducialSize)
-            fiducialModelGaps.append(landmarkModelGaps)
+            landmarkModelGaps = self.createLandmarkModelGaps(mdObj.ts, fiducialSize)
 
             particleCounter = 0
             for coord, subtomoFile in zip(coords, subtomoFiles):
+                self.fillLandmarkModel(landmarkModelGaps, tsProjections, nTotalParticles, nImgs)
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
@@ -263,10 +264,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                 subtomogram.setTsHdf(self._getExtraPath(mdObj.tsHdfName))
                 subtomogram.setStack2dHdf(stack2d)
                 subtomogram.setStack3dHdf(stack3d)
-                subtomogram.setAbsIndex(absParticleCounter)
+                subtomogram.setAbsIndex(nTotalParticles)
                 subtomoSet.append(subtomogram)
                 particleCounter += 1
-                absParticleCounter += 1
+                nTotalParticles += 1
+            fiducialModelGaps.append(landmarkModelGaps)
 
         # Define outputs and relations
         self._defineOutputs(**{self._possibleOutputs.subtomograms.name: subtomoSet,
@@ -391,7 +393,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # lists of lists, as expected
         return projList
 
-    def createLandmarkModelGaps(self, ts, tsProjections, fiducialSize):
+    def createLandmarkModelGaps(self, ts, fiducialSize):
         tsId = ts.getTsId()
         landmarkModelGapsFilePath = self._getExtraPath(str(tsId) + "_gaps.sfid")
         landmarkModelGaps = LandmarkModel(tsId=tsId,
@@ -401,10 +403,15 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                                           size=fiducialSize,
                                           applyTSTransformation=False)
         landmarkModelGaps.setTiltSeries(ts)
-        for projection in tsProjections:
-            tiltId = projection[1] + 1
-            partId = projection[2] + 1
-            xCoord = round(projection[3])
-            yCoord = round(projection[4])
-            landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
         return landmarkModelGaps
+
+    @staticmethod
+    def fillLandmarkModel(landmarkModelGaps, tsProjections, particle3dInd, nImgs):
+        ind = particle3dInd * nImgs
+        for i in range(ind, ind + nImgs):
+            projection = tsProjections[i]
+            tiltId = projection[1] + 1
+            partId = particle3dInd + 1
+            xCoord = round(projection[2])
+            yCoord = round(projection[3])
+            landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
