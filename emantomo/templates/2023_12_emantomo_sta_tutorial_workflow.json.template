@@ -1,5 +1,5 @@
 Subtomogram averaging with EMAN plugin for Scipion (subset of EMPIAR-10064).
-To download the dataset required for this woekflow, execute the following command: 
+To download the dataset required for this woekflow, execute the following command:
 scipion3 testdata --download emantomo_tutorial_ribo
 
 [
@@ -35,7 +35,7 @@ scipion3 testdata --download emantomo_tutorial_ribo
     },
     {
         "object.className": "ProtImportTsCTF",
-        "object.id": "305",
+        "object.id": "52",
         "object.label": "tomo - import tomo CTFs",
         "object.comment": "",
         "_useQueue": false,
@@ -52,7 +52,7 @@ scipion3 testdata --download emantomo_tutorial_ribo
     },
     {
         "object.className": "EmanProtTsAlignTomoRec",
-        "object.id": "1001",
+        "object.id": "89",
         "object.label": "emantomo - TS align & tomo rec",
         "object.comment": "",
         "_useQueue": false,
@@ -90,7 +90,7 @@ scipion3 testdata --download emantomo_tutorial_ribo
     },
     {
         "object.className": "ProtImportCoordinates3DFromScipion",
-        "object.id": "1109",
+        "object.id": "145",
         "object.label": "tomo - import 3D coords from scipion (copy)",
         "object.comment": "",
         "_useQueue": false,
@@ -99,12 +99,12 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "runName": null,
         "runMode": 0,
         "sqliteFile": "%(SCIPION_TESTS)s/emantomo_tutorial_ribo/coordinates.sqlite",
-        "importTomograms": "1001.tomograms",
-        "boxSize": 36
+        "boxSize": 36,
+        "importTomograms": "89.tomograms"
     },
     {
         "object.className": "EmanProtTSExtraction",
-        "object.id": "1152",
+        "object.id": "179",
         "object.label": "emantomo - Extraction from TS",
         "object.comment": "",
         "_useQueue": false,
@@ -112,9 +112,7 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inputSubtomos": "1109.coordinates",
-        "inputCTF": "578.CTFTomoSeries",
-        "inputTS": "1001.tiltSeries",
+        "inputCTF": "52.CTFs",
         "doFlipZInTomo": false,
         "boxSize": 144,
         "shrink": 4.0,
@@ -124,11 +122,13 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "paddingFactor": 2.0,
         "minDist": 150.0,
         "hostName": "localhost",
-        "numberOfThreads": 12
+        "numberOfThreads": 12,
+        "inputTS": "89.tiltSeries",
+        "inputSubtomos": "145.coordinates"
     },
     {
         "object.className": "EmanProtTomoInitialModelNew",
-        "object.id": "1963",
+        "object.id": "223",
         "object.label": "emantomo - Initial model",
         "object.comment": "",
         "_useQueue": false,
@@ -136,7 +136,6 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inputSubtomos": "1152.subtomograms",
         "shrink": 1,
         "nIters": 30,
         "nClasses": 1,
@@ -146,11 +145,12 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "keptParticles": 1.0,
         "learningRate": 0.2,
         "hostName": "localhost",
-        "numberOfThreads": 12
+        "numberOfThreads": 12,
+        "inputSubtomos": "179.subtomograms"
     },
     {
         "object.className": "EmanProtTomoRefinementNew",
-        "object.id": "2097",
+        "object.id": "265",
         "object.label": "emantomo - subtomogram refinement pppt",
         "object.comment": "",
         "_useQueue": false,
@@ -158,8 +158,6 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "_queueParams": null,
         "runName": null,
         "runMode": 0,
-        "inputSubtomos": "1152.subtomograms",
-        "refVol": "1963.averages.1",
         "startRes": 50.0,
         "iters": "p3,t2,p,t,r,d",
         "symmetry": "c1",
@@ -176,6 +174,8 @@ scipion3 testdata --download emantomo_tutorial_ribo
         "make3dThread": false,
         "extraParams": null,
         "hostName": "localhost",
-        "numberOfThreads": 12
+        "numberOfThreads": 12,
+        "inputSubtomos": "179.subtomograms",
+        "refVol": "223.averages.1"
     }
 ]
