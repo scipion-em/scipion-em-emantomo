@@ -105,7 +105,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        inTsSet = self.getTs()
+        inTsSet = self.getAttrib(IN_TS)
         self.createInitEmanPrjDirs()
         # Manage the TS
         presentTsIds = set(getPresentTsIdsInSet(inTsSet))
@@ -132,7 +132,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
         self.runJob(program, self._genCtfEstimationArgs(mdObj), cwd=self._getExtraPath())
 
     def createOutputStep(self, mdObjDict):
-        inTsSet = self.getTs()
+        inTsSet = self.getAttrib(IN_TS)
         outCtfSet = SetOfCTFTomoSeries.create(self._getPath(), template='CTFmodels%s.sqlite')
         outCtfSet.setSetOfTiltSeries(inTsSet)
 
@@ -151,7 +151,8 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
                 defocusU = defocusV = 10000.0 * defocus[idx]
                 newCTFTomo = CTFTomo()
                 newCTFTomo.setIndex(idx + 1)
-                newCTFTomo.setPhaseShift(phase_shift[idx])
+                if phase_shift[idx] != 0:
+                    newCTFTomo.setPhaseShift(phase_shift[idx])
                 newCTFTomo.setDefocusU(defocusU)
                 newCTFTomo.setDefocusV(defocusV)
                 newCTFTomo.setDefocusAngle(0)

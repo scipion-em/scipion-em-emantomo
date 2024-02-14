@@ -71,7 +71,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         form.addSection(label='options')
         form.addParam('nptcl', IntParam,
                       default=500,
-                      label='Maximum number of particles per tomogram.',
+                      label='Maximum no. particles picked among the tomograms',
                       help='If a higher number of particles is detected, the program will take the best N, '
                            'being N the value of the current parameter.')
         form.addParam('delta', FloatParam,

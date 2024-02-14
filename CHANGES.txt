@@ -1,3 +1,16 @@
+v3.3.0:
+ Users:
+  - Prevent viewers from locking the screen focus.
+  - Refine new (pppt): set unmasked halves to the resulting average instead of the masked ones.
+  - Initial model new (pppt): in no. initial volumes requested is one, it generates an AverageSubTomogram instead of a
+    SetOfAverageSubTomograms, allowing the scheduling with a posterior refine.
+  - Fix pppt multirefine (bad assigment of the alignments detected).
+  - Fix protocol extraction from TS: the chainId in the fiducials generation is correct now.
+  - Update the template 2023_12_emantomo_sta_tutorial_workflow.json.template, so it calls the centralized
+    CTF import protocol instead of the obsolete corresponding non-centralized protocol.
+ Developers:
+  - lstConvert: orders alphabetically the tomograms to prevent data mismatching.
+  - update tests calls to import CTFs to the new centralized protocol developed for that purpose.
 v3.2.3:
   - Hotfix: add templates dir to package_data in setup
 v3.2.2:
@@ -6,7 +19,7 @@ v3.2.1:
   - Fix schedule execution
   - Fix template
 v3.2.0:
-Users:
+ Users:
   - Template matching protocol added.
   - Clip tomograms protocol added.
   - CTF estimation protocol improved.

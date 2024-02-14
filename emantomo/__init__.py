@@ -22,7 +22,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-__version__ = "3.2.3"
+__version__ = "3.3.0"
 _logo = "eman2_logo.png"
 _references = ['GALAZMONTOYA2015279', 'BELL201625']
 _url = "https://github.com/scipion-em/scipion-em-emantomo"

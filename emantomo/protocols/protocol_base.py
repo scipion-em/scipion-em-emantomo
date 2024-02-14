@@ -70,10 +70,10 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
-        if mdObj.ctf:
-            inTsFName = mdObj.ctf.getTiltSeries().getFirstItem().getFileName()
-        else:
-            inTsFName = mdObj.ts.getFirstItem().getFileName()
+        # if mdObj.ctf:
+        #     inTsFName = mdObj.ctf.getTiltSeries().getFirstItem().getFileName()
+        # else:
+        inTsFName = mdObj.ts.getFirstItem().getFileName()
         sRate = mdObj.ts.getSamplingRate()
         self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
 
@@ -139,12 +139,6 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
             return obj.get()
         else:
             return obj
-
-    def getTs(self):
-        """If the user provides a set of tilt series, use them. If not (expected behaviour), get the non-interpolated
-        tilt series from the introduced coordinates."""
-        tsSet = self.getAttrib(IN_TS)
-        return tsSet if tsSet else getNonInterpolatedTsFromRelations(self.getAttrib(IN_COORDS), self)
 
     def getBoxSize(self):
         """If the user provides a box size value. If not (expected behaviour), read it from the set of subtomograms

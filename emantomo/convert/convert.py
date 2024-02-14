@@ -79,7 +79,7 @@ def readCTFModel(ctfModel, filename):
     elif 'ctf' in jsonDict:
         keyPos = jsonDict['ctf'][0]
     else:
-        setWrongDefocus(ctfModel)
+        ctfModel.setWrongDefocus()
 
     if keyPos:
         defocus = float(keyPos['defocus'])
@@ -98,12 +98,6 @@ def readCTFModel(ctfModel, filename):
             if pwutils.exists(psdFile):
                 ctfModel.setPsdFile(psdFile)
     ctfModel.setPhaseShift(float(ctfPhaseShift))
-
-
-def setWrongDefocus(ctfModel):
-    ctfModel.setDefocusU(-999)
-    ctfModel.setDefocusV(-1)
-    ctfModel.setDefocusAngle(-999)
 
 
 def readSetOfCoordinates3D(jsonBoxDict, coord3DSetDict, inputTomo, updateItem=None,
@@ -746,6 +740,7 @@ def getApixUnbinnedFromMd(mdObj):
     size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to"""
     ts = mdObj.ts
     apixTs = ts.getSamplingRate()
-    ctf = mdObj.ctf
-    apixCtf = ctf.getTiltSeries().getSamplingRate() if ctf else None
-    return apixCtf if apixCtf else apixTs
+    # ctf = mdObj.ctf
+    # apixCtf = ctf.getTiltSeries().getSamplingRate() if ctf else None
+    # return apixCtf if apixCtf else apixTs
+    return apixTs
