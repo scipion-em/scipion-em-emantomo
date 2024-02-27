@@ -86,18 +86,23 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
 
     def test_ts_align_tomo_rec(self):
         print(magentaStr("\n==> Aligning the tilt series and reconstructing the tomograms:"))
+        tiltStep = 3
         protTsAlignTomoRec = self.newProtocol(EmanProtTsAlignTomoRec,
                                               inputTS=self.importedTs,
                                               boxSizeTrk=100,
-                                              tltStep=3,
+                                              tltStep=tiltStep,
                                               clipz=250,
+                                              genInterpolatedTs=True,
                                               numberOfThreads=8)
         self.launchProtocol(protTsAlignTomoRec)
         tsAligned = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeries.name, None)
+        tsInterp = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeriesInterpolated.name, None)
         tomosRec = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tomograms.name, None)
         self.assertIsNotNone(tsAligned, "There was a problem aligning the tilt series")
         self.assertIsNotNone(tomosRec, "There was a problem reconstructing the tomograms")
         # Check the tilt series
+        expectedSetSize = 1
+        anglesCount = 40
         testAcq = TomoAcquisition(voltage=DataSetRe4STATuto.voltage.value,
                                   sphericalAberration=DataSetRe4STATuto.sphericalAb.value,
                                   amplitudeContrast=DataSetRe4STATuto.amplitudeContrast.value,
@@ -105,20 +110,34 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
                                   tiltAxisAngle=DataSetRe4STATuto.tiltAxisAngle.value,
                                   doseInitial=DataSetRe4STATuto.initialDose.value,
                                   dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value,
-                                  accumDose=DataSetRe4STATuto.accumDose.value
+                                  accumDose=DataSetRe4STATuto.accumDose.value,
+                                  angleMin=-57,
+                                  angleMax=60,
+                                  step=tiltStep
                                   )
         self.checkTiltSeries(tsAligned,
-                             expectedSetSize=1,
+                             expectedSetSize=expectedSetSize,
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
                              expectedDimensions=[3710, 3838, 40],
+                             testSetAcqObj=testAcq,
                              testAcqObj=testAcq,
                              alignment=ALIGN_2D,
                              hasAlignment=True,
-                             anglesCount=40,
+                             anglesCount=anglesCount
+                             )
+        # Check the interpolated tilt series
+        self.checkTiltSeries(tsInterp,
+                             expectedSetSize=expectedSetSize,
+                             expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
+                             expectedDimensions=[927, 927, 40],
+                             testSetAcqObj=testAcq,
+                             testAcqObj=testAcq,
+                             isInterpolated=True,
+                             anglesCount=anglesCount
                              )
         # Check the tomograms
         self.checkTomograms(tomosRec,
-                            expectedSetSize=1,
+                            expectedSetSize=expectedSetSize,
                             expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value * 4,  # Bin 4
                             expectedDimensions=[1050, 1000, 250]
                             )

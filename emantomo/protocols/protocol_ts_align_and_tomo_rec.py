@@ -483,8 +483,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             setattr(outTi, EMAN_ALI_LOSS, Float(aliLoss[idx]))
             self._genTrMatrixFromEmanAlign(outTi, curerntAlignParams)
             # Append the current tilt image to the corresponding tilt series
+            tiltSeries.setAlignment2D()
             tiltSeries.append(outTi)
 
+        outTsSet.setAlignment2D()
         outTsSet.update(tiltSeries)
         return outTsSet
 
@@ -503,7 +505,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setTiltAngle(alignParams[idx][3])  # Refined tilt angle
             tiltSeries.append(outTi)
 
-        outTsSet.setAlignment2D()
         outTsSet.update(tiltSeries)
         return outTsSet
 
@@ -520,6 +521,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     def _createCurrentOutTs(self, ts, interpolated=False):
         tiltSeries = TiltSeries()
         if interpolated:
+            tiltSeries.setInterpolated(True)
             # Avoid the copyInfo and set the origin manually to get the squared TS dims and origin correctly stored
             tsId = ts.getTsId()
             sr = ts.getSamplingRate()

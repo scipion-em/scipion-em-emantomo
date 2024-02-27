@@ -1,3 +1,8 @@
+v3.3.1:
+ Users:
+  - Small fixes regarding the register of the tilt series acquisition attributes.
+ Developers:
+  - Test for TS alignment & tomo reconstruction updated to the new TCL.
 v3.3.0:
  Users:
   - Prevent viewers from locking the screen focus.
