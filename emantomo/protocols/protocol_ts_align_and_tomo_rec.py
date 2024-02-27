@@ -35,6 +35,7 @@ from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData, EmanHdf5Handler
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName, getPresentTsIdsInSet
+from pwem import ALIGN_2D, ALIGN_NONE
 from pwem.convert.headers import fixVolume
 from pwem.emlib.image import ImageHandler
 from pwem.objects import Transform
@@ -436,27 +437,29 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def getOutputSetOfTs(self, interpolated=False):
         inTs = self.inputTS.get()
-        outTs = self.getTiltSeries(interpolated=interpolated)
-        if outTs:
-            outTs.enableAppend()
-            tiltSeries = outTs
+        outTsSet = self.getTiltSeries(interpolated=interpolated)
+        if outTsSet:
+            outTsSet.enableAppend()
         else:
             if interpolated:
                 suffix = 'interpolated'
                 x, y, z, _ = ImageHandler().getDimensions(glob.glob(self._getExtraPath(TS_DIR, '*_interp.mrc'))[0])
                 dims = (x, y, z)
+                alignment = ALIGN_NONE
             else:
                 suffix = ''
                 dims = inTs.getDim()
+                alignment = ALIGN_2D
 
-            tiltSeries = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
-            tiltSeries.copyInfo(self.inputTS.get())
-            tiltSeries.setDim(dims)
-            tiltSeries.setSamplingRate(inTs.getSamplingRate())
-            tiltSeries.setStreamState(Set.STREAM_OPEN)
-            self.setTiltSeries(tiltSeries, interpolated=interpolated)
+            outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
+            outTsSet.copyInfo(self.inputTS.get())
+            outTsSet.setDim(dims)
+            outTsSet.setSamplingRate(inTs.getSamplingRate())
+            outTsSet.setAlignment(alignment)
+            outTsSet.setStreamState(Set.STREAM_OPEN)
+            self.setTiltSeries(outTsSet, interpolated=interpolated)
 
-        return tiltSeries
+        return outTsSet
 
     def getTiltSeries(self, interpolated=False):
         if interpolated:
@@ -483,10 +486,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             setattr(outTi, EMAN_ALI_LOSS, Float(aliLoss[idx]))
             self._genTrMatrixFromEmanAlign(outTi, curerntAlignParams)
             # Append the current tilt image to the corresponding tilt series
-            tiltSeries.setAlignment2D()
             tiltSeries.append(outTi)
 
-        outTsSet.setAlignment2D()
         outTsSet.update(tiltSeries)
         return outTsSet
 
@@ -534,6 +535,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tiltSeries.setOrigin(self.genUpdateTsInterpOrigin(dims, sr))
         else:
             tiltSeries.copyInfo(ts)
+            tiltSeries.setAlignment2D()
         if self._doUpdateTiltAxisAng:
             acq = ts.getAcquisition()
             acq.setTiltAxisAngle(self._tiltAxisAngle)
