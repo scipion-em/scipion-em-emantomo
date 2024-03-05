@@ -110,7 +110,7 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
                                   tiltAxisAngle=DataSetRe4STATuto.tiltAxisAngle.value,
                                   doseInitial=DataSetRe4STATuto.initialDose.value,
                                   dosePerFrame=DataSetRe4STATuto.dosePerTiltImg.value,
-                                  accumDose=DataSetRe4STATuto.accumDose.value,
+                                  accumDose=DataSetRe4STATuto.dosePerTiltImg.value * anglesCount,
                                   angleMin=-57,
                                   angleMax=60,
                                   step=tiltStep
@@ -126,12 +126,14 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
                              anglesCount=anglesCount
                              )
         # Check the interpolated tilt series
+        testAcqInterp = testAcq.clone()
+        testAcqInterp.setTiltAxisAngle(0)  # It is aligned
         self.checkTiltSeries(tsInterp,
                              expectedSetSize=expectedSetSize,
                              expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
                              expectedDimensions=[927, 927, 40],
-                             testSetAcqObj=testAcq,
-                             testAcqObj=testAcq,
+                             testSetAcqObj=testAcqInterp,
+                             testAcqObj=testAcqInterp,
                              isInterpolated=True,
                              anglesCount=anglesCount
                              )

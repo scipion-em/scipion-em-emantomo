@@ -441,18 +441,20 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         if outTsSet:
             outTsSet.enableAppend()
         else:
+            suffix = "_interpolated" if interpolated else ""
+            outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
+            outTsSet.copyInfo(self.inputTS.get())
+            acq = outTsSet.getAcquisition()
             if interpolated:
-                suffix = 'interpolated'
                 x, y, z, _ = ImageHandler().getDimensions(glob.glob(self._getExtraPath(TS_DIR, '*_interp.mrc'))[0])
                 dims = (x, y, z)
                 alignment = ALIGN_NONE
+                acq.setTiltAxisAngle(0.)
+                outTsSet.setAcquisition(acq)
             else:
-                suffix = ''
                 dims = inTs.getDim()
                 alignment = ALIGN_2D
 
-            outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
-            outTsSet.copyInfo(self.inputTS.get())
             outTsSet.setDim(dims)
             outTsSet.setSamplingRate(inTs.getSamplingRate())
             outTsSet.setAlignment(alignment)
@@ -504,8 +506,14 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTi.setFileName(finalName)
             setattr(outTi, EMAN_OFF_TILT_AXIS, Float(alignParams[idx][4]))  # Off tilt axis angle, extended parameter
             outTi.setTiltAngle(alignParams[idx][3])  # Refined tilt angle
+            acq = outTi.getAcquisition()
+            acq.setTiltAxisAngle(0.)  # 0 because it is aligned
+            ti.setAcquisition(acq)
             tiltSeries.append(outTi)
 
+        acq = tiltSeries.getAcquisition()
+        acq.setTiltAxisAngle(0.)  # 0 because the TS is aligned
+        tiltSeries.setAcquisition(acq)
         outTsSet.update(tiltSeries)
         return outTsSet
 
@@ -520,26 +528,25 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return origin
 
     def _createCurrentOutTs(self, ts, interpolated=False):
-        tiltSeries = TiltSeries()
+        tsId = ts.getTsId()
+        tiltSeries = TiltSeries(tsId=tsId)
+        tiltSeries.copyInfo(ts)
         if interpolated:
             tiltSeries.setInterpolated(True)
             # Avoid the copyInfo and set the origin manually to get the squared TS dims and origin correctly stored
-            tsId = ts.getTsId()
-            sr = ts.getSamplingRate()
-            tiltSeries.setSamplingRate(sr)
-            tiltSeries.setAcquisition(ts.getAcquisition())
-            tiltSeries.setTsId(tsId)
+            acq = ts.getAcquisition()
+            acq.setTiltAxisAngle(0.)
+            tiltSeries.setAcquisition(acq)
             x, y, z, _ = ImageHandler().getDimensions(self._getExtraPath(TS_DIR, tsId + '.mrc'))
             dims = (x, y, z)
             tiltSeries.setDim(dims)
-            tiltSeries.setOrigin(self.genUpdateTsInterpOrigin(dims, sr))
+            tiltSeries.setOrigin(self.genUpdateTsInterpOrigin(dims, ts.getSamplingRate()))
         else:
-            tiltSeries.copyInfo(ts)
             tiltSeries.setAlignment2D()
-        if self._doUpdateTiltAxisAng:
-            acq = ts.getAcquisition()
-            acq.setTiltAxisAngle(self._tiltAxisAngle)
-            tiltSeries.setAcquisition(acq)
+            if self._doUpdateTiltAxisAng:
+                acq = ts.getAcquisition()
+                acq.setTiltAxisAngle(self._tiltAxisAngle)
+                tiltSeries.setAcquisition(acq)
         return tiltSeries
 
     def _getInterpTsFile(self, mdObj):
