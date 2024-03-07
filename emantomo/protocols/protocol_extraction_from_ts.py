@@ -93,7 +93,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         form.addParam(IN_BOXSIZE, IntParam,
                       allowsNull=False,
                       important=True,
-                      label='Box size unbinned (pix.)',
+                      label='Box size unbinned (px)',
                       help='The subtomograms are extracted as a cubic box of this size.')
         form.addParam('shrink', FloatParam,
                       default=1,
@@ -241,7 +241,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
             particleCounter = 0
             for coord, subtomoFile in zip(coords, subtomoFiles):
-                self.fillLandmarkModel(landmarkModelGaps, tsProjections, nTotalParticles, nImgs)
+                self.fillLandmarkModel(landmarkModelGaps, tsProjections, particleCounter, nImgs)
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)

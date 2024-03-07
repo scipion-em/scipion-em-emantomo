@@ -62,7 +62,7 @@ class EmanProtTomoClip(ProtEmantomoBase):
                       label="Input tomograms",
                       important=True)
 
-        line = form.addLine('New center coordinates [pix.] (opt.)',
+        line = form.addLine('New center coordinates [px] (opt.)',
                             help='For each empty coordinate, the correspònding original center coordinate '
                                  'will be used.')
         line.addParam('xc', IntParam,
@@ -75,7 +75,7 @@ class EmanProtTomoClip(ProtEmantomoBase):
                       label="cz",
                       allowsNull=True)
 
-        line = form.addLine('New dimensions [pix.] (opt.)',
+        line = form.addLine('New dimensions [px] (opt.)',
                             help='For each empty dimension, the original corresponding dimension will be used.')
         line.addParam('xDim', IntParam,
                       label="dx",

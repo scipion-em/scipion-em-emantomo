@@ -127,7 +127,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
         form.addParam('maxShift', IntParam,
                       default=-1,
                       condition='doAlignment',
-                      label='Maximum shift (pix.)',
+                      label='Maximum shift (px)',
                       help='If set to -1, it will be estimated as maxShift=boxSize/6.')
 
         form.addSection(label='Extra params')

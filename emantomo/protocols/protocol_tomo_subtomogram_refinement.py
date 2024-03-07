@@ -39,8 +39,9 @@ import emantomo
 import pwem.constants as emcts
 from pyworkflow.utils import createLink
 from tomo.protocols import ProtTomoBase
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms
+from tomo.objects import AverageSubTomogram, SetOfSubTomograms, Coordinate3D
 from ..constants import SUBTOMOGRAMS_DIR, SPT_00_DIR, SYMMETRY_HELP_MSG
+from ..utils import getPresentPrecedents
 
 
 class EmanTomoRefinementOutputs(enum.Enum):
@@ -150,33 +151,38 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     # --------------- INSERT steps functions ----------------
 
     def _insertAllSteps(self):
-        self.whole3dStack = self._getExtraPath(SUBTOMOGRAMS_DIR, 'whole3dstack.hdf')
+        self._initialize()
         self._insertFunctionStep(self.convertInputStep)
         self._insertFunctionStep(self.refinementSubtomogram)
         self._insertFunctionStep(self.convertOutputStep)
         self._insertFunctionStep(self.createOutputStep)
 
     # --------------- STEPS functions -----------------------
-    def convertInputStep(self):
-        storePath = self._getExtraPath(SUBTOMOGRAMS_DIR)
-        pwutils.makePath(storePath)
+    def _initialize(self):
+        self.whole3dStack = self._getExtraPath(SUBTOMOGRAMS_DIR, 'whole3dstack.hdf')
         if self.useAlign.get():
             self.alignType = emcts.ALIGN_3D
         else:
             self.alignType = emcts.ALIGN_NONE
-        writeSetOfSubTomograms(self.inputSetOfSubTomogram.get(), storePath, alignType=self.alignType)
-        fileList = glob(join(storePath, '*.hdf'))
+
+    def convertInputStep(self):
+        inSubtomos = self.inputSetOfSubTomogram.get()
+        storePath = self._getExtraPath(SUBTOMOGRAMS_DIR)
+        pwutils.makePath(storePath)
+        writeSetOfSubTomograms(inSubtomos, storePath, alignType=self.alignType)
 
         # Fix the sampling rate as it might be set wrong
-        inSubtomos = self.inputSetOfSubTomogram.get()
         sampling_rate = inSubtomos.getSamplingRate()
         program = emantomo.Plugin.getProgram('e2proc3d.py')
-        for file in fileList:
+        for file in sorted(glob(join(storePath, '*.hdf'))):  # It's critical that the HDF stack keep the sqlite order
+            # to later generate the output correctly in terms of transformation matrix assignment
+
             # Bypass the problematic lst generation with this classical approach by making one HDF file containing all
             # the particles from all the tomograms
             args = "--apix %f %s %s --append" % (sampling_rate, file, self.whole3dStack)
             self.runJob(program, args)
             remove(file)
+
         # The same with the reference volume
         self.refFileIn = self.inputRef.get().getFileName()
         self.refFileOut = self._getExtraPath('refVol.hdf')

@@ -449,12 +449,18 @@ def jsons2SetCoords3D(protocol, setTomograms, outPath):
     coord3DSet.setSamplingRate(setTomograms.getSamplingRate())
     first = True
     for tomo in setTomograms.iterItems():
-        outFile = '*%s_info.json' % pwutils.removeBaseExt(tomo.getFileName().split("__")[0])
+        # File search by tsId
+        outFile = '*%s_info.json' % tomo.getTsId()
         pattern = join(outPath, outFile)
         files = glob.glob(pattern)
 
         if not files or not isfile(files[0]):
-            continue
+            # File search by filename
+            outFile = '*%s_info.json' % pwutils.removeBaseExt(tomo.getFileName().split("__")[0])
+            pattern = join(outPath, outFile)
+            files = glob.glob(pattern)
+            if not files or not isfile(files[0]):
+                continue
 
         jsonFnbase = files[0]
         jsonBoxDict = loadJson(jsonFnbase)
