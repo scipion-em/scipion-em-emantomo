@@ -241,7 +241,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
             particleCounter = 0
             for coord, subtomoFile in zip(coords, subtomoFiles):
-                self.fillLandmarkModel(landmarkModelGaps, tsProjections, nTotalParticles, nImgs)
+                self.fillLandmarkModel(landmarkModelGaps, tsProjections, particleCounter, nImgs)
                 subtomogram = EmanParticle()
                 transform = Transform()
                 subtomogram.setFileName(subtomoFile)
