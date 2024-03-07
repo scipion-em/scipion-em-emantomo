@@ -1,10 +1,8 @@
-v3.3.2:
- Users:
-  - Fix the classic subtomo refine transformation matrices assignment when generating the output.
 v3.3.1:
  Users:
   - Small fixes regarding the register of the tilt series acquisition attributes.
   - Fixes the template matching output register reported by Ricardo Righetto (thanks!).
+  - Fix the classic subtomo refine transformation matrices assignment when generating the output.
  Developers:
   - Test for TS alignment & tomo reconstruction updated to the new TCL.
 v3.3.0:
