@@ -148,7 +148,7 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         form.addParam('maxShift', IntParam,
                       default=-1,
                       condition='doLocalRefine',
-                      label='Maximum shift (pix.)',
+                      label='Maximum shift (px)',
                       help='If set to -1, it will be estimated as maxShift= boxSize/6.')
         group = form.addGroup('Motion correction', condition='doLocalRefine')
         group.addParam('smooth', IntParam,

@@ -141,7 +141,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                            'tracking iterations.')
         form.addParam('boxSizeTrk', IntParam,
                       default=32,
-                      label='Box size of the particles for tracking (pix.)',
+                      label='Box size of the particles for tracking (px)',
                       condition=alignCond,
                       help='It may be helpful to use a larger one for fiducial-less cases.')
         form.addParam('letEmanEstimateTilts', BooleanParam,
@@ -190,7 +190,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addParam('clipz', IntParam,
                       default=-1,
                       condition=recCond,
-                      label='Thickness (pix.)',
+                      label='Thickness (px)',
                       help='Z thickness of the final tomogram output. default is -1, (5/16 of tomogram length).')
         form.addParam('tltkeep', FloatParam,
                       default=0.9,
