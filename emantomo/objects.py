@@ -73,6 +73,19 @@ class EmanHdf5Handler:
                              (shrink * img.attrs['EMAN.ptcl_source_coord'][:-1]).tolist())
         return projsList
 
+    def get3dCoordsFrom3dStack(self, scaleFactor=1, invertZ=False):
+        """Generate a list of elements in which each element is a list containing the following data:
+        [xCoord, yCoord, zCoord] read from the HDF stack header.
+        """
+        coordsList = []
+        for particleId in range(len(self._imgObjList)):
+            img = self._imgObjList[str(particleId)]
+            coords = (scaleFactor * img.attrs['EMAN.ptcl_source_coord']).tolist()
+            if invertZ:
+                coords[-1] = -1 * coords[-1]
+            coordsList.append(coords)
+        return coordsList
+
     def getSamplingRate(self):
         """Reads the sampling rate from the HDF header"""
         return self._imgObjList['0'].attrs['EMAN.apix_x']

@@ -28,6 +28,7 @@ import glob
 import logging
 from enum import Enum
 from os.path import join, exists, basename, abspath
+import numpy as np
 from emantomo import Plugin
 from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX, TOMOGRAMS_DIR, TS_DIR
 from emantomo.objects import EmanHdf5Handler, EmanSetOfParticles, EmanParticle, EmanMetaData
@@ -40,7 +41,7 @@ from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE
     STEPS_PARALLEL
 from pyworkflow.utils import Message, replaceExt, removeExt, createLink
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
-from tomo.constants import TR_EMAN
+from tomo.constants import TR_EMAN, SCIPION
 from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D, \
     SetOfMeshes
 
@@ -232,15 +233,21 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         tsProjections = self.getProjections(mdObj)
         landmarkModelGaps = self.createLandmarkModelGaps(mdObj.ts)
 
+        # Because the order is changed when the particles are processed with EMAN, if they have transformation matrix,
+        # there will be a data mismatch. To avoid it, The EMAN coordinates will be read from the 3d HDF stack, then the
+        # corresponding coordinate will be located among the input set, so the transformation is correctly matched, and
+        # finally, the corresponding output unstacked MRC file will be located and added to the output particle.
+        emanCoords = self.getEmanCoordsFromHdfStack(tsId)
+
         _, _, nImgs = mdObj.ts.getDimensions()
-        coords = mdObj.particles if self.inParticles else mdObj.coords
+        inCoords = mdObj.particles if self.inParticles else mdObj.coords
         subtomoFiles = sorted(glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.mrc' % tsId)))
         stack2d = glob.glob(self._getExtraPath(PARTICLES_DIR, '%s*.hdf' % tsId))[0]
         stack3d = glob.glob(self._getExtraPath(PARTICLES_3D_DIR, '%s*.hdf' % tsId))[0]
 
         nTotalParticles = mdObj.processingInd
         particleCounter = 0
-        for coord, subtomoFile in zip(coords, subtomoFiles):
+        for emanCoord, subtomoFile in zip(emanCoords, subtomoFiles):
             self.fillLandmarkModel(landmarkModelGaps, tsProjections, particleCounter, nImgs)
             subtomogram = EmanParticle()
             transform = Transform()
@@ -249,15 +256,16 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             # the position of the particle in the 3d HDF stack (to handle subsets - LST file gen.)
             subtomogram.setSamplingRate(self.currentSRate)
             subtomogram.setVolName(mdObj.tsId)
-            subtomogram.setCoordinate3D(coord)
-            M = coord.getMatrix()
-            shift_x = M[0, 3]
-            shift_y = M[1, 3]
-            shift_z = M[2, 3]
+            scipionCoord, inCoords = self.getEmanMatchingCoord(emanCoord, inCoords)
+            subtomogram.setCoordinate3D(scipionCoord)
+            M = scipionCoord.getMatrix()
+            # shift_x = M[0, 3]
+            # shift_y = M[1, 3]
+            # shift_z = M[2, 3]
             transform.setMatrix(M)
-            transform.setShifts(self.scaleFactor * shift_x,
-                                self.scaleFactor * shift_y,
-                                self.scaleFactor * shift_z)
+            # transform.setShifts(self.scaleFactor * shift_x,
+            #                     self.scaleFactor * shift_y,
+            #                     self.scaleFactor * shift_z)
             subtomogram.setTransform(transform, convention=TR_EMAN)
             # Fill EmanParticle own attributes
             subtomogram.setInfoJson(mdObj.jsonFile)
@@ -407,13 +415,22 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     @staticmethod
     def fillLandmarkModel(landmarkModelGaps, tsProjections, particle3dInd, nImgs):
         ind = particle3dInd * nImgs
+        logger.info(f'PARTICLE {particle3dInd}------------------------------------------------------------------------')
+        logger.info(f'IND RANGLE {ind} to {ind + nImgs}')
         for i in range(ind, ind + nImgs):
-            projection = tsProjections[i]
-            tiltId = projection[1] + 1
-            partId = particle3dInd + 1
-            xCoord = round(projection[2])
-            yCoord = round(projection[3])
-            landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
+            try:
+                # Found cases in which some 2d tilt images seem to have been excluded, e.g., TS with 58 images, 819
+                # coordinates, and the stack 2d is of size 48251, which is not divisible by 59 (48251 / 59 = 817.8135).
+                # But in the end it's not critical as this 2d landmark models are only used for visualization and
+                # result checking purposes
+                projection = tsProjections[i]
+                tiltId = projection[1] + 1
+                partId = particle3dInd + 1
+                xCoord = round(projection[2])
+                yCoord = round(projection[3])
+                landmarkModelGaps.addLandmark(xCoord, yCoord, tiltId, partId, 0, 0)
+            except Exception as e:
+                continue
 
     def getOutSetOfParticles(self):
         outParticles = getattr(self, self._possibleOutputs.subtomograms.name, None)
@@ -450,3 +467,25 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             self._defineOutputs(**{self._possibleOutputs.projected2DCoordinates.name: outFiducials})
             self._defineSourceRelation(inTsPointer, outFiducials)
         return outFiducials
+
+    def getEmanCoordsFromHdfStack(self, tsId):
+        fName = self._getEmanFName(tsId)
+        # Unstack the 3d particles HDF stack into individual MRC files
+        stack3d = abspath(join(self.getStack3dDir(), fName))
+        eh = EmanHdf5Handler(stack3d)
+        return eh.get3dCoordsFrom3dStack(invertZ=self.doFlipZInTomo.get())
+
+    @staticmethod
+    def getEmanMatchingCoord(emanCoord, scipionCoords):
+        def euclideanDist(coord1, coord2):
+            return np.linalg.norm(np.array(coord1) - np.array(coord2))
+
+        distances = [euclideanDist(scipionCoord.getPosition(SCIPION), emanCoord) for scipionCoord in scipionCoords]
+        minDistInd = np.argmin(distances)
+        logger.info(f'MIN DIST = {distances[minDistInd]}')
+        matchingCoord = scipionCoords[minDistInd]
+        # Remove the matching coord from the list, so in an iterative project, the list becomes smaller with each
+        # iteration, being more efficient
+        reducedList = scipionCoords[:minDistInd] + scipionCoords[minDistInd+1:]
+        return matchingCoord, reducedList
+
