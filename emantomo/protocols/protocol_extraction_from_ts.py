@@ -77,10 +77,11 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_SUBTOMOS, PointerParam,
-                      label="Coordinates",
+                      label="Coordinates or 3D particles",
                       important=True,
-                      pointerClass='SetOfCoordinates3D, EmanSetOfParticles',
-                      help='The corresponding tomograms data will be accessed from the provided coordinates.')
+                      pointerClass='SetOfCoordinates3D, SetOfSubTomograms',
+                      help='The corresponding tomograms data will be accessed from the provided coordinates or the '
+                           'coordinates associated to the 3D particles.')
         form.addParam(IN_CTF, PointerParam,
                       label="CTF tomo series",
                       pointerClass='SetOfCTFTomoSeries',
@@ -180,8 +181,10 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         uniqueTomoValsDict = getFromPresentObjects(coords, [Coordinate3D.TOMO_ID_ATTR, GROUP_ID])
         self.groupIds = uniqueTomoValsDict[GROUP_ID]
         self.emanDict = genEmanGrouping(self.groupIds)
-        # Calculate the scale factor
-        self.scaleFactor = inParticles.getSamplingRate() / inTsSet.getSamplingRate()
+        # Calculate the scale factor for coords and shift scaling: according to EMAN's behavior, it is the rate between
+        # the sampling rate of the input coordinates and the TS unbinned sampling rate multiplied by the binning factor
+        # introduced
+        self.scaleFactor = inParticles.getSamplingRate() / (inTsSet.getSamplingRate() * self.shrink.get())
         # The fiducial size is the diameter in nm
         self.fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getAttrib(IN_TS).getSamplingRate() / 2
         # Generate the md object data units as a dict
@@ -259,13 +262,13 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             scipionCoord, inCoords = self.getEmanMatchingCoord(emanCoord, inCoords)
             subtomogram.setCoordinate3D(scipionCoord)
             M = scipionCoord.getMatrix()
-            # shift_x = M[0, 3]
-            # shift_y = M[1, 3]
-            # shift_z = M[2, 3]
+            shift_x = M[0, 3]
+            shift_y = M[1, 3]
+            shift_z = M[2, 3]
             transform.setMatrix(M)
-            # transform.setShifts(self.scaleFactor * shift_x,
-            #                     self.scaleFactor * shift_y,
-            #                     self.scaleFactor * shift_z)
+            transform.setShifts(self.scaleFactor * shift_x,
+                                self.scaleFactor * shift_y,
+                                self.scaleFactor * shift_z)
             subtomogram.setTransform(transform, convention=TR_EMAN)
             # Fill EmanParticle own attributes
             subtomogram.setInfoJson(mdObj.jsonFile)
@@ -415,8 +418,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
     @staticmethod
     def fillLandmarkModel(landmarkModelGaps, tsProjections, particle3dInd, nImgs):
         ind = particle3dInd * nImgs
-        logger.info(f'PARTICLE {particle3dInd}------------------------------------------------------------------------')
-        logger.info(f'IND RANGLE {ind} to {ind + nImgs}')
         for i in range(ind, ind + nImgs):
             try:
                 # Found cases in which some 2d tilt images seem to have been excluded, e.g., TS with 58 images, 819
@@ -438,12 +439,13 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             outParticles.enableAppend()
         else:
             inTsPointer = getattr(self, IN_TS)
-            inCoordsPointer = getattr(self, IN_SUBTOMOS)
+            inParticlesPointer = getattr(self, IN_SUBTOMOS)
             outParticles = EmanSetOfParticles.create(self._getPath(), template='emanParticles%s.sqlite')
-            if self.inParticles:
-                outParticles.copyInfo(self.inParticles)
+            if isinstance(inParticlesPointer.get(), SetOfSubTomograms):
+                outParticles.copyInfo(inParticlesPointer.get())
             else:
-                outParticles.setCoordinates3D(inCoordsPointer)
+                # The input are coordinates
+                outParticles.setCoordinates3D(inParticlesPointer)
             outParticles.setSamplingRate(self.currentSRate)
             # Define outputs and relations
             self._defineOutputs(**{self._possibleOutputs.subtomograms.name: outParticles})
@@ -475,15 +477,16 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         eh = EmanHdf5Handler(stack3d)
         return eh.get3dCoordsFrom3dStack(invertZ=self.doFlipZInTomo.get())
 
-    @staticmethod
-    def getEmanMatchingCoord(emanCoord, scipionCoords):
+    def getEmanMatchingCoord(self, emanCoord, scipionCoords):
         def euclideanDist(coord1, coord2):
-            return np.linalg.norm(np.array(coord1) - np.array(coord2))
+            return np.linalg.norm(np.array(coord1) * self.scaleFactor - np.array(coord2))
 
         distances = [euclideanDist(scipionCoord.getPosition(SCIPION), emanCoord) for scipionCoord in scipionCoords]
         minDistInd = np.argmin(distances)
         logger.info(f'MIN DIST = {distances[minDistInd]}')
         matchingCoord = scipionCoords[minDistInd]
+        scaledCoords = np.array(matchingCoord.getPosition(SCIPION)) * self.scaleFactor
+        matchingCoord.setPosition(scaledCoords[0], scaledCoords[1], scaledCoords[2], SCIPION)
         # Remove the matching coord from the list, so in an iterative project, the list becomes smaller with each
         # iteration, being more efficient
         reducedList = scipionCoords[:minDistInd] + scipionCoords[minDistInd+1:]

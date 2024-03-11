@@ -4,6 +4,7 @@ v3.3.1:
   - Fix the template matching output register reported by Ricardo Righetto (thanks!).
   - Fix the classic subtomo refine transformation matrices assignment when generating the output.
   - Fix the particles order in the registered output of protocol extract particles from TS.
+  - Protocol 'extract particles from TS' semi-streamified.
  Developers:
   - Test for TS alignment & tomo reconstruction updated to the new TCL.
 v3.3.0:
