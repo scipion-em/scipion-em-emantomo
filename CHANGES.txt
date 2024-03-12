@@ -4,7 +4,11 @@ v3.3.1:
   - Fix the template matching output register reported by Ricardo Righetto (thanks!).
   - Fix the classic subtomo refine transformation matrices assignment when generating the output.
   - Fix the particles order in the registered output of protocol extract particles from TS.
-  - Protocol 'extract particles from TS' semi-streamified.
+  - Protocol 'extract particles from TS':
+        * Semi-streamified.
+        * Fix the sampling rate of the set of tilt series interpolated.
+        * Remove form parameter 'Step between tilts' as it can now be read from the acquisition.
+        * Some other changes in the protocol form.
   - Protocol 'average subtomograms' adapted to work with EMAN 3D particles generated from 3D particles (the ones
     resulting when using the protocol 'extract particles from TS')
  Developers:

@@ -67,14 +67,14 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     """
     This protocol wraps *e2tomogram.py* EMAN2 program.
 
-    Tomogram tiltseries alignment.
+    Tilt series alignment and tomogram reconstruction.
     Tomograms are not normally reconstructed at full resolution, generally limited to 1k x 1k or 2k x 2k,
     but the tilt-series are aligned at full resolution. For high resolution subtomogram averaging, the raw
     tilt-series data is used, based on coordinates from particle picking in the downsampled tomograms.
     On a typical workstation reconstruction takes about 4-5 minutes per tomogram.
     """
 
-    _label = 'TS align & tomo rec'
+    _label = 'Alignment and reconstruction'
     _possibleOutputs = outputObjects
 
     def __init__(self, **kwargs):
@@ -110,12 +110,12 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                            'generated in HDF and then converted into MRC. The HDF files are deleted by default to '
                            'save storage.')
 
-        form.addSection(label='TS alignment')
+        form.addSection(label='Tilt series alignment')
         form.addParam('doAlignment', BooleanParam,
                       default=True,
                       label='Align the tilt series?')
         form.addParam('genInterpolatedTs', BooleanParam,
-                      label='Generated interpolated TS?',
+                      label='Generated the interpolated tilt series?',
                       default=False,
                       condition=alignCond,
                       help='If set to Yes, an additional set of tilt series with the transformation matrix applied '
@@ -123,7 +123,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addParam('nLandmarks', IntParam,
                       default=20,
                       condition=alignCond,
-                      label='Number of landmarks to use')
+                      label='No. landmarks to use')
         form.addParam('pkKeep', FloatParam,
                       default=0.9,
                       label='Fraction of landmarks to keep in the tracking',
@@ -143,22 +143,21 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       default=32,
                       label='Box size of the particles for tracking (px)',
                       condition=alignCond,
+                      expertLevel=LEVEL_ADVANCED,
                       help='It may be helpful to use a larger one for fiducial-less cases.')
         form.addParam('letEmanEstimateTilts', BooleanParam,
-                      default=True,
+                      default=False,
                       label='Should Eman estimate the tilt angles?',
                       condition=alignCond,
+                      expertLevel=LEVEL_ADVANCED,
                       help='If set to No, a .tlt file will be generated containing the tilt angles read from Scipion '
                            'imported tilt series metadata and passed to Eman. Default=True will let Eman to estimate '
                            'the tilt angles, following the Eman original default behavior.')
-        form.addParam('tltStep', FloatParam,
-                      default=2,
-                      label='Step between tilts',
-                      condition=f'{alignCond} and letEmanEstimateTilts')
         form.addParam('zeroId', IntParam,
                       default=-1,
                       label='Index of the center tilt',
-                      condition=f'{alignCond} and letEmanEstimateTilts')
+                      condition=f'{alignCond} and letEmanEstimateTilts',
+                      help='If set -1, it will be estimated by EMAN.')
         form.addParam('tiltAxisAngle', FloatParam,
                       allowsNull=True,
                       label='Tilt axis angle',
@@ -182,11 +181,11 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       default=SIZE_1K,
                       choices=OUT_TOMO_SIZE_CHOICES,
                       condition=recCond,
-                      label='Size of output tomograms')
+                      label='Size of the output tomograms')
         form.addParam('nIters', StringParam,
                       default='2,1,1,1',
                       condition=recCond,
-                      label='No. iterations for bin8, bin4, bin2 images')
+                      label='No. iterations for 500, 1K, 2K, and 8K images')
         form.addParam('clipz', IntParam,
                       default=-1,
                       condition=recCond,
@@ -195,6 +194,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         form.addParam('tltkeep', FloatParam,
                       default=0.9,
                       label='Fraction of tilts to keep in the reconstruction',
+                      condition=recCond,
                       validators=[GT(0), LE(1)])
         form.addParam('bytile', BooleanParam,
                       default=True,
@@ -240,7 +240,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         for mdObj in mdObjList:
             self._insertFunctionStep(self.convertTsStep, mdObj)
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
-            self._insertFunctionStep(self.emanStep, mdObj.tsId)
+            self._insertFunctionStep(self.emanStep, mdObj)
             self._insertFunctionStep(self.convertOutputStep, mdObj)
             self._insertFunctionStep(self.createOutputStep, mdObj)
         self._insertFunctionStep(self.closeOutputSetsStep)
@@ -291,11 +291,12 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             # This only applies to the reconstruction
             ts2Json(mdObj, mode='w')
 
-    def emanStep(self, tsId):
+    def emanStep(self, mdObj):
+        tsId = mdObj.tsId
         program = emantomo.Plugin.getProgram("e2tomogram.py")
         cmd = [self.getCommonArgs(tsId)]
         if self.doAlignment.get():
-            cmd.append(self._getAlignArgs(tsId))
+            cmd.append(self._getAlignArgs(mdObj))
         if self.doRec.get():
             cmd.append(self._getRecArgs())
         self.runJob(program, ' '.join(cmd), cwd=self._getExtraPath())
@@ -413,7 +414,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 self._tiltAxisAngle = ts.getAcquisition().getTiltAxisAngle()
         return self._tiltAxisAngle
 
-    def _getAlignArgs(self, tsId):
+    def _getAlignArgs(self, mdObj):
         tAx = self.getTAxisAngle()
         args = [
             f'--npk={self.nLandmarks.get()}',
@@ -424,10 +425,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         ]
         if self.letEmanEstimateTilts.get():
             # Introduce angular step and zero id
-            args.append(f'--tltstep={self.tltStep.get():.2f}')
+            args.append(f'--tltstep={mdObj.ts.getAcquisition().getStep()}')
             args.append(f'--zeroid={self.zeroId.get()}')
         else:
-            args.append(f'--rawtlt={join(TLT_DIR, tsId + ".tlt")}')
+            args.append(f'--rawtlt={join(TLT_DIR, mdObj.tsId + ".tlt")}')
         if not self.writeIntermediateRes.get() and not self.genInterpolatedTs.get():
             args.append('--notmp')
         if tAx:
@@ -435,7 +436,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         args.append('--verbose=9')
         return ' '.join(args)
 
-    def getOutputSetOfTs(self, interpolated=False):
+    def getOutputSetOfTs(self, interpolated=False, interpSRate=-1):
         inTs = self.inputTS.get()
         outTsSet = self.getTiltSeries(interpolated=interpolated)
         if outTsSet:
@@ -443,20 +444,20 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         else:
             suffix = "_interpolated" if interpolated else ""
             outTsSet = SetOfTiltSeries.create(self._getPath(), template='tiltseries', suffix=suffix)
-            outTsSet.copyInfo(self.inputTS.get())
-            acq = outTsSet.getAcquisition()
+            acq = inTs.getAcquisition()
             if interpolated:
                 x, y, z, _ = ImageHandler().getDimensions(glob.glob(self._getExtraPath(TS_DIR, '*_interp.mrc'))[0])
                 dims = (x, y, z)
                 alignment = ALIGN_NONE
                 acq.setTiltAxisAngle(0.)
                 outTsSet.setAcquisition(acq)
+                outTsSet.setSamplingRate(interpSRate)
             else:
+                outTsSet.copyInfo(inTs)
                 dims = inTs.getDim()
                 alignment = ALIGN_2D
 
             outTsSet.setDim(dims)
-            outTsSet.setSamplingRate(inTs.getSamplingRate())
             outTsSet.setAlignment(alignment)
             outTsSet.setStreamState(Set.STREAM_OPEN)
             self.setTiltSeries(outTsSet, interpolated=interpolated)
@@ -477,7 +478,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def _createOutputTs(self, mdObj, alignParams, aliLoss):
         outTsSet = self.getOutputSetOfTs()
-        tiltSeries = self._createCurrentOutTs(mdObj.ts)
+        tiltSeries = self._createCurrentOutTs(mdObj)
         outTsSet.append(tiltSeries)
         for idx, ti in enumerate(mdObj.ts.iterItems()):
             outTi = TiltImage()
@@ -494,8 +495,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return outTsSet
 
     def _createOutputTsInterpolated(self, mdObj, alignParams):
-        outTsSet = self.getOutputSetOfTs(interpolated=True)
-        tiltSeries = self._createCurrentOutTs(mdObj.ts, interpolated=True)
+        interpTsSRate = self.getInterpTsSRate(mdObj)
+        outTsSet = self.getOutputSetOfTs(interpolated=True, interpSRate=interpTsSRate)
+        tiltSeries = self._createCurrentOutTs(mdObj, interpolated=True, interpSRate=interpTsSRate)
         outTsSet.append(tiltSeries)
         for idx, ti in enumerate(mdObj.ts.iterItems()):
             outTi = TiltImage()
@@ -509,6 +511,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             acq = outTi.getAcquisition()
             acq.setTiltAxisAngle(0.)  # 0 because it is aligned
             ti.setAcquisition(acq)
+            ti.setSamplingRate(interpTsSRate)
             tiltSeries.append(outTi)
 
         acq = tiltSeries.getAcquisition()
@@ -527,10 +530,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                          0)
         return origin
 
-    def _createCurrentOutTs(self, ts, interpolated=False):
+    def _createCurrentOutTs(self, mdObj, interpolated=False, interpSRate=-1):
+        ts = mdObj.ts
         tsId = ts.getTsId()
         tiltSeries = TiltSeries(tsId=tsId)
-        tiltSeries.copyInfo(ts)
         if interpolated:
             tiltSeries.setInterpolated(True)
             # Avoid the copyInfo and set the origin manually to get the squared TS dims and origin correctly stored
@@ -541,7 +544,10 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             dims = (x, y, z)
             tiltSeries.setDim(dims)
             tiltSeries.setOrigin(self.genUpdateTsInterpOrigin(dims, ts.getSamplingRate()))
+            # Set the interpolated TS sampling rate
+            tiltSeries.setSamplingRate(interpSRate)
         else:
+            tiltSeries.copyInfo(ts)
             tiltSeries.setAlignment2D()
             if self._doUpdateTiltAxisAng:
                 acq = ts.getAcquisition()
@@ -660,3 +666,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         ih = ImageHandler()
         x, y, _, _ = ih.getDimensions(self.inTsSet.getFirstItem().getFirstItem().getFileName())
         return True if x != y else False
+
+    def getInterpTsSRate(self, mdObj):
+        # Get the TS sampling rate
+        interpHdf = self._getInterpTsFile(mdObj)
+        eh = EmanHdf5Handler(interpHdf)
+        return eh.getSamplingRate()

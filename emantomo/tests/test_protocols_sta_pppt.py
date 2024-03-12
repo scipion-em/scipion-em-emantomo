@@ -128,9 +128,10 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
         # Check the interpolated tilt series
         testAcqInterp = testAcq.clone()
         testAcqInterp.setTiltAxisAngle(0)  # It is aligned
+        interpSRate = DataSetRe4STATuto.unbinnedPixSize.value * 4  # Generated in bin 4 by EMAN
         self.checkTiltSeries(tsInterp,
                              expectedSetSize=expectedSetSize,
-                             expectedSRate=DataSetRe4STATuto.unbinnedPixSize.value,
+                             expectedSRate=interpSRate,
                              expectedDimensions=[927, 927, 40],
                              testSetAcqObj=testAcqInterp,
                              testAcqObj=testAcqInterp,
