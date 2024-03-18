@@ -352,7 +352,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tomogram.setFileName(self.getOutTomoFName(tsId))
             tomogram.setSamplingRate(eh.getSamplingRate())
             tomogram.setTsId(tsId)
-            acq = mdObj.ts.getAcquisition()
+            acq = mdObj.ts.getAcquisition().clone()
             if self._doUpdateTiltAxisAng:
                 acq.setTiltAxisAngle(self._tiltAxisAngle)
             tomogram.setAcquisition(acq)
@@ -361,8 +361,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             outTomoSet = self.getOutputSetOfTomograms()
             outTomoSet.append(tomogram)
             outTomoSet.update(tomogram)
-
-        self._store()
+            outTomoSet.write()
+            self._store(outTomoSet)
 
     def closeOutputSetsStep(self):
         outPutDict = {}
@@ -511,6 +511,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             tiltSeries.append(outTi)
 
         outTsSet.update(tiltSeries)
+        outTsSet.write()
+        self._store(outTsSet)
         return tiltSeries
 
     def _createOutputTsInterpolated(self, mdObj, alignParams, tsNonInterp):
@@ -539,6 +541,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         acq.setTiltAxisAngle(0.)  # 0 because the TS is aligned
         tiltSeries.setAcquisition(acq)
         outTsSet.update(tiltSeries)
+        outTsSet.write()
+        self._store(outTsSet)
         return outTsSet
 
     @staticmethod
