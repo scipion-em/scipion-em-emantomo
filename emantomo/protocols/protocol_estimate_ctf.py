@@ -151,6 +151,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
                 defocusU = defocusV = 10000.0 * defocus[idx]
                 newCTFTomo = CTFTomo()
                 newCTFTomo.setIndex(idx + 1)
+                newCTFTomo.setAcquisitionOrder(tiltImage.getAcquisitionOrder())
                 if phase_shift[idx] != 0:
                     newCTFTomo.setPhaseShift(phase_shift[idx])
                 newCTFTomo.setDefocusU(defocusU)
