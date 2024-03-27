@@ -29,13 +29,13 @@ import enum
 import glob
 import os
 import shutil
-from os.path import join, basename
+from os.path import join, basename, abspath
 
 from pyworkflow import BETA
 
 from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, FloatParam, StringParam, BooleanParam, LEVEL_ADVANCED
-from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt
+from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt, createLink
 from ..constants import SPT_00_DIR, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR
 
 from ..convert import writeSetOfSubTomograms, refinement2Json
@@ -43,6 +43,7 @@ import emantomo
 
 from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram
+from ..objects import EmanParticle, EmanSetOfParticles
 
 
 class OutputsAverageSubtomos(enum.Enum):
@@ -118,7 +119,13 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
 
     def convertInputStep(self):
         inSubtomos = self.inputSetOfSubTomogram.get()
-        writeSetOfSubTomograms(inSubtomos, self.hdfSubtomosDir)
+        if type(inSubtomos) is EmanSetOfParticles:
+            # If True, the 3D particles HDF stacks will already exist because they have been extracted with EMAN pppt
+            hdfStacks = inSubtomos.getUniqueValues(EmanParticle.STACK_3D_HDF)
+            [createLink(abspath(hdfStack), self._getExtraPath(SUBTOMOGRAMS_DIR, basename(hdfStack))) for
+             hdfStack in hdfStacks]
+        else:
+            writeSetOfSubTomograms(inSubtomos, self.hdfSubtomosDir)
         refinement2Json(self, inSubtomos)
 
         # Generate a virtual stack of particle represented by a .lst file, as expected by EMAN

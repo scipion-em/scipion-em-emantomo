@@ -24,6 +24,7 @@
 # *
 # **************************************************************************
 import glob
+import logging
 import re
 from os.path import join, abspath, basename
 
@@ -43,6 +44,9 @@ from pyworkflow.object import Pointer, String
 from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
+
+
+logger = logging.getLogger(__name__)
 
 IN_TS = 'inputTS'
 IN_COORDS = 'inputCoordinates'
@@ -70,9 +74,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
-        # if mdObj.ctf:
-        #     inTsFName = mdObj.ctf.getTiltSeries().getFirstItem().getFileName()
-        # else:
+        logger.info(f'Converting TS {mdObj.tsId} into HDF...')
         inTsFName = mdObj.ts.getFirstItem().getFileName()
         sRate = mdObj.ts.getSamplingRate()
         self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)

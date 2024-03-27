@@ -141,6 +141,9 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     def createOutputStep(self):
         jsons2SetCoords3D(self, self.inTomos, self.getInfoDir())
+        # Throw an exception if no coordinates were registered
+        if len(getattr(self, 'coordinates', '')) == 0:
+            raise Exception('ERROR!!! No coordintes were registered.')
 
     # --------------------------- UTILS functions -----------------------------
     def _genTempMatchArgs(self):
