@@ -33,6 +33,7 @@ from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
 from pwem.convert.headers import fixVolume
+from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
@@ -324,14 +325,26 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         return len(unrolledList) - unrolledList[::-1].index('p')
 
     # --------------------------- INFO functions --------------------------------
-    # def _validate(self):
-    #     errorMsgs = []
-    #     inParticles = self.getAttrib(IN_SUBTOMOS)
-    #     inRef = self.getAttrib(REF_VOL)
-    #     if not self._getGoldModeCmd(inParticles) and inRef:
-    #         if not inRef.hasHalfMaps():
-    #             errorMsgs.append('If the introduced particles have some kind of alignment or orientation, the '
-    #                              'initial volume introduced needs to have the corresponding even and odd halves. '
-    #                              'Try to replace the initial volume by the resulting average of a previous refine '
-    #                              'protocol.')
-    #     return errorMsgs
+    def _validate(self):
+        errorMsg = []
+        refVol = self.getAttrib(REF_VOL)
+        if refVol:
+            # Check the dimensions
+            ih = ImageHandler()
+            x, y, z, _ = ih.getDimensions(refVol.getFileName())
+            refVolDims = (x, y, z)
+            inParticles = self.getAttrib(IN_SUBTOMOS)
+            inParticlesBoxSize = inParticles.getBoxSize()
+            inParticlesDims = (inParticlesBoxSize, inParticlesBoxSize, inParticlesBoxSize)
+            if refVolDims != inParticlesDims:
+                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            # Check the sampling rate
+            tol = 1e-03
+            inParticlesSRate = inParticles.getSamplingRate()
+            refVolSRate = refVol.getSamplingRate()
+            if abs(inParticlesSRate - refVolSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
+                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        return errorMsg

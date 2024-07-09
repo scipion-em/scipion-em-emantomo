@@ -31,6 +31,7 @@ from emantomo import Plugin
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
 from pwem.convert.headers import fixVolume
+from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SubTomogram
@@ -293,11 +294,44 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
         errorMsg = []
+        tol = 1e-03
+        ih = ImageHandler()
         nClasses = self.nClasses.get()
         refs = self.getAttrib(REF_VOL)
+        inParticles = self.getAttrib(IN_SUBTOMOS)
+        inParticlesBoxSize = inParticles.getBoxSize()
+        inParticlesDims = (inParticlesBoxSize, inParticlesBoxSize, inParticlesBoxSize)
+        inParticlesSRate = inParticles.getSamplingRate()
         if nClasses <= 0 and not refs:
             errorMsg.append('At least a number of classes or a set of references is required.')
-    #     inTrMatrix = self.getAttrib(IN_SUBTOMOS).getFirstItem().getTransform().getMatrix()
-    #     if np.allclose(inTrMatrix, np.eye(4), atol=1e-4):
-    #         errorMsg.append('No alignment was detected in the introduced particles.')
+        if refs:
+            # Dimensions
+            if len(refs) == 1:
+                fName = refs.getFileName()
+            else:
+                fName = refs.getFirstItem().getFileName()
+            x, y, z, _ = ih.getDimensions(fName)
+            refsDims = (x, y, z)
+            if refsDims != inParticlesDims:
+                errorMsg.append(f'The dimensions of the referece/s {refsDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            # Sampling rate
+            refsSRate = refs.getSamplingRate()
+            if abs(inParticlesSRate - refsSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume/s '
+                    f'[{refsSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        maskRef = self.maskRef.get()
+        if maskRef:
+            # Dimensions
+            x, y, z, _ = ih.getDimensions(maskRef.getFileName())
+            maskDims = (x, y, z)
+            maskSRate = maskRef.getSamplingRate()
+            if inParticlesDims != maskDims:
+                errorMsg.append(f'The dimensions of the introduced mask {maskDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            if abs(inParticlesSRate - maskSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the mask '
+                    f'[{maskSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
         return errorMsg

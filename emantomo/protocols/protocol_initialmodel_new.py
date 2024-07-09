@@ -33,6 +33,7 @@ from emantomo.constants import INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, 
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
 from pwem.convert.headers import fixVolume
+from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfAverageSubTomograms
@@ -204,3 +205,26 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         return averageSubTomogram
 
     # -------------------------- INFO functions -------------------------------
+    def _validate(self):
+        errorMsg = []
+        refVol = self.getAttrib(REF_VOL)
+        if refVol:
+            # Check the dimensions
+            ih = ImageHandler()
+            x, y, z, _ = ih.getDimensions(refVol.getFileName())
+            refVolDims = (x, y, z)
+            inParticles = self.getAttrib(IN_SUBTOMOS)
+            inParticlesBoxSize = inParticles.getBoxSize()
+            inParticlesDims = (inParticlesBoxSize, inParticlesBoxSize, inParticlesBoxSize)
+            if refVolDims != inParticlesDims:
+                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            # Check the sampling rate
+            tol = 1e-03
+            inParticlesSRate = inParticles.getSamplingRate()
+            refVolSRate = refVol.getSamplingRate()
+            if abs(inParticlesSRate - refVolSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
+                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        return errorMsg
