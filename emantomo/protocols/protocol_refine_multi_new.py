@@ -293,14 +293,25 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
+        # JORGE
+        import os
+        fname = "/home/jjimenez/test_JJ.txt"
+        if os.path.exists(fname):
+            os.remove(fname)
+        fjj = open(fname, "a+")
+        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        fjj.close()
+        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
+        import time
+        time.sleep(10)
+        # JORGE_END
         errorMsg = []
         tol = 1e-03
         ih = ImageHandler()
         nClasses = self.nClasses.get()
         refs = self.getAttrib(REF_VOL)
         inParticles = self.getAttrib(IN_SUBTOMOS)
-        inParticlesBoxSize = inParticles.getBoxSize()
-        inParticlesDims = (inParticlesBoxSize, inParticlesBoxSize, inParticlesBoxSize)
+        inParticlesDims = inParticles.getBoxSize()
         inParticlesSRate = inParticles.getSamplingRate()
         if nClasses <= 0 and not refs:
             errorMsg.append('At least a number of classes or a set of references is required.')
