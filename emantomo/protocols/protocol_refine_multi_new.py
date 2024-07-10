@@ -34,7 +34,7 @@ from pwem.convert.headers import fixVolume
 from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
-from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SubTomogram
+from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, SubTomogram, AverageSubTomogram
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
 from emantomo.constants import SYMMETRY_HELP_MSG, THREED, ALI3D_BASENAME, ALI2D_BASENAME, SPTCLS_00_DIR, CLASS, \
     SPT_00_DIR
@@ -293,18 +293,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
 
     # --------------------------- INFO functions --------------------------------
     def _validate(self):
-        # JORGE
-        import os
-        fname = "/home/jjimenez/test_JJ.txt"
-        if os.path.exists(fname):
-            os.remove(fname)
-        fjj = open(fname, "a+")
-        fjj.write('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        fjj.close()
-        print('JORGE--------->onDebugMode PID {}'.format(os.getpid()))
-        import time
-        time.sleep(10)
-        # JORGE_END
         errorMsg = []
         tol = 1e-03
         ih = ImageHandler()
@@ -317,7 +305,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             errorMsg.append('At least a number of classes or a set of references is required.')
         if refs:
             # Dimensions
-            if len(refs) == 1:
+            if type(refs) is AverageSubTomogram:
                 fName = refs.getFileName()
             else:
                 fName = refs.getFirstItem().getFileName()
