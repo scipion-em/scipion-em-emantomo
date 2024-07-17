@@ -305,11 +305,8 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             errorMsg.append('At least a number of classes or a set of references is required.')
         if refs:
             # Dimensions
-            if type(refs) is AverageSubTomogram:
-                fName = refs.getFileName()
-            else:
-                fName = refs.getFirstItem().getFileName()
-            x, y, z, _ = ih.getDimensions(fName)
+            ref = refs if type(refs) is AverageSubTomogram else refs.getFirstItem()
+            x, y, z = ref.getDim()
             refsDims = (x, y, z)
             if refsDims != inParticlesDims:
                 errorMsg.append(f'The dimensions of the referece/s {refsDims} px and the particles '

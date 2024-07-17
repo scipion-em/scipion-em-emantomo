@@ -33,7 +33,6 @@ from emantomo.constants import INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, 
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
 from pwem.convert.headers import fixVolume
-from pwem.emlib.image import ImageHandler
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfAverageSubTomograms
@@ -210,8 +209,7 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         refVol = self.getAttrib(REF_VOL)
         if refVol:
             # Check the dimensions
-            ih = ImageHandler()
-            x, y, z, _ = ih.getDimensions(refVol.getFileName())
+            x, y, z = refVol.getDim()
             refVolDims = (x, y, z)
             inParticles = self.getAttrib(IN_SUBTOMOS)
             inParticlesDims = inParticles.getBoxSize()
