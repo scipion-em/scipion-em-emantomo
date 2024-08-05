@@ -427,8 +427,6 @@ def setCoords3D2Jsons(json_files, setCoords, mode="w"):
 
 def jsons2SetCoords3D(protocol, setTomograms, outPath):
     from tomo.objects import SetOfCoordinates3D
-    if isinstance(setTomograms, Pointer):
-        setTomograms = setTomograms.get()
     coord3DSetDict = {}
 
     # Subsets do not have this
