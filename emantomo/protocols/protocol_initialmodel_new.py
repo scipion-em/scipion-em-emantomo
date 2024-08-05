@@ -31,7 +31,8 @@ from emantomo import Plugin
 from emantomo.constants import INIT_MODEL_DIR, INIT_MODEL_NAME, INIT_MODEL_MRC, \
     SYMMETRY_HELP_MSG, REFERENCE_NAME
 from emantomo.convert import convertBetweenHdfAndMrc
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
+from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
+from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
@@ -43,7 +44,7 @@ class OutputsInitModelNew(Enum):
     average = AverageSubTomogram
 
 
-class EmanProtTomoInitialModelNew(ProtEmantomoBase):
+class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
     """
     This protocol wraps *e2spt_sgd_new.py* EMAN2 program.
     It generates an initial model from subtomograms using stochastic gradient descent.
@@ -204,24 +205,4 @@ class EmanProtTomoInitialModelNew(ProtEmantomoBase):
         return averageSubTomogram
 
     # -------------------------- INFO functions -------------------------------
-    def _validate(self):
-        errorMsg = []
-        refVol = self.getAttrib(REF_VOL)
-        if refVol:
-            # Check the dimensions
-            x, y, z = refVol.getDim()
-            refVolDims = (x, y, z)
-            inParticles = self.getAttrib(IN_SUBTOMOS)
-            inParticlesDims = inParticles.getBoxSize()
-            if refVolDims != inParticlesDims:
-                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
-                                f'{inParticlesDims} px must be the same')
-            # Check the sampling rate
-            tol = 1e-03
-            inParticlesSRate = inParticles.getSamplingRate()
-            refVolSRate = refVol.getSamplingRate()
-            if abs(inParticlesSRate - refVolSRate) >= tol:
-                errorMsg.append(
-                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
-                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
-        return errorMsg
+

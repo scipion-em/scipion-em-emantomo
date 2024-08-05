@@ -32,13 +32,14 @@ from emantomo import Plugin
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
+from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
 from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
+from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, SPT_00_DIR
 
 # 3D maps filtering options
@@ -56,7 +57,7 @@ class EmanRefineNewOutputs(Enum):
     FSCs = SetOfFSCs
 
 
-class EmanProtTomoRefinementNew(ProtEmantomoBase):
+class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
     """
     This protocol wraps *e2spt_refine_new.py* EMAN2 program.
     This refinement protocol performs subtomogram, subtilt and defocus refinement. The 2D subtilt particles are used
@@ -325,25 +326,4 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         return len(unrolledList) - unrolledList[::-1].index('p')
 
     # --------------------------- INFO functions --------------------------------
-    def _validate(self):
-        errorMsg = []
-        refVol = self.getAttrib(REF_VOL)
-        if refVol:
-            # Check the dimensions
-            ih = ImageHandler()
-            x, y, z, _ = ih.getDimensions(refVol.getFileName())
-            refVolDims = (x, y, z)
-            inParticles = self.getAttrib(IN_SUBTOMOS)
-            inParticlesDims = inParticles.getBoxSize()
-            if refVolDims != inParticlesDims:
-                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
-                                f'{inParticlesDims} px must be the same')
-            # Check the sampling rate
-            tol = 1e-03
-            inParticlesSRate = inParticles.getSamplingRate()
-            refVolSRate = refVol.getSamplingRate()
-            if abs(inParticlesSRate - refVolSRate) >= tol:
-                errorMsg.append(
-                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
-                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
-        return errorMsg
+
