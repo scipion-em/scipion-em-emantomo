@@ -1,5 +1,6 @@
 v3.3.2:
  Users:
+  - Add validations to multiple protocols.
   - Fix a bug in the coordinates saving when picked from the viewer.
  Developers:
   - Update the acquisition order in the CTFTomo objects (field added to that class in scipion-em-tomo v3.7.0).

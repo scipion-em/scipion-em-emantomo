@@ -32,12 +32,14 @@ from emantomo import Plugin
 from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
+from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
+from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfFSCs
 from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
+from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, SPT_00_DIR
 
 # 3D maps filtering options
@@ -55,7 +57,7 @@ class EmanRefineNewOutputs(Enum):
     FSCs = SetOfFSCs
 
 
-class EmanProtTomoRefinementNew(ProtEmantomoBase):
+class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
     """
     This protocol wraps *e2spt_refine_new.py* EMAN2 program.
     This refinement protocol performs subtomogram, subtilt and defocus refinement. The 2D subtilt particles are used
@@ -324,14 +326,4 @@ class EmanProtTomoRefinementNew(ProtEmantomoBase):
         return len(unrolledList) - unrolledList[::-1].index('p')
 
     # --------------------------- INFO functions --------------------------------
-    # def _validate(self):
-    #     errorMsgs = []
-    #     inParticles = self.getAttrib(IN_SUBTOMOS)
-    #     inRef = self.getAttrib(REF_VOL)
-    #     if not self._getGoldModeCmd(inParticles) and inRef:
-    #         if not inRef.hasHalfMaps():
-    #             errorMsgs.append('If the introduced particles have some kind of alignment or orientation, the '
-    #                              'initial volume introduced needs to have the corresponding even and odd halves. '
-    #                              'Try to replace the initial volume by the resulting average of a previous refine '
-    #                              'protocol.')
-    #     return errorMsgs
+

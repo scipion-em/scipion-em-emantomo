@@ -178,6 +178,10 @@ class EmanSetOfParticles(SetOfSubTomograms):
     def getAli3dLstFile(self):
         return self._emanAli3dFile.get()
 
+    def getBoxSize(self):
+        dimsDict = self._firstDim
+        return dimsDict[0], dimsDict[1], dimsDict[2]
+
     def copyInfo(self, other):
         super().copyInfo(other)
         moreAttrs2Copy = [self.ALI_2D, self.ALI_3D]
