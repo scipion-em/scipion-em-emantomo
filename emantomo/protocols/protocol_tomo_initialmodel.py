@@ -25,6 +25,7 @@
 # **************************************************************************
 from enum import Enum
 from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD, SYMMETRY_HELP_MSG
+from pwem.emlib.image import ImageHandler
 from pyworkflow import BETA
 from pyworkflow.protocol import params
 from pyworkflow.utils.path import makePath, replaceBaseExt
@@ -254,3 +255,41 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
         ]
 
         return list(filter(bool, lines))
+
+    def _validate(self):
+        errorMsg = []
+        refVol = self.reference.get()
+        if refVol:
+            # Check the dimensions
+            ih = ImageHandler()
+            x, y, z, _ = ih.getDimensions(refVol.getFileName())
+            refVolDims = (x, y, z)
+            inParticles = self.particles.get()
+            dimsDict = self._firstDim
+            inParticlesDims = (dimsDict[0], dimsDict[1], dimsDict[2])
+            if refVolDims != inParticlesDims:
+                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            # Check the sampling rate
+            tol = 1e-03
+            inParticlesSRate = inParticles.getSamplingRate()
+            refVolSRate = refVol.getSamplingRate()
+            if abs(inParticlesSRate - refVolSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
+                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+            # Check the mask
+            mask = self.mask.get()
+            if mask:
+                x, y, z, _ = ih.getDimensions(refVol.getFileName())
+                maskDims = (x, y, z)
+                maskSRate = mask.getSamplingRate()
+                if inParticlesDims != maskDims:
+                    errorMsg.append(f'The dimensions of the introduced mask {maskDims} px and the particles '
+                                    f'{inParticlesDims} px must be the same')
+                if abs(inParticlesSRate - maskSRate) >= tol:
+                    errorMsg.append(
+                        f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the mask '
+                        f'[{maskSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+
+        return errorMsg

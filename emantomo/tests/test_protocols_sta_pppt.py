@@ -197,7 +197,7 @@ class TestEmanEstimateCtf(TestEmanBasePPPT):
         outCtfs = getattr(protEstimateCtf, protEstimateCtf._possibleOutputs.CTFs.name, None)
         self.assertIsNotNone(outCtfs, "There was a problem estimating the CTFs")
         # Check the CTFs
-        self.checkCTFs(outCtfs, expectedSetSize=1)
+        self.checkCTFs(outCtfs, expectedSetSize=len(self.importedTs))
 
 
 class TestBaseRefineCyclePPPT(TestEmanBasePPPT):

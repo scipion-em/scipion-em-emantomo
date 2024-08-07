@@ -169,3 +169,12 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         return ' '.join(tomoFileList)
 
     # -------------------------- INFO functions -------------------------------
+    def _validate(self):
+        errorMsg = []
+        tol = 1e-03
+        tomosSRate = self.getAttrib(IN_TOMOS).getSamplingRate()
+        refSRate = self.getAttrib(REF_VOL).getSamplingRate()
+        if abs(tomosSRate - refSRate) >= tol:
+            errorMsg.append(f'The sampling rate of the input tomograms [{tomosSRate} Å/pix] and the reference volume '
+                            f'[{refSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        return errorMsg
