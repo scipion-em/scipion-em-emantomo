@@ -41,7 +41,6 @@ from ..convert import setCoords3D2Jsons, jsons2SetCoords3D, jsonFilesFromSet
 from .views_tkinter_tree import EmanDialog
 
 
-
 class EmanDataViewer(pwviewer.Viewer):
     """ Wrapper to visualize different type of objects
     with the Xmipp program xmipp_showj
@@ -81,7 +80,7 @@ class EmanDataViewer(pwviewer.Viewer):
             path = self.protocol._getExtraPath()
             info_path = self.protocol._getExtraPath('info')
 
-            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json',)
+            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json', )
 
             if not os.path.exists(info_path):
                 pwutils.makePath(info_path)
@@ -107,6 +106,7 @@ class EmanDataViewer(pwviewer.Viewer):
 
         return views
 
+
 def hasAnyFileChanged(files, time):
     """ Returns true if any of the files in files list has been changed after 'time'"""
     for file in files:
@@ -115,8 +115,8 @@ def hasAnyFileChanged(files, time):
 
     return False
 
+
 def hasFileChangedSince(file, time):
     """ Returns true if the file has changed after 'time'"""
     modTime = datetime.datetime.fromtimestamp(getmtime(file))
     return time < modTime
-

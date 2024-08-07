@@ -66,7 +66,7 @@ class EmanProtTomoBoxing(ProtTomoPicking):
         self._insertFunctionStep('launchBoxingGUIStep', interactive=True)
 
     def _createOutput(self):
-        jsons2SetCoords3D(self, self.inputTomograms, self.info_path)
+        jsons2SetCoords3D(self, self.inputTomograms.get(), self.info_path)
 
     # --------------------------- STEPS functions -----------------------------
     def copyInputCoords(self):
