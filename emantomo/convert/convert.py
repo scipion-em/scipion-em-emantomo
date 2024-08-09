@@ -371,8 +371,7 @@ def jsonFilesFromSet(setScipion, path):
             if "__" in fileBasename:
                 fnInputCoor = '%s_info.json' % fileBasename.split("__")[0]
             else:
-                parentFolder = pwutils.removeBaseExt(dirname(file))
-                fnInputCoor = '%s-%s_info.json' % (parentFolder, fileBasename)
+                fnInputCoor = '%s_info.json' % fileBasename
             pathInputCoor = pwutils.join(path, fnInputCoor)
             json_files.append(pathInputCoor)
             tomo_files.append(file)
