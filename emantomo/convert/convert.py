@@ -369,9 +369,9 @@ def jsonFilesFromSet(setScipion, path):
         for file in setScipion.getFiles():
             fileBasename = pwutils.removeBaseExt(file)
             if "__" in fileBasename:
-                fnInputCoor = '%s_info.json' % fileBasename.split("__")[0]
+                fnInputCoor = 'extra-%s_info.json' % fileBasename.split("__")[0]
             else:
-                fnInputCoor = '%s_info.json' % fileBasename
+                fnInputCoor = 'extra-%s_info.json' % fileBasename
             pathInputCoor = pwutils.join(path, fnInputCoor)
             json_files.append(pathInputCoor)
             tomo_files.append(file)
@@ -389,24 +389,24 @@ def jsonFilesFromSet(setScipion, path):
 
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
-    TOMO_ID = Coordinate3D.TOMO_ID_ATTR
-    tomoIds = sorted(setCoords.getUniqueValues(TOMO_ID))
+    tomoIds = sorted(setCoords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR))
     json_files = sorted(json_files)
     for tomoId, json_file in zip(tomoIds, json_files):
         coords = []
         groupIds = setCoords.getUniqueValues("_groupId", where='_tomoId="%s"' % tomoId)
         dict_eman = dict(zip(groupIds, range(len(groupIds))))
-        for coor in setCoords.iterCoordinates():
-            tomoName = pwutils.removeBaseExt(coor.getVolume().getFileName())
+        for coord in setCoords.iterCoordinates():
+
+            tomoName = pwutils.removeBaseExt(coord.getVolume().getFileName())
             if "__" in tomoName:
                 tomoName = '%s_info' % tomoName.split("__")[0]
             else:
                 tomoName += "_info"
             if tomoName in json_file:
-                coords.append([coor.getX(const.BOTTOM_LEFT_CORNER),
-                               coor.getY(const.BOTTOM_LEFT_CORNER),
-                               coor.getZ(const.BOTTOM_LEFT_CORNER),
-                               "manual", 0.0, dict_eman[coor.getGroupId()]])
+                coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
+                               coord.getY(const.BOTTOM_LEFT_CORNER),
+                               coord.getZ(const.BOTTOM_LEFT_CORNER),
+                               "manual", 0.0, dict_eman[coord.getGroupId()]])
 
         if coords:
             coordDict = {"boxes_3d": coords,
