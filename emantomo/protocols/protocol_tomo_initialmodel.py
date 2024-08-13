@@ -265,7 +265,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
             x, y, z, _ = ih.getDimensions(refVol.getFileName())
             refVolDims = (x, y, z)
             inParticles = self.particles.get()
-            dimsDict = self._firstDim
+            dimsDict = inParticles._firstDim
             inParticlesDims = (dimsDict[0], dimsDict[1], dimsDict[2])
             if refVolDims != inParticlesDims:
                 errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
