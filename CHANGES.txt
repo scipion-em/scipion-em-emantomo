@@ -1,3 +1,6 @@
+v3.3.4:
+ Users: hotfix - solved bug in the validation method of the classic initial volume protocol.
+ Developers: add odd dimensions checking to the classic initial volume.
 v3.3.3:
  Users: hotfix - solve problems when using the emantomo viewer with coordinates picked with crYOLO.
 v3.3.2:
