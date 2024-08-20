@@ -25,8 +25,6 @@
 # **************************************************************************
 from enum import Enum
 from emantomo.constants import INIT_MODEL_DIR, INIR_MODEL_NAME_OLD, SYMMETRY_HELP_MSG
-from pwem.emlib.image import ImageHandler
-from pyworkflow import BETA
 from pyworkflow.protocol import params
 from pyworkflow.utils.path import makePath, replaceBaseExt
 from pwem.protocols import EMProtocol
@@ -261,17 +259,21 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
         refVol = self.reference.get()
         if refVol:
             # Check the dimensions
-            ih = ImageHandler()
-            x, y, z, _ = ih.getDimensions(refVol.getFileName())
-            refVolDims = (x, y, z)
             inParticles = self.particles.get()
-            dimsDict = self._firstDim
+            dimsDict = inParticles._firstDim
             inParticlesDims = (dimsDict[0], dimsDict[1], dimsDict[2])
+            # Eman fails if the dimensions are odd numbers
+            for iDim in inParticlesDims:
+                if iDim % 2 != 0:
+                    errorMsg.append('The particles dimensions must be an even number')
+                    break
+            x, y, z = refVol.getDimensions()
+            refVolDims = (x, y, z)
             if refVolDims != inParticlesDims:
                 errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
                                 f'{inParticlesDims} px must be the same')
             # Check the sampling rate
-            tol = 1e-03
+            tol = 2e-03
             inParticlesSRate = inParticles.getSamplingRate()
             refVolSRate = refVol.getSamplingRate()
             if abs(inParticlesSRate - refVolSRate) >= tol:
@@ -281,7 +283,7 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
             # Check the mask
             mask = self.mask.get()
             if mask:
-                x, y, z, _ = ih.getDimensions(refVol.getFileName())
+                x, y, z = mask.getDimensions()
                 maskDims = (x, y, z)
                 maskSRate = mask.getSamplingRate()
                 if inParticlesDims != maskDims:
