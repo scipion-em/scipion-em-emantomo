@@ -127,6 +127,7 @@ def readCoordinate3D(box, inputTomo, origin=const.BOTTOM_LEFT_CORNER, scale=1):
     from tomo.objects import Coordinate3D
     x, y, z = scale * numpy.asarray(box[:3])
     coord = Coordinate3D()
+    coord.setScore(box[4])
     coord.setVolume(inputTomo)
     coord.setPosition(x, y, z, origin)
     return coord
