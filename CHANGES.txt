@@ -1,3 +1,5 @@
+v3.3.5:
+ Users: template matching protocol stores the coordinates score.
 v3.3.4:
  Users: hotfix - solved bug in the validation method of the classic initial volume protocol.
  Developers: add odd dimensions checking to the classic initial volume.
