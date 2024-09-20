@@ -24,20 +24,22 @@
 # *
 # **************************************************************************
 import datetime
+import glob
 import os
-from os.path import getmtime
+from os.path import getmtime, join, basename
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 import pyworkflow.utils as pwutils
 
 import pwem.viewers.views as vi
-import tomo.objects
+from tomo.objects import SetOfCoordinates3D, Tomogram, Coordinate3D
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 from tomo.protocols.protocol_import_coordinates import ProtImportCoordinates3D
 
-from ..convert import setCoords3D2Jsons, jsons2SetCoords3D, jsonFilesFromSet
+from ..convert import jsons2SetCoords3D, jsonFilesFromSet
 from .views_tkinter_tree import EmanDialog
 
 
@@ -49,7 +51,7 @@ class EmanDataViewer(pwviewer.Viewer):
     _name = 'Open with Eman'
     _targets = [
         ProtImportCoordinates3D,
-        tomo.objects.SetOfCoordinates3D
+        SetOfCoordinates3D
     ]
 
     def __init__(self, **kwargs):
@@ -64,34 +66,35 @@ class EmanDataViewer(pwviewer.Viewer):
         views = []
         cls = type(obj)
 
-        if issubclass(cls, tomo.objects.SetOfCoordinates3D):
+        if issubclass(cls, SetOfCoordinates3D):
             outputCoords = obj
+            tomoIdField = Coordinate3D.TOMO_ID_ATTR
+            countField = 'COUNT'
             tomos = outputCoords.getPrecedents()
-
-            volIds = outputCoords.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
-            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
+            tsIdDictList = outputCoords.aggregate(countField, tomoIdField, [tomoIdField])
 
             tomoList = []
-            for objId in volIds:
-                tomogram = tomos[objId[0]].clone()
-                tomogram.count = objId[1]
+            tomoCountDict = {}
+            for tsIdDict in tsIdDictList:
+                tsId = tsIdDict[tomoIdField]
+                nCoords = tsIdDict[countField]
+                tomogram = tomos.getItem(Tomogram.TS_ID_FIELD, tsId).clone()
+                tomogram.count = nCoords
+                tomoCountDict[tsId] = nCoords
                 tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
-            info_path = self.protocol._getExtraPath('info')
+            info_path = join(path, 'info')
 
-            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json', )
+            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json')
 
             if not os.path.exists(info_path):
                 pwutils.makePath(info_path)
             json_files, _ = jsonFilesFromSet(tomos, info_path)
-            _ = setCoords3D2Jsons(json_files, outputCoords)
-
-            time = datetime.datetime.now()
 
             EmanDialog(self._tkRoot, path, provider=tomoProvider)
 
-            if hasAnyFileChanged(json_files, time):
+            if hasAnyFileChanged(tomoCountDict, info_path):
 
                 import tkinter as tk
                 frame = tk.Frame()
@@ -100,20 +103,26 @@ class EmanDataViewer(pwviewer.Viewer):
 
         elif issubclass(cls, ProtImportCoordinates3D):
             if obj.getOutputsSize() >= 1:
-                for _, out in obj.iterOutputAttributes(tomo.objects.SetOfCoordinates3D):
+                for _, out in obj.iterOutputAttributes(SetOfCoordinates3D):
                     lastOutput = out
             self._visualize(lastOutput)
 
         return views
 
 
-def hasAnyFileChanged(files, time):
-    """ Returns true if any of the files in files list has been changed after 'time'"""
-    for file in files:
-        if hasFileChangedSince(file, time):
-            return True
-
-    return False
+def hasAnyFileChanged(counterDict, infoPath):
+    countFileList = glob.glob(os.path.join(infoPath, '*.count'))
+    if countFileList:
+        lastModFile = max(countFileList, key=os.path.getmtime)
+        with open(lastModFile, 'r') as file:
+            count = file.read()
+            tsId = removeBaseExt(lastModFile)
+            if int(count) != counterDict[tsId]:
+                return True
+            else:
+                return False
+    else:
+        return False
 
 
 def hasFileChangedSince(file, time):

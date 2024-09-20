@@ -33,7 +33,7 @@ from pyworkflow import utils as pwutils
 from pyworkflow.gui.dialog import ToolbarListDialog
 from pyworkflow.utils.process import runJob
 import emantomo
-from emantomo.convert import loadJson
+from emantomo.convert import loadJson, jsonFileFromTomoFile, writeViewerCoordsCounterFile, getViewerInfoPath
 
 
 class EmanDialog(ToolbarListDialog):
@@ -61,10 +61,12 @@ class EmanDialog(ToolbarListDialog):
             self.after(1000, self.refresh_gui)
         else:
             outFile = '*%s_info*.json' % pwutils.removeBaseExt(self.tomo.getFileName().split("__")[0])
-            jsonPath = os.path.join(self.path, "info", outFile)
+            jsonPath = os.path.join(getViewerInfoPath(self.path), outFile)
             jsonPath = glob.glob(jsonPath)[0]
             jsonDict = loadJson(jsonPath)
-            self.tomo.count = len(jsonDict["boxes_3d"])
+            count = len(jsonDict["boxes_3d"])
+            self.tomo.count = count
+            writeViewerCoordsCounterFile(self.tomo.getTsId(), self.path, count)
             self.tree.update()
 
     def doubleClickOnTomogram(self, e=None):
@@ -78,6 +80,7 @@ class EmanDialog(ToolbarListDialog):
         tomoFile = join(TOMOGRAMS_DIR, tomo.getTsId() + '.hdf')  # PPPT --> use the HDF file generated in the convert
         if not exists(join(self.path, tomoFile)):  # Any other case
             tomoFile = abspath(tomo.getFileName())
+        jsonFileFromTomoFile(tomoFile, join(self.path, 'info'))
         program = emantomo.Plugin.getProgram("e2spt_boxer.py")
         arguments = "%s --box3d" % tomoFile
         runJob(None, program, arguments, env=emantomo.Plugin.getEnviron(), cwd=self.path)

@@ -29,6 +29,7 @@
 import glob
 import itertools
 import json
+import time
 from os.path import join, abspath, splitext, dirname, isfile, basename
 import numpy as np
 import numpy
@@ -39,11 +40,14 @@ import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D
+from tomo.objects import SetOfTiltSeries, SetOfTomograms
 from tomo.constants import TR_EMAN
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
     TS_FILE, EMAN_OFF_TILT_AXIS
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def loadJson(jsonFn):
@@ -368,14 +372,7 @@ def jsonFilesFromSet(setScipion, path):
     if isinstance(setScipion, SetOfTomograms):
         tomo_files = []
         for file in setScipion.getFiles():
-            fileBasename = pwutils.removeBaseExt(file)
-            parentDir = basename(dirname(file))
-            if "__" in fileBasename:
-                fnInputCoor = '%s-%s_info.json' % (parentDir, fileBasename.split("__")[0])
-            else:
-                fnInputCoor = '%s-%s_info.json' % (parentDir, fileBasename)
-            pathInputCoor = pwutils.join(path, fnInputCoor)
-            json_files.append(pathInputCoor)
+            file = jsonFileFromTomoFile(file, path)
             tomo_files.append(file)
         return json_files, tomo_files
     elif isinstance(setScipion, SetOfTiltSeries):
@@ -389,14 +386,35 @@ def jsonFilesFromSet(setScipion, path):
         return json_files, tlt_files
 
 
+def jsonFileFromTomoFile(tomoFileName, path):
+    fileBasename = pwutils.removeBaseExt(tomoFileName)
+    parentDir = basename(dirname(tomoFileName))
+    if "__" in fileBasename:
+        fnInputCoor = '%s-%s_info.json' % (parentDir, fileBasename.split("__")[0])
+    else:
+        fnInputCoor = '%s-%s_info.json' % (parentDir, fileBasename)
+    return pwutils.join(path, fnInputCoor)
+
+def getViewerInfoPath(path):
+    return join(path, 'info')
+
+def getCoordsCounterFileName(path, tsId):
+    return join(getViewerInfoPath(path), f'{tsId}.count')
+
+def writeViewerCoordsCounterFile(tsId, path, count):
+    with open(getCoordsCounterFileName(path, tsId), 'w') as file:
+        file.write(str(count))
+    time.sleep(0.5)
+
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
     paths = []
-    tomoIds = sorted(setCoords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR))
+    tomoIds = setCoords.getTSIds()
     json_files = sorted(json_files)
     for tomoId, json_file in zip(tomoIds, json_files):
         coords = []
         groupIds = setCoords.getUniqueValues("_groupId", where='_tomoId="%s"' % tomoId)
         dict_eman = dict(zip(groupIds, range(len(groupIds))))
+        dict_eman_keys = dict_eman.keys()
         for coord in setCoords.iterCoordinates():
 
             tomoName = pwutils.removeBaseExt(coord.getVolume().getFileName())
@@ -404,11 +422,15 @@ def setCoords3D2Jsons(json_files, setCoords, mode="w"):
                 tomoName = '%s_info' % tomoName.split("__")[0]
             else:
                 tomoName += "_info"
-            if tomoName in json_file:
-                coords.append([coord.getX(const.BOTTOM_LEFT_CORNER),
-                               coord.getY(const.BOTTOM_LEFT_CORNER),
-                               coord.getZ(const.BOTTOM_LEFT_CORNER),
-                               "manual", 0.0, dict_eman[coord.getGroupId()]])
+            groupId = coord.getGroupId()
+            x = coord.getX(const.BOTTOM_LEFT_CORNER)
+            y = coord.getY(const.BOTTOM_LEFT_CORNER)
+            z = coord.getZ(const.BOTTOM_LEFT_CORNER)
+            if tomoName in json_file and groupId in dict_eman_keys:
+                coords.append([x, y, z, "manual", 0.0, dict_eman[groupId]])
+            else:
+                logger.info(f'Coordinate skipped ---> objId = {coord.getObjId()}, tsId = {coord.getTomoId()},'
+                            f'groupId = {groupId}, (x, y, z) =  ({x}, {y}, {z})')
 
         if coords:
             coordDict = {"boxes_3d": coords,
