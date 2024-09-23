@@ -39,7 +39,7 @@ from tomo.objects import SetOfCoordinates3D, Tomogram, Coordinate3D
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 from tomo.protocols.protocol_import_coordinates import ProtImportCoordinates3D
 
-from ..convert import jsons2SetCoords3D, jsonFilesFromSet
+from ..convert import jsons2SetCoords3D, jsonFilesFromSet, jsonFileFromTomoFile, writeTomoCoordsJson
 from .views_tkinter_tree import EmanDialog
 
 
@@ -75,12 +75,14 @@ class EmanDataViewer(pwviewer.Viewer):
 
             tomoList = []
             tomoCountDict = {}
+            tomoTsIdDict = {}
             for tsIdDict in tsIdDictList:
                 tsId = tsIdDict[tomoIdField]
                 nCoords = tsIdDict[countField]
                 tomogram = tomos.getItem(Tomogram.TS_ID_FIELD, tsId).clone()
                 tomogram.count = nCoords
                 tomoCountDict[tsId] = nCoords
+                tomoTsIdDict[tsId] = tomogram.getFileName()
                 tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
@@ -92,13 +94,23 @@ class EmanDataViewer(pwviewer.Viewer):
                 pwutils.makePath(info_path)
             json_files, _ = jsonFilesFromSet(tomos, info_path)
 
-            EmanDialog(self._tkRoot, path, provider=tomoProvider)
+            EmanDialog(self._tkRoot, path, provider=tomoProvider, coords=outputCoords)
 
-            if hasAnyFileChanged(tomoCountDict, info_path):
+            updatedFiles = getUpdatedFiles(tomoCountDict, info_path)
+            if updatedFiles:
 
                 import tkinter as tk
                 frame = tk.Frame()
                 if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
+                    modifiedCoordsTomoIds = [removeBaseExt(iFile) for iFile in updatedFiles]
+                    # Write the rest of the json files (the unmodified ones) if they don't exist
+                    for tsId in tomoCountDict.keys():
+                        if tsId not in modifiedCoordsTomoIds:
+                            tomoFile = tomoTsIdDict[tsId]
+                            jsonFile = jsonFileFromTomoFile(tomoFile, info_path)
+                            writeTomoCoordsJson(outputCoords, tsId, jsonFile)
+
+                    # Generate the new SetOfCoordinates3D
                     jsons2SetCoords3D(self.protocol, outputCoords.getPrecedents(), info_path)
 
         elif issubclass(cls, ProtImportCoordinates3D):
@@ -110,19 +122,20 @@ class EmanDataViewer(pwviewer.Viewer):
         return views
 
 
-def hasAnyFileChanged(counterDict, infoPath):
+def getUpdatedFiles(counterDict, infoPath):
+    updatedFiles = []
+    filesChangedCounter = 0
     countFileList = glob.glob(os.path.join(infoPath, '*.count'))
     if countFileList:
-        lastModFile = max(countFileList, key=os.path.getmtime)
-        with open(lastModFile, 'r') as file:
-            count = file.read()
-            tsId = removeBaseExt(lastModFile)
-            if int(count) != counterDict[tsId]:
-                return True
-            else:
-                return False
-    else:
-        return False
+        for iFile in countFileList:
+            with open(iFile, 'r') as file:
+                count = file.read()
+                tsId = removeBaseExt(iFile)
+                if int(count) != counterDict[tsId]:
+                    filesChangedCounter += 1
+                    updatedFiles.append(iFile)
+
+    return updatedFiles
 
 
 def hasFileChangedSince(file, time):

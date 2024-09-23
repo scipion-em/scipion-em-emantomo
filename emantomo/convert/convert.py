@@ -40,7 +40,7 @@ import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries, SetOfTomograms
+from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D, Tomogram
 from tomo.constants import TR_EMAN
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
@@ -395,57 +395,75 @@ def jsonFileFromTomoFile(tomoFileName, path):
         fnInputCoor = '%s-%s_info.json' % (parentDir, fileBasename)
     return pwutils.join(path, fnInputCoor)
 
+
 def getViewerInfoPath(path):
     return join(path, 'info')
 
+
 def getCoordsCounterFileName(path, tsId):
     return join(getViewerInfoPath(path), f'{tsId}.count')
+
 
 def writeViewerCoordsCounterFile(tsId, path, count):
     with open(getCoordsCounterFileName(path, tsId), 'w') as file:
         file.write(str(count))
     time.sleep(0.5)
 
+
 def setCoords3D2Jsons(json_files, setCoords, mode="w"):
-    paths = []
     tomoIds = setCoords.getTSIds()
     json_files = sorted(json_files)
-    for tomoId, json_file in zip(tomoIds, json_files):
-        coords = []
+    for tomoId, jsonFile in zip(tomoIds, json_files):
+        coordList = []
         groupIds = setCoords.getUniqueValues("_groupId", where='_tomoId="%s"' % tomoId)
-        dict_eman = dict(zip(groupIds, range(len(groupIds))))
-        dict_eman_keys = dict_eman.keys()
+        dictEman = dict(zip(groupIds, range(len(groupIds))))
         for coord in setCoords.iterCoordinates():
+            addCoordinate2Json(coord, coordList, jsonFile, dictEman)
 
-            tomoName = pwutils.removeBaseExt(coord.getVolume().getFileName())
-            if "__" in tomoName:
-                tomoName = '%s_info' % tomoName.split("__")[0]
-            else:
-                tomoName += "_info"
-            groupId = coord.getGroupId()
-            x = coord.getX(const.BOTTOM_LEFT_CORNER)
-            y = coord.getY(const.BOTTOM_LEFT_CORNER)
-            z = coord.getZ(const.BOTTOM_LEFT_CORNER)
-            if tomoName in json_file and groupId in dict_eman_keys:
-                coords.append([x, y, z, "manual", 0.0, dict_eman[groupId]])
-            else:
-                logger.info(f'Coordinate skipped ---> objId = {coord.getObjId()}, tsId = {coord.getTomoId()},'
-                            f'groupId = {groupId}, (x, y, z) =  ({x}, {y}, {z})')
+        writeEmanCoordsJson(coordList, jsonFile, setCoords.getBoxSize(), dictEman, groupIds, mode=mode)
 
-        if coords:
-            coordDict = {"boxes_3d": coords,
-                         "class_list": {}
-                         }
-            for groupId in groupIds:
-                coordDict["class_list"]["%s" % dict_eman[groupId]] = {"boxsize": setCoords.getBoxSize(),
-                                                                      "name": "particles_%02d" % dict_eman[groupId]}
-            if mode == "w":
-                writeJson(coordDict, json_file)
-                paths.append(json_file)
-            elif mode == "a":
-                appendJson(coordDict, json_file)
-                paths.append(json_file)
-    return paths
+
+def writeTomoCoordsJson(setCoords, tomoId, jsonFile, mode='w'):
+    coordList = []
+    boxSize = setCoords.getBoxSize()
+    precedents = setCoords.getPrecedents()
+    groupIds = setCoords.getUniqueValues("_groupId", where='_tomoId="%s"' % tomoId)
+    dictEman = dict(zip(groupIds, range(len(groupIds))))
+    for coord in setCoords.iterCoordinates(volume=precedents.getItem(Tomogram.TS_ID_FIELD, tomoId)):
+        addCoordinate2Json(coord, coordList, jsonFile, dictEman)
+
+    writeEmanCoordsJson(coordList, jsonFile, boxSize, dictEman, groupIds, mode=mode)
+
+
+def addCoordinate2Json(coord, coordList, jsonFile, dictEman):
+    tomoName = pwutils.removeBaseExt(coord.getVolume().getFileName())
+    if "__" in tomoName:
+        tomoName = '%s_info' % tomoName.split("__")[0]
+    else:
+        tomoName += "_info"
+    groupId = coord.getGroupId()
+    x = coord.getX(const.BOTTOM_LEFT_CORNER)
+    y = coord.getY(const.BOTTOM_LEFT_CORNER)
+    z = coord.getZ(const.BOTTOM_LEFT_CORNER)
+    if tomoName in jsonFile and groupId in dictEman.keys():
+        coordList.append([x, y, z, "manual", 0.0, dictEman[groupId]])
+    else:
+        logger.info(f'Coordinate skipped ---> objId = {coord.getObjId()}, tsId = {coord.getTomoId()},'
+                    f'groupId = {groupId}, (x, y, z) =  ({x}, {y}, {z})')
+
+
+def writeEmanCoordsJson(coordList, jsonFile, boxSize, dictEman, groupIds, mode='w'):
+    if coordList:
+        coordDict = {"boxes_3d": coordList,
+                     "class_list": {}
+                     }
+        for groupId in groupIds:
+            coordDict["class_list"]["%s" % dictEman[groupId]] = {"boxsize": boxSize,
+                                                                 "name": "particles_%02d" % dictEman[groupId]}
+        if mode == "w":
+            writeJson(coordDict, jsonFile)
+        elif mode == "a":
+            appendJson(coordDict, jsonFile)
 
 
 def jsons2SetCoords3D(protocol, setTomograms, outPath):
