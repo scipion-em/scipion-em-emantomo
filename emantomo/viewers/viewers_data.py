@@ -38,6 +38,7 @@ import pwem.viewers.views as vi
 from tomo.objects import SetOfCoordinates3D, Tomogram, Coordinate3D
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 from tomo.protocols.protocol_import_coordinates import ProtImportCoordinates3D
+from .tomoPovider import EmantomoTomoProvider
 
 from ..convert import jsons2SetCoords3D, jsonFilesFromSet, jsonFileFromTomoFile, writeTomoCoordsJson
 from .views_tkinter_tree import EmanDialog
@@ -68,27 +69,32 @@ class EmanDataViewer(pwviewer.Viewer):
 
         if issubclass(cls, SetOfCoordinates3D):
             outputCoords = obj
+            tsIdField = Tomogram.TS_ID_FIELD
             tomoIdField = Coordinate3D.TOMO_ID_ATTR
             countField = 'COUNT'
             tomos = outputCoords.getPrecedents()
-            tsIdDictList = outputCoords.aggregate(countField, tomoIdField, [tomoIdField])
+            # List of dicts {tomoIdField: tomoId, countField: count}
+            coordsTomoIdList = outputCoords.aggregate(countField, tomoIdField, [tomoIdField])
+            # Dict {coordsTomoId: nCoords}
+            coordsTomoIdDict = {tomoIdDict[tomoIdField]: tomoIdDict[countField] for tomoIdDict in coordsTomoIdList}
+            # List of tomos tsIds
+            tomosTsIdList = tomos.getTSIds()
 
-            tomoList = []
+            self.tomoList = []  # Used to fill the tomogram provider
             tomoCountDict = {}
             tomoTsIdDict = {}
-            for tsIdDict in tsIdDictList:
-                tsId = tsIdDict[tomoIdField]
-                nCoords = tsIdDict[countField]
+            for tsId in tomosTsIdList:
+                nCoords = coordsTomoIdDict.get(tsId, 0)
                 tomogram = tomos.getItem(Tomogram.TS_ID_FIELD, tsId).clone()
                 tomogram.count = nCoords
                 tomoCountDict[tsId] = nCoords
                 tomoTsIdDict[tsId] = tomogram.getFileName()
-                tomoList.append(tomogram)
+                self.tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
             info_path = join(path, 'info')
 
-            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json')
+            tomoProvider = EmantomoTomoProvider(self.tomoList, info_path, 'json')
 
             if not os.path.exists(info_path):
                 pwutils.makePath(info_path)
