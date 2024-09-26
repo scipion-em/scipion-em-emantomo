@@ -40,7 +40,7 @@ import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries, SetOfTomograms, Coordinate3D, Tomogram
+from tomo.objects import SetOfTiltSeries, SetOfTomograms, Tomogram
 from tomo.constants import TR_EMAN
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
