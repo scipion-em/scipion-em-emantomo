@@ -44,6 +44,7 @@ class EmanProtTomoBoxing(ProtTomoPicking):
 
     def __init__(self, **kwargs):
         ProtTomoPicking.__init__(self, **kwargs)
+        self.info_path = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -58,32 +59,33 @@ class EmanProtTomoBoxing(ProtTomoPicking):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
+        self._initialize()
         # Copy input coordinates to Extra Path
         if self.inputCoordinates.get():
-            self._insertFunctionStep('copyInputCoords')
-
+            self._insertFunctionStep(self.copyInputCoords)
         # Launch Boxing GUI
-        self._insertFunctionStep('launchBoxingGUIStep', interactive=True)
+        self._insertFunctionStep(self.launchBoxingGUIStep, interactive=True)
 
     def _createOutput(self):
         jsons2SetCoords3D(self, self.inputTomograms.get(), self.info_path)
 
     # --------------------------- STEPS functions -----------------------------
-    def copyInputCoords(self):
+    def _initialize(self):
         self.info_path = self._getExtraPath('info')
+
+    def copyInputCoords(self):
         pwutils.makePath(self.info_path)
         self.json_files, self.tomo_files = jsonFilesFromSet(self.inputTomograms.get(), self.info_path)
-        _ = setCoords3D2Jsons(self.json_files, self.inputCoordinates.get())
+        setCoords3D2Jsons(self.json_files, self.inputCoordinates.get())
 
     def launchBoxingGUIStep(self):
-
-        self.info_path = self._getExtraPath('info')
+        inTomos = self.inputTomograms.get()
         lastOutput = None
         if self.getOutputsSize() >= 1:
             pwutils.makePath(self.info_path)
-            self.json_files, self.tomo_files = jsonFilesFromSet(self.inputTomograms.get(), self.info_path)
+            self.json_files, self.tomo_files = jsonFilesFromSet(inTomos, self.info_path)
             lastOutput = [output for _, output in self.iterOutputAttributes()][-1]
-            _ = setCoords3D2Jsons(self.json_files, lastOutput)
+            setCoords3D2Jsons(self.json_files, lastOutput)
 
         if lastOutput is not None:
             volIds = lastOutput.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
@@ -92,7 +94,7 @@ class EmanProtTomoBoxing(ProtTomoPicking):
             volIds = dict()
 
         tomoList = []
-        for tomo in self.inputTomograms.get().iterItems():
+        for tomo in inTomos.iterItems():
             tomogram = tomo.clone()
             if tomo.getObjId() in volIds:
                 tomogram.count = volIds[tomo.getObjId()]

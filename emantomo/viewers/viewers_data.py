@@ -24,20 +24,23 @@
 # *
 # **************************************************************************
 import datetime
+import glob
 import os
-from os.path import getmtime
+from os.path import getmtime, join, basename
 
 import pyworkflow.viewer as pwviewer
 from pyworkflow.gui.dialog import askYesNo
+from pyworkflow.utils import removeBaseExt
 from pyworkflow.utils.properties import Message
 import pyworkflow.utils as pwutils
 
 import pwem.viewers.views as vi
-import tomo.objects
+from tomo.objects import SetOfCoordinates3D, Tomogram, Coordinate3D
 from tomo.viewers.views_tkinter_tree import TomogramsTreeProvider
 from tomo.protocols.protocol_import_coordinates import ProtImportCoordinates3D
+from .tomoPovider import EmantomoTomoProvider
 
-from ..convert import setCoords3D2Jsons, jsons2SetCoords3D, jsonFilesFromSet
+from ..convert import jsons2SetCoords3D, jsonFilesFromSet, jsonFileFromTomoFile, writeTomoCoordsJson
 from .views_tkinter_tree import EmanDialog
 
 
@@ -49,7 +52,7 @@ class EmanDataViewer(pwviewer.Viewer):
     _name = 'Open with Eman'
     _targets = [
         ProtImportCoordinates3D,
-        tomo.objects.SetOfCoordinates3D
+        SetOfCoordinates3D
     ]
 
     def __init__(self, **kwargs):
@@ -64,56 +67,81 @@ class EmanDataViewer(pwviewer.Viewer):
         views = []
         cls = type(obj)
 
-        if issubclass(cls, tomo.objects.SetOfCoordinates3D):
+        if issubclass(cls, SetOfCoordinates3D):
             outputCoords = obj
+            tsIdField = Tomogram.TS_ID_FIELD
+            tomoIdField = Coordinate3D.TOMO_ID_ATTR
+            countField = 'COUNT'
             tomos = outputCoords.getPrecedents()
+            # List of dicts {tomoIdField: tomoId, countField: count}
+            coordsTomoIdList = outputCoords.aggregate(countField, tomoIdField, [tomoIdField])
+            # Dict {coordsTomoId: nCoords}
+            coordsTomoIdDict = {tomoIdDict[tomoIdField]: tomoIdDict[countField] for tomoIdDict in coordsTomoIdList}
+            # List of tomos tsIds
+            tomosTsIdList = tomos.getTSIds()
 
-            volIds = outputCoords.aggregate(["MAX", "COUNT"], "_volId", ["_volId"])
-            volIds = [(d['_volId'], d["COUNT"]) for d in volIds]
-
-            tomoList = []
-            for objId in volIds:
-                tomogram = tomos[objId[0]].clone()
-                tomogram.count = objId[1]
-                tomoList.append(tomogram)
+            self.tomoList = []  # Used to fill the tomogram provider
+            tomoCountDict = {}
+            tomoTsIdDict = {}
+            for tsId in tomosTsIdList:
+                nCoords = coordsTomoIdDict.get(tsId, 0)
+                tomogram = tomos.getItem(Tomogram.TS_ID_FIELD, tsId).clone()
+                tomogram.count = nCoords
+                tomoCountDict[tsId] = nCoords
+                tomoTsIdDict[tsId] = tomogram.getFileName()
+                self.tomoList.append(tomogram)
 
             path = self.protocol._getExtraPath()
-            info_path = self.protocol._getExtraPath('info')
+            info_path = join(path, 'info')
 
-            tomoProvider = TomogramsTreeProvider(tomoList, info_path, 'json', )
+            tomoProvider = EmantomoTomoProvider(self.tomoList, info_path, 'json')
 
             if not os.path.exists(info_path):
                 pwutils.makePath(info_path)
             json_files, _ = jsonFilesFromSet(tomos, info_path)
-            _ = setCoords3D2Jsons(json_files, outputCoords)
 
-            time = datetime.datetime.now()
+            EmanDialog(self._tkRoot, path, provider=tomoProvider, coords=outputCoords)
 
-            EmanDialog(self._tkRoot, path, provider=tomoProvider)
-
-            if hasAnyFileChanged(json_files, time):
+            updatedFiles = getUpdatedFiles(tomoCountDict, info_path)
+            if updatedFiles:
 
                 import tkinter as tk
                 frame = tk.Frame()
                 if askYesNo(Message.TITLE_SAVE_OUTPUT, Message.LABEL_SAVE_OUTPUT, frame):
+                    modifiedCoordsTomoIds = [removeBaseExt(iFile) for iFile in updatedFiles]
+                    # Write the rest of the json files (the unmodified ones) if they don't exist
+                    for tsId in tomoCountDict.keys():
+                        if tsId not in modifiedCoordsTomoIds:
+                            tomoFile = tomoTsIdDict[tsId]
+                            jsonFile = jsonFileFromTomoFile(tomoFile, info_path)
+                            writeTomoCoordsJson(outputCoords, tsId, jsonFile)
+
+                    # Generate the new SetOfCoordinates3D
                     jsons2SetCoords3D(self.protocol, outputCoords.getPrecedents(), info_path)
 
         elif issubclass(cls, ProtImportCoordinates3D):
             if obj.getOutputsSize() >= 1:
-                for _, out in obj.iterOutputAttributes(tomo.objects.SetOfCoordinates3D):
+                for _, out in obj.iterOutputAttributes(SetOfCoordinates3D):
                     lastOutput = out
             self._visualize(lastOutput)
 
         return views
 
 
-def hasAnyFileChanged(files, time):
-    """ Returns true if any of the files in files list has been changed after 'time'"""
-    for file in files:
-        if hasFileChangedSince(file, time):
-            return True
+def getUpdatedFiles(counterDict, infoPath):
+    updatedFiles = []
+    filesChangedCounter = 0
+    countFileList = glob.glob(os.path.join(infoPath, '*.count'))
+    if countFileList:
+        for iFile in countFileList:
+            with open(iFile, 'r') as file:
+                count = file.read()
+                tsId = removeBaseExt(iFile)
+                if int(count) != counterDict[tsId]:
+                    filesChangedCounter += 1
+                    updatedFiles.append(iFile)
 
-    return False
+    return updatedFiles
 
 
 def hasFileChangedSince(file, time):
