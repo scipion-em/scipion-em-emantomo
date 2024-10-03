@@ -257,16 +257,16 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     def _validate(self):
         errorMsg = []
         refVol = self.reference.get()
+        # Check the dimensions
+        inParticles = self.particles.get()
+        dimsDict = inParticles._firstDim
+        inParticlesDims = (dimsDict[0], dimsDict[1], dimsDict[2])
+        # Eman fails if the dimensions are odd numbers
+        for iDim in inParticlesDims:
+            if iDim % 2 != 0:
+                errorMsg.append('The particles dimensions must be an even number')
+                break
         if refVol:
-            # Check the dimensions
-            inParticles = self.particles.get()
-            dimsDict = inParticles._firstDim
-            inParticlesDims = (dimsDict[0], dimsDict[1], dimsDict[2])
-            # Eman fails if the dimensions are odd numbers
-            for iDim in inParticlesDims:
-                if iDim % 2 != 0:
-                    errorMsg.append('The particles dimensions must be an even number')
-                    break
             x, y, z = refVol.getDimensions()
             refVolDims = (x, y, z)
             if refVolDims != inParticlesDims:

@@ -34,12 +34,13 @@ class EmantomoTomoProvider(TomogramsTreeProvider):
         super().__init__(tomoList, path, mode)
 
     def getObjectInfo(self, tomo):
-        tomogramName = removeBaseExt(tomo)
-        if tomo.count == 0:
+        tomogramName = removeBaseExt(tomo.getFileName())
+        tomoCoordsCount = getattr(tomo, 'count', 0)
+        if tomoCoordsCount == 0:
             return {'key': tomogramName, 'parent': None,
-                    'text': tomogramName, 'values': (tomo.count, "TODO"),
+                    'text': tomogramName, 'values': (tomoCoordsCount, "TODO"),
                     'tags': "pending"}
         else:
             return {'key': tomogramName, 'parent': None,
-                    'text': tomogramName, 'values': (tomo.count, "DONE"),
+                    'text': tomogramName, 'values': (tomoCoordsCount, "DONE"),
                     'tags': "done"}

@@ -107,7 +107,7 @@ class EmanProtRefineTS(EMProtocol, ProtTomoBase):
         tomos = coords.getPrecedents()
         tltSeries = recoverTSFromObj(coords, self)
         self.json_files, self.tomo_files = jsonFilesFromSet(tomos, info_path)
-        _ = setCoords3D2Jsons(self.json_files, coords)
+        setCoords3D2Jsons(self.json_files, coords)
         _ = tltParams2Json(self.json_files, tltSeries, mode="a")
 
         if self.inputCTF.get() is not None:
