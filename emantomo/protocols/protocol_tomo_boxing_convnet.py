@@ -81,8 +81,8 @@ class EmanProtTomoConvNet(ProtTomoPicking, ProtEmantomoBase):
     # --------------------------- STEPS functions -----------------------------
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
-        self._insertFunctionStep(self.convertInputStep, mdObjDict)
-        self._insertFunctionStep(self.launchBoxingGUIStep, interactive=True)
+        self._insertFunctionStep(self.convertInputStep, mdObjDict, needsGPU=False)
+        self._insertFunctionStep(self.launchBoxingGUIStep, interactive=True, needsGPU=True)
 
     def _initialize(self):
         inTomoSet = self.inputTomograms.get()

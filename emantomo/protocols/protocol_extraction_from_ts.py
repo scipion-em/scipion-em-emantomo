@@ -62,7 +62,6 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
         self.groupIds = None
         self.emanDict = None
         self.sphAb = None

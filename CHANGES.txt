@@ -1,3 +1,8 @@
+v3.3.6:
+  Users:
+   - Steps more precise in GPU usage. Improved execution
+  Developers:
+   - executionmode at class level
 v3.3.5:
  Users: template matching protocol stores the coordinates score.
  Developers: viewer efficiency improved and coordinates-tomograms matching is now more robust.
