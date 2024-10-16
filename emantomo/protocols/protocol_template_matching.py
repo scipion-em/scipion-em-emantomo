@@ -59,6 +59,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         super().__init__(**kwargs)
         self.inTomos = None
         self.badTsIds = String()
+        self.zeroCoordsTsIds = String()
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -180,12 +181,16 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
         if exists(tomoJsonFile):
             jsonBoxDict = loadJson(tomoJsonFile)
-            boxes = jsonBoxDict["boxes_3d"]
-            for box in boxes:
-                newCoord = readCoordinate3D(box, tomo)
-                outCoords.append(newCoord)
-            outCoords.write()
-            self._store(outCoords)
+            boxes = jsonBoxDict.get("boxes_3d", None)
+            if boxes:
+                for box in boxes:
+                    newCoord = readCoordinate3D(box, tomo)
+                    outCoords.append(newCoord)
+                outCoords.write()
+                self._store(outCoords)
+            else:
+                logger.warning(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})')
+                self.zeroCoordsTsIds.set(self.zeroCoordsTsIds.get() + f' {tsId}')
         else:
             logger.warning(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})')
 
@@ -252,8 +257,12 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def _summary(self):
         msg = []
         badTsIds = self.badTsIds.get()
+        zeroPickedTsIds = self.zeroCoordsTsIds.get()
         if badTsIds:
             msg.append(f'Some tomograms were not processed.\n'
                        f'*{badTsIds}*'
                        f'Check the log for more info\n')
+        if zeroPickedTsIds:
+            msg.append('Zero coordinates were picked in tomograms:\n'
+                       f'{zeroPickedTsIds}')
         return msg
