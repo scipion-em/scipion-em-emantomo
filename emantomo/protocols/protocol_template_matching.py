@@ -174,6 +174,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             for box in boxes:
                 newCoord = readCoordinate3D(box, tomo)
                 outCoords.append(newCoord)
+            outCoords.write()
             self._store(outCoords)
         else:
             logger.warning(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})')
