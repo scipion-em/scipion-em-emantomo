@@ -31,6 +31,7 @@ from emantomo import Plugin
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
 from emantomo.convert import loadJson, readCoordinate3D
 from emantomo.protocols.protocol_base import ProtEmantomoBase, REF_VOL, IN_TOMOS
+from pyworkflow.object import Set
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam, GE, LE, \
     STEPS_PARALLEL
 from pyworkflow.utils import Message, replaceExt
@@ -192,6 +193,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             outCoords.setPrecedents(self.inTomos)
             outCoords.setSamplingRate(self.inTomos.getSamplingRate())
             outCoords.setBoxSize(self.getRefVol().getDim()[0])
+            outCoords.setStreamState(Set.STREAM_OPEN)
 
             self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
             self._defineSourceRelation(self.inTomos, outCoords)
