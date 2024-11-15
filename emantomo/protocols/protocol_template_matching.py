@@ -176,23 +176,24 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             self.badTsIds.set(self.badTsIds.get() + f' {tsId}')
 
     def createOutputStep(self, tsId):
-        tomo = self.inTomos.getItem(Tomogram.TS_ID_FIELD, tsId)
-        outCoords = self.createOutputSet()
-        tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
-        if exists(tomoJsonFile):
-            jsonBoxDict = loadJson(tomoJsonFile)
-            boxes = jsonBoxDict.get("boxes_3d", None)
-            if boxes:
-                for box in boxes:
-                    newCoord = readCoordinate3D(box, tomo)
-                    outCoords.append(newCoord)
-                outCoords.write()
-                self._store(outCoords)
+        with self._lock:
+            tomo = self.inTomos.getItem(Tomogram.TS_ID_FIELD, tsId)
+            outCoords = self.createOutputSet()
+            tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
+            if exists(tomoJsonFile):
+                jsonBoxDict = loadJson(tomoJsonFile)
+                boxes = jsonBoxDict.get("boxes_3d", None)
+                if boxes:
+                    for box in boxes:
+                        newCoord = readCoordinate3D(box, tomo)
+                        outCoords.append(newCoord)
+                    outCoords.write()
+                    self._store(outCoords)
+                else:
+                    logger.warning(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})')
+                    self.zeroCoordsTsIds.set(self.zeroCoordsTsIds.get() + f' {tsId}')
             else:
-                logger.warning(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})')
-                self.zeroCoordsTsIds.set(self.zeroCoordsTsIds.get() + f' {tsId}')
-        else:
-            logger.warning(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})')
+                logger.warning(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})')
 
     def closeOutputSet(self):
         self._closeOutputSet()
