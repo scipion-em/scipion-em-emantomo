@@ -58,7 +58,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.inTomos = None
-        self.badTsIds = String()
+        self.badTsIds = String('')
         self.zeroCoordsTsIds = String()
 
     # --------------------------- DEFINE param functions ----------------------
