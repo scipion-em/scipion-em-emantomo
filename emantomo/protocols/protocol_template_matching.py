@@ -199,7 +199,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         self._closeOutputSet()
         # Throw an exception if no coordinates were registered
         if len(getattr(self, self._possibleOutputs.coordinates.name, '')) == 0:
-            raise Exception('ERROR!!! No coordinates were registered.')
+            raise ValueError('ERROR!!! No coordinates were registered.')
 
     # --------------------------- UTILS functions -----------------------------
     def _genTempMatchArgs(self, inTomoName):
