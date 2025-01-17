@@ -150,7 +150,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                                               prerequisites=tmId,
                                               needsGPU=False)
             closeSetStepDeps.append(cOutId)
-        self._insertFunctionStep(self._closeOutputSet,
+        self._insertFunctionStep(self.closeOutputSet,
                                  prerequisites=closeSetStepDeps,
                                  needsGPU=False)
 
