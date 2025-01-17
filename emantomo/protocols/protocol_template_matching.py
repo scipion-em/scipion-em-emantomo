@@ -224,7 +224,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         if outCoords:
             outCoords.enableAppend()
         else:
-            outCoords = SetOfCoordinates3D.create(self._getPath(), prefix="coordinates%s")
+            outCoords = SetOfCoordinates3D.create(self._getPath(), template="coordinates%s")
             outCoords.setPrecedents(self.inTomos)
             outCoords.setSamplingRate(self.inTomos.getSamplingRate())
             outCoords.setBoxSize(self.getRefVol().getDim()[0])
