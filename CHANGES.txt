@@ -1,3 +1,5 @@
+v3.4.0:
+ Users: template matching protocol semi-streamified.
 v3.3.5:
  Users: template matching protocol stores the coordinates score.
  Developers: viewer efficiency improved and coordinates-tomograms matching is now more robust.
