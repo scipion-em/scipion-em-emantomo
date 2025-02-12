@@ -105,7 +105,8 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
                                               genInterpolatedTs=True,
                                               correctrot=True,
                                               extrapad=True,
-                                              numberOfThreads=8)
+                                              numberOfThreads=1,
+                                              binThreads=8)
         protTsAlignTomoRec.setObjLabel('Align & Interp & Rec')
         self.launchProtocol(protTsAlignTomoRec)
 

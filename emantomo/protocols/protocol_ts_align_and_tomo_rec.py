@@ -471,7 +471,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return ' '.join(args)
 
     def getOutputSetOfTs(self, interpolated: bool = False) -> SetOfTiltSeries:
-        inTsPointer = self.getAttrib(IN_TS)
+        inTsPointer = self.getAttrib(IN_TS, getPointer=True)
         inTs = inTsPointer.get()
         outTsSet = self.getTiltSeries(interpolated=interpolated)
         if outTsSet:
