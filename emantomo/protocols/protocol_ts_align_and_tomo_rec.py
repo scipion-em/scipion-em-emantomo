@@ -115,6 +115,13 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       help='If set to Yes, the generated files will be saved in both HDF and MRC formats. They are '
                            'generated in HDF and then converted into MRC. The HDF files are deleted by default to '
                            'save storage.')
+        self.addBinThreads(form, helpMsg='Number of threads used by EMAN each time it is called in the '
+                                         'protocol execution. For example, if 2 Scipion threads and 3 EMAN '
+                                         'threads are set, the tomograms, tilt-series, etc will be processed '
+                                         'in groups of 2 at the same time with a call of EMAN with 3 threads '
+                                         'each, so 6 threads will be used at the same time. Beware the memory '
+                                         'of your machine has memory enough to load together the number of '
+                                         'tomograms, tilt-series, etc specified by Scipion threads.')
 
         form.addSection(label='Tilt series alignment')
         form.addParam('doAlignment', BooleanParam,
@@ -133,6 +140,17 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                            'is different from the one generated if only align TS is selected (It is part of '
                            'the reconstruction functionality in the first case, and a temp file part of the alignment '
                            'step in the second case).')
+        form.addParam('InterpBinningFactor', IntParam,
+                      default=4,
+                      condition='genInterpolatedTs',
+                      label='Binning for the interpolated',
+                      help='Binning to be applied to the interpolated  tilt-series in IMOD '
+                           'convention. \n'
+                           'Binning is an scaling factor given by an integer greater than 1. '
+                           'IMOD uses ordinary binning to reduce images in size by the given factor. '
+                           'The value of a binned pixel is the average of pixel values in each block '
+                           'of pixels being binned. Binning is applied before all other image '
+                           'transformations.')
         form.addParam('nLandmarks', IntParam,
                       default=20,
                       condition=alignCond,
@@ -252,13 +270,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       condition=recCond,
                       help='Use extra padding for tilted reconstruction. It is slower and costs more memory, '
                            'but reduces the boundary artifacts when the sample is thick.')
-        self.addBinThreads(form, helpMsg='Number of threads used by EMAN each time it is called in the '
-                                         'protocol execution. For example, if 2 Scipion threads and 3 EMAN '
-                                         'threads are set, the tomograms, tilt-series, etc will be processed '
-                                         'in groups of 2 at the same time with a call of EMAN with 3 threads '
-                                         'each, so 6 threads will be used at the same time. Beware the memory '
-                                         'of your machine has memory enough to load together the number of '
-                                         'tomograms, tilt-series, etc specified by Scipion threads.')
         form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -544,7 +555,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         rotationAngle = tsNonInterp.getAcquisition().getTiltAxisAngle()
         doSwap = 45 < abs(rotationAngle) < 135
         finalName = tsNonInterp.getFirstItem().getFileName().replace('.mrc', '_interpolated.mrc')
-        tsNonInterp.applyTransform(finalName, swapXY=doSwap)
+        tsNonInterp.applyTransform(finalName,
+                                   swapXY=doSwap,
+                                   outputBinning=self.InterpBinningFactor.get())
         for idx, ti in enumerate(mdObj.ts):
             outTi = ti.clone()
             outTi.setFileName(finalName)
@@ -576,7 +589,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                          0)
         return origin
 
-    def _createCurrentOutTs(self, mdObj, interpolated=False):
+    def _createCurrentOutTs(self, mdObj: EmanMetaData, interpolated: bool = False) -> TiltSeries:
         ts = mdObj.ts
         tsId = ts.getTsId()
         tiltSeries = TiltSeries(tsId=tsId)
@@ -601,14 +614,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 acq.setTiltAxisAngle(self._tiltAxisAngle)
                 tiltSeries.setAcquisition(acq)
         return tiltSeries
-
-    def _getInterpTsFile(self, mdObj):
-        # NOTE: The interpolated TS generated when the tomogram is requested to be reconstructed is different from
-        # the one generated if only align TS is selected (Seems to be part of the reconstruction functionality in the
-        # first case, and a temp file part of the alignment step in the second case).
-        interpBName = INTERP_TS if self.doRec.get() else 'tltseries_transali'
-        matchingFiles = glob.glob(self._getExtraPath('tomorecon_%02d' % mdObj.processingInd, interpBName + '.hdf'))
-        return max(matchingFiles, key=getctime)
 
         # --------------------------- reconstruct tomograms UTILS functions ----------------------------
     def _getRecArgs(self):
