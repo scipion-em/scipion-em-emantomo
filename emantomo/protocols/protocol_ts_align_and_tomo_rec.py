@@ -140,17 +140,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                            'is different from the one generated if only align TS is selected (It is part of '
                            'the reconstruction functionality in the first case, and a temp file part of the alignment '
                            'step in the second case).')
-        form.addParam('InterpBinningFactor', IntParam,
-                      default=4,
-                      condition='genInterpolatedTs',
-                      label='Binning for the interpolated',
-                      help='Binning to be applied to the interpolated  tilt-series in IMOD '
-                           'convention. \n'
-                           'Binning is an scaling factor given by an integer greater than 1. '
-                           'IMOD uses ordinary binning to reduce images in size by the given factor. '
-                           'The value of a binned pixel is the average of pixel values in each block '
-                           'of pixels being binned. Binning is applied before all other image '
-                           'transformations.')
         form.addParam('nLandmarks', IntParam,
                       default=20,
                       condition=alignCond,
@@ -555,9 +544,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         rotationAngle = tsNonInterp.getAcquisition().getTiltAxisAngle()
         doSwap = 45 < abs(rotationAngle) < 135
         finalName = tsNonInterp.getFirstItem().getFileName().replace('.mrc', '_interpolated.mrc')
-        tsNonInterp.applyTransform(finalName,
-                                   swapXY=doSwap,
-                                   outputBinning=self.InterpBinningFactor.get())
+        tsNonInterp.applyTransform(finalName, swapXY=doSwap)
         for idx, ti in enumerate(mdObj.ts):
             outTi = ti.clone()
             outTi.setFileName(finalName)
