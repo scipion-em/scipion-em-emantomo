@@ -701,7 +701,7 @@ def ts2Json(mdObj, mode="w"):
         trMatrixInv = np.linalg.inv(trMatrix)
         sx = trMatrixInv[0, 2] * shiftsScale
         sy = trMatrixInv[1, 2] * shiftsScale
-        rotzCorrected = np.rad2deg(np.arccos(trMatrixInv[0, 0]))
+        rotzCorrected = np.rad2deg(np.arctan2(trMatrixInv[0, 1], trMatrixInv[0, 0]))
         offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
         rotz = rotzCorrected + offTiltAngle
         # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
