@@ -41,7 +41,9 @@ from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer, String
-from pyworkflow.utils import makePath, createLink
+from pyworkflow.protocol import IntParam
+from pyworkflow.utils import makePath, createLink, cyanStr
+from tomo.objects import SetOfTiltSeries
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
 
@@ -63,18 +65,28 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._mdObjDict = {}
         self.inParticles = None
         self.inSamplingRate = -1.0
         self.scaleFactor = 1.0
         self.voltage = 300.0
         self.sphAb = 2.7
 
+    # --------------------------- DEFINE param functions ----------------------
+    def addBinThreads(self, form, helpMsg=''):
+        form.addParam('binThreads', IntParam,
+                      label='Eman threads',
+                      default=3,
+                      important=True,
+                      help=helpMsg)
+
     # --------------------------- STEPS functions -----------------------------
-    def convertTsStep(self, mdObj):
+    def convertTsStep(self, tsId: str):
         # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
-        logger.info(f'Converting TS {mdObj.tsId} into HDF...')
+        logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
+        mdObj = self._mdObjDict[tsId]
         inTsFName = mdObj.ts.getFirstItem().getFileName()
         sRate = mdObj.ts.getSamplingRate()
         self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)

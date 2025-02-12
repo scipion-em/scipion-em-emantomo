@@ -1,5 +1,8 @@
 v3.4.0:
- Users: template matching protocol semi-streamified.
+ Users:
+  - Protocols semi-streamified:
+    * Template matching
+    * Tilt-series alignment and tomogram reconstruction.
 v3.3.5:
  Users: template matching protocol stores the coordinates score.
  Developers: viewer efficiency improved and coordinates-tomograms matching is now more robust.
