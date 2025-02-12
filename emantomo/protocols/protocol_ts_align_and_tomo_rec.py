@@ -427,7 +427,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     # --------------------------- UTILS functions ----------------------------
     def getCommonArgs(self, tsId):
         args = ' %s ' % self._getTsFile(tsId)
-        args += '--threads=%i ' % self.numberOfThreads.get()
+        args += '--threads=%i ' % self.binThreads.get()
         return args
 
         # --------------------------- TS alignment UTILS functions ----------------------------
