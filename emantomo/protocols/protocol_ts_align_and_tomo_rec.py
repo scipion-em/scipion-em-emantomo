@@ -27,10 +27,10 @@ import glob
 import logging
 from enum import Enum
 from os import remove
-from os.path import join, getctime, basename
+from os.path import join, basename
 import numpy as np
 import emantomo
-from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, INTERP_TS, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS, \
+from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS, \
     EMAN_OFF_TILT_AXIS
 from emantomo.convert import ts2Json, loadJson, convertBetweenHdfAndMrc
 from emantomo.objects import EmanMetaData, EmanHdf5Handler
@@ -362,50 +362,51 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 logger.error(redStr(f'Execution failed for tsId {tsId} -> {e}'))
 
     def createOutputStep(self, tsId: str):
-        mdObj = self._mdObjDict[tsId]
-        if tsId in self.failedItems:
-            logger.info(cyanStr(f'===> tsId = {tsId} FAILED: creating the failed output...'))
-            inputSet = self.getAttrib(IN_TS, getPointer=True)
-            output = self.getOutputFailedSet(inputSet)
-            item = mdObj.ts
-            newItem = item.clone()
-            # newItem.copyInfo(item)
-            output.append(newItem)
-            newItem.copyItems(item)
-            newItem.write()
+        with self._lock:
+            mdObj = self._mdObjDict[tsId]
+            if tsId in self.failedItems:
+                logger.info(cyanStr(f'===> tsId = {tsId} FAILED: creating the failed output...'))
+                inputSet = self.getAttrib(IN_TS, getPointer=True)
+                output = self.getOutputFailedSet(inputSet)
+                item = mdObj.ts
+                newItem = item.clone()
+                # newItem.copyInfo(item)
+                output.append(newItem)
+                newItem.copyItems(item)
+                newItem.write()
 
-            output.update(newItem)
-            output.write()
-            self._store(output)
-        else:
-            logger.info(cyanStr(f'===> tsId = {tsId}: creating the output...'))
-            # TS alignment
-            if self.doAlignment.get():
-                jsonDict = loadJson(mdObj.jsonFile)
-                aliLoss = jsonDict[ALI_LOSS]
-                alignParams = jsonDict[TLT_PARAMS]
-                tsNonInterp = self._createOutputTs(mdObj, alignParams, aliLoss)
-                if self.genInterpolatedTs.get():
-                    self._createOutputTsInterpolated(mdObj, alignParams, tsNonInterp)
+                output.update(newItem)
+                output.write()
+                self._store(output)
+            else:
+                logger.info(cyanStr(f'===> tsId = {tsId}: creating the output...'))
+                # TS alignment
+                if self.doAlignment.get():
+                    jsonDict = loadJson(mdObj.jsonFile)
+                    aliLoss = jsonDict[ALI_LOSS]
+                    alignParams = jsonDict[TLT_PARAMS]
+                    tsNonInterp = self._createOutputTs(mdObj, alignParams, aliLoss)
+                    if self.genInterpolatedTs.get():
+                        self._createOutputTsInterpolated(mdObj, alignParams, tsNonInterp)
 
-            # Tomogram reconstruction
-            if self.doRec.get():
-                eh = EmanHdf5Handler(self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId))
-                tomogram = Tomogram()
-                tomogram.setFileName(self.getOutTomoFName(tsId))
-                tomogram.setSamplingRate(eh.getSamplingRate())
-                tomogram.setTsId(tsId)
-                acq = mdObj.ts.getAcquisition().clone()
-                if self._doUpdateTiltAxisAng:
-                    acq.setTiltAxisAngle(self._tiltAxisAngle)
-                tomogram.setAcquisition(acq)
-                # Set default tomogram origin
-                tomogram.setOrigin(newOrigin=False)
-                outTomoSet = self.getOutputSetOfTomograms()
-                outTomoSet.append(tomogram)
-                outTomoSet.update(tomogram)
-                outTomoSet.write()
-                self._store(outTomoSet)
+                # Tomogram reconstruction
+                if self.doRec.get():
+                    eh = EmanHdf5Handler(self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId))
+                    tomogram = Tomogram()
+                    tomogram.setFileName(self.getOutTomoFName(tsId))
+                    tomogram.setSamplingRate(eh.getSamplingRate())
+                    tomogram.setTsId(tsId)
+                    acq = mdObj.ts.getAcquisition().clone()
+                    if self._doUpdateTiltAxisAng:
+                        acq.setTiltAxisAngle(self._tiltAxisAngle)
+                    tomogram.setAcquisition(acq)
+                    # Set default tomogram origin
+                    tomogram.setOrigin(newOrigin=False)
+                    outTomoSet = self.getOutputSetOfTomograms()
+                    outTomoSet.append(tomogram)
+                    outTomoSet.update(tomogram)
+                    outTomoSet.write()
+                    self._store(outTomoSet)
 
     def closeOutputSetsStep(self):
         # Remove HDF files if requested
