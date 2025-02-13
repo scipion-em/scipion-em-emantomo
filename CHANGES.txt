@@ -1,5 +1,6 @@
 v3.4.0:
  Users:
+  - Correct bug in the convert for alignment transformations in the case of negative tilt axis angle.
   - Protocols semi-streamified:
     * Template matching
     * Tilt-series alignment and tomogram reconstruction.
