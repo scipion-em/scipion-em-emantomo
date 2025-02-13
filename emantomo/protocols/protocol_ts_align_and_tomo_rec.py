@@ -115,13 +115,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       help='If set to Yes, the generated files will be saved in both HDF and MRC formats. They are '
                            'generated in HDF and then converted into MRC. The HDF files are deleted by default to '
                            'save storage.')
-        self.addBinThreads(form, helpMsg='Number of threads used by EMAN each time it is called in the '
-                                         'protocol execution. For example, if 2 Scipion threads and 3 EMAN '
-                                         'threads are set, the tomograms, tilt-series, etc will be processed '
-                                         'in groups of 2 at the same time with a call of EMAN with 3 threads '
-                                         'each, so 6 threads will be used at the same time. Beware the memory '
-                                         'of your machine has memory enough to load together the number of '
-                                         'tomograms, tilt-series, etc specified by Scipion threads.')
+        self._addBinThreads(form)
 
         form.addSection(label='Tilt series alignment')
         form.addParam('doAlignment', BooleanParam,

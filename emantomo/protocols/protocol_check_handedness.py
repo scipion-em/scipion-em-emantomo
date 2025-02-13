@@ -1,9 +1,9 @@
+# -*- coding: utf-8 -*-
 # **************************************************************************
 # *
-# * Authors:     David Herreros Calero (dherreros@cnb.csic.es) [1]
-# *              Scipion Team (scipion@cnb.csic.es) [1]
+# * Authors:     Scipion Team
 # *
-# * [1] Unidad de  Bioinformatica of Centro Nacional de Biotecnologia , CSIC
+# * National Center of Biotechnology, CSIC, Spain
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@
 # *
 # **************************************************************************
 
-from enum import Enum
 from os.path import exists, join
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
@@ -33,22 +32,17 @@ from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
-from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
+from pyworkflow.protocol import PointerParam
 from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
 from emantomo.convert import loadJson, ts2Json
 
 
-class EstimateCtfOutputs(Enum):
-    CTFs = SetOfCTFTomoSeries
-
-
 class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
     """
-    Protocol for CTF estimation from tilt series using e2spt_tomoctf.py
+    Protocol for checking handedness by CTF using e2spt_tomoctf.py
     """
-    _label = 'ctf estimation'
-    _possibleOutputs = EstimateCtfOutputs
+    _label = 'Check handedness by CTF'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -64,7 +58,8 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
         self._addBinThreads(form)
         form.addParallelSection(threads=1, mpi=0)
 
-    # --------------------------- INSERT steps functions ----------------------
+        # --------------------------- INSERT steps functions ----------------------
+
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
         for mdObj in mdObjDict.values():

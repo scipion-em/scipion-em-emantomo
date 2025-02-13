@@ -47,7 +47,6 @@ from tomo.objects import SetOfTiltSeries
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
 
-
 logger = logging.getLogger(__name__)
 
 IN_TS = 'inputTS'
@@ -60,7 +59,6 @@ REF_VOL = 'refVol'
 
 
 class ProtEmantomoBase(EMProtocol, ProtTomoBase):
-
     _devStatus = BETA
 
     def __init__(self, **kwargs):
@@ -73,7 +71,16 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         self.sphAb = 2.7
 
     # --------------------------- DEFINE param functions ----------------------
-    def addBinThreads(self, form, helpMsg=''):
+    @staticmethod
+    def _addBinThreads(form, helpMsg=''):
+        if not helpMsg:
+            helpMsg = ('Number of threads used by EMAN each time it is called in the ' 
+                       'protocol execution. For example, if 2 Scipion threads and 3 EMAN '
+                       'threads are set, the tomograms, tilt-series, etc will be processed '
+                       'in groups of 2 at the same time with a call of EMAN with 3 threads '
+                       'each, so 6 threads will be used at the same time. Beware the memory '
+                       'of your machine has memory enough to load together the number of '
+                       'tomograms, tilt-series, etc specified by Scipion threads.')
         form.addParam('binThreads', IntParam,
                       label='Eman threads',
                       default=3,

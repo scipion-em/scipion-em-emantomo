@@ -30,11 +30,9 @@ from os.path import exists, join
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
 from emantomo.objects import EmanMetaData
-from emantomo.protocols.protocol_base import IN_TS
-from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
-from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
 from emantomo.convert import loadJson, ts2Json
 
@@ -43,7 +41,7 @@ class EstimateCtfOutputs(Enum):
     CTFs = SetOfCTFTomoSeries
 
 
-class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
+class EmanProtEstimateCTFBase(ProtEmantomoBase):
     """
     Protocol for CTF estimation from tilt series using e2spt_tomoctf.py
     """
@@ -54,17 +52,49 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
         super().__init__(**kwargs)
 
     # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_TS, PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      label="Tilt Series",
-                      important=True)
-        self._defineCTFParams(form)
-        self._addBinThreads(form)
-        form.addParallelSection(threads=1, mpi=0)
+    @staticmethod
+    def _defineCTFParams(form):
+        # form.addSection(label='Input')
+        # form.addParam(IN_TS, PointerParam,
+        #               pointerClass='TiltSeries',  #'SetOfTiltSeries',
+        #               label="Tilt Series",
+        #               important=True)
+        lineDefocus = form.addLine('Defocus range (μm)',
+                                   help="Search range of defocus (start, end, step). Note that "
+                                        "they must be introduced in microns.")
 
-    # --------------------------- INSERT steps functions ----------------------
+        lineDefocus.addParam('minDefocus', FloatParam, default=2.0, label='min')
+        lineDefocus.addParam('maxDefocus', FloatParam, default=7.0, label='max')
+        lineDefocus.addParam('stepDefocus', FloatParam, default=0.02, label='Step')
+        form.addParam('doPhaseShiftSearch', BooleanParam,
+                      label='Do phase shift search?',
+                      default=False)
+        linePhaseShift = form.addLine('Phase shift range (deg.)',
+                                      condition='doPhaseShiftSearch',
+                                      help="Search range of the phase shift (start, end, step). To avoid"
+                                           "the phase shift search use min 0.0, max 1.0, and step 1.0.")
+        linePhaseShift.addParam('minPhaseShift', FloatParam, default=0, label='min', condition='doPhaseShiftSearch')
+        linePhaseShift.addParam('maxPhaseShift', FloatParam, default=1, label='max', condition='doPhaseShiftSearch')
+        linePhaseShift.addParam('stepPhaseShift', FloatParam, default=1, label='Step', condition='doPhaseShiftSearch')
+
+        form.addParam('tilesize', IntParam,
+                      label='Size of tile to calculate FFT',
+                      default=256)
+        form.addParam('nref', IntParam,
+                      label='Number of references',
+                      default=15,
+                      help='Using N tilt images near the center tilt to estimate the range of defocus for all images.')
+        form.addParam('stepx', IntParam,
+                      label='Step in X direction',
+                      default=20,
+                      help='Number of tiles to generate on x-axis (different defocus)')
+        form.addParam('stepy', IntParam,
+                      label='Step in Y direction',
+                      default=40,
+                      help='Number of tiles to generate on y-axis (same defocus)')
+
+        # --------------------------- INSERT steps functions ----------------------
+
     def _insertAllSteps(self):
         mdObjDict = self._initialize()
         for mdObj in mdObjDict.values():
@@ -72,6 +102,7 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
             self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
             self._insertFunctionStep(self.estimateCtfStep, mdObj)
         self._insertFunctionStep(self.createOutputStep, mdObjDict)
+
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
