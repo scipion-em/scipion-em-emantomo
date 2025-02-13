@@ -699,15 +699,11 @@ def ts2Json(mdObj, mode="w"):
         tiltAngle = tiltImage.getTiltAngle()
         trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
         trMatrixInv = np.linalg.inv(trMatrix)
-        sx = trMatrixInv[0, 2] * shiftsScale
-        sy = trMatrixInv[1, 2] * shiftsScale
+        sx = - trMatrixInv[0, 2] * shiftsScale
+        sy = - trMatrixInv[1, 2] * shiftsScale
         rotzCorrected = np.rad2deg(np.arctan2(trMatrixInv[0, 1], trMatrixInv[0, 0]))
         offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
         rotz = rotzCorrected + offTiltAngle
-        # rotZ --> -rotZ: (from EMAN doc) Angle of the tilt axis. Note the angle stored internally will have an
-        # opposite sign
-        if tiltAxisAngle >= 0:
-            rotz = -rotz
         tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
         aliLoss.append(getattr(tiltImage, EMAN_ALI_LOSS, Float(0)).get())
     tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle

@@ -86,7 +86,8 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
     expectedDimsTs = DataSetRe4STATuto.dimsTsBin1Dict.value
     tsAcqDict = DataSetRe4STATuto.tsAcqDict.value
     expectedTomoThk = 250
-    expectedTomoDimsDict = {TS_54: [1080, 1050, expectedTomoThk]}
+    expectedTomoDimsDict = {TS_54: [1080, 1050, expectedTomoThk],
+                            TS_03:[1024, 1000, expectedTomoThk]}
 
     @classmethod
     def setUpClass(cls):
@@ -111,7 +112,6 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
         self.launchProtocol(protTsAlignTomoRec)
 
         # CHECK THE OUTPUTS
-        self.expectedTomoDimsDict[TS_03] = [1024, 1000, self.expectedTomoThk]
         tsAligned = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeries.name, None)
         tsInterp = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeriesInterpolated.name, None)
         tomosRec = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tomograms.name, None)
@@ -159,12 +159,12 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
                                               clipz=self.expectedTomoThk,
                                               correctrot=True,
                                               extrapad=True,
-                                              numberOfThreads=8)
+                                              numberOfThreads=1,
+                                              binThreads=8)
         protTsAlignTomoRec.setObjLabel('Tomo rec')
         self.launchProtocol(protTsAlignTomoRec)
 
         # Check the results
-        self.expectedTomoDimsDict[TS_03] = [1050, 1000, self.expectedTomoThk]
         tomosRec = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tomograms.name, None)
         tsAligned = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeries.name, None)
         tsInterp = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeriesInterpolated.name, None)
