@@ -24,19 +24,14 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
 from enum import Enum
-from os.path import exists, join
-from emantomo import Plugin
-from emantomo.constants import TS_DIR
-from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
-from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
-from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
+from pyworkflow.object import Set
+from pyworkflow.protocol import PointerParam, STEPS_PARALLEL
 from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
-from emantomo.convert import loadJson, ts2Json
+from emantomo.convert import loadJson
 
 
 class EstimateCtfOutputs(Enum):
@@ -49,6 +44,7 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
     """
     _label = 'ctf estimation'
     _possibleOutputs = EstimateCtfOutputs
+    stepsExecutionMode = STEPS_PARALLEL
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -66,47 +62,31 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
-        mdObjDict = self._initialize()
-        for mdObj in mdObjDict.values():
-            self._insertFunctionStep(self.convertTsStep, mdObj)
-            self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
-            self._insertFunctionStep(self.estimateCtfStep, mdObj)
-        self._insertFunctionStep(self.createOutputStep, mdObjDict)
+        closeSetStepDeps = []
+        self._initialize()
+        for tsId in self.mdObjDict.keys():
+            cId = self._insertFunctionStep(self.convertTsStep, tsId,
+                                           prerequisites=[],
+                                           needsGPU=False)
+            wJsonId = self._insertFunctionStep(self.writeData2JsonFileStep, tsId,
+                                               prerequisites=cId,
+                                               needsGPU=False)
+            ctfId = self._insertFunctionStep(self.estimateCtfStep, tsId,
+                                             prerequisites=wJsonId,
+                                             needsGPU=False)
+            cOutId = self._insertFunctionStep(self.createOutputStep, tsId,
+                                              prerequisites=ctfId,
+                                              needsGPU=False)
+            closeSetStepDeps.append(cOutId)
+        self._insertFunctionStep(self._closeOutputSet,
+                                 prerequisites=closeSetStepDeps,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
-    def _initialize(self):
-        inTsSet = self.getAttrib(IN_TS)
-        self.createInitEmanPrjDirs()
-        # Manage the TS
-        presentTsIds = set(getPresentTsIdsInSet(inTsSet))
-        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
-        # Get the required acquisition data
-        self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
-        self.voltage = inTsSet.getAcquisition().getVoltage()
-        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
-        mdObjDict = {}
-        for tomoId, ts in tsIdsDict.items():
-            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
-                                             ts=ts,
-                                             tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
-                                             jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
-        return mdObjDict
-
-    @staticmethod
-    def writeData2JsonFileStep(mdObj):
-        mode = 'a' if exists(mdObj.jsonFile) else 'w'
-        ts2Json(mdObj, mode=mode)
-
-    def estimateCtfStep(self, mdObj):
-        program = Plugin.getProgram('e2spt_tomoctf.py')
-        self.runJob(program, self._genCtfEstimationArgs(mdObj), cwd=self._getExtraPath())
-
-    def createOutputStep(self, mdObjDict):
-        inTsSet = self.getAttrib(IN_TS)
-        outCtfSet = SetOfCTFTomoSeries.create(self._getPath(), template='CTFmodels%s.sqlite')
-        outCtfSet.setSetOfTiltSeries(inTsSet)
-
-        for tsId, mdObj in mdObjDict.items():
+    def createOutputStep(self, tsId: str):
+        with self._lock:
+            mdObj = self.mdObjDict[tsId]
+            outCtfSet = self.getOutputCtfTomoSet()
             ts = mdObj.ts
             newCTFTomoSeries = CTFTomoSeries()
             newCTFTomoSeries.copyInfo(ts)
@@ -129,26 +109,23 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
                 newCTFTomo.setDefocusAngle(0)
                 newCTFTomoSeries.append(newCTFTomo)
 
-        self._defineOutputs(**{self._possibleOutputs.CTFs.name: outCtfSet})
-        self._defineSourceRelation(getattr(self, IN_TS), outCtfSet)
+            newCTFTomoSeries.write()
+            outCtfSet.update(newCTFTomoSeries)
+            outCtfSet.write()
+            self._store(outCtfSet)
 
     # --------------------------- UTILS functions -----------------------------
-    def _genCtfEstimationArgs(self, mdObj):
-        args = '%s ' % mdObj.tsHdfName
-        args += '--dfrange %s ' % ','.join([str(self.minDefocus.get()),
-                                            str(self.maxDefocus.get()),
-                                            str(self.stepDefocus.get())])
-        args += '--psrange %s ' % ','.join([str(self.minPhaseShift.get()),
-                                            str(self.maxPhaseShift.get()),
-                                            str(self.stepPhaseShift.get())])
-        args += '--tilesize %i ' % self.tilesize.get()
-        args += '--voltage %i ' % self.voltage
-        args += '--cs %.2f ' % self.sphAb
-        args += '--nref %i ' % self.nref.get()
-        args += '--stepx %i ' % self.stepx.get()
-        args += '--stepy %i ' % self.stepy.get()
-        args += '--threads %i ' % self.numberOfThreads.get()
-        args += '--verbose 9 '
-        return args
+    def getOutputCtfTomoSet(self) -> SetOfCTFTomoSeries:
+        outCtfSet = getattr(self, self._possibleOutputs.CTFs.name, None)
+        if outCtfSet:
+            outCtfSet.enableAppend()
+        else:
+            inTsSetPointer = self.getAttrib(IN_TS, getPointer=True)
+            outCtfSet = SetOfCTFTomoSeries.create(self._getPath(),
+                                                  template='ctfTomoSeries%s.sqlite')
+            outCtfSet.setSetOfTiltSeries(inTsSetPointer)
+            outCtfSet.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{self._possibleOutputs.CTFs.name: outCtfSet})
+            self._defineSourceRelation(inTsSetPointer, outCtfSet)
 
-
+        return outCtfSet

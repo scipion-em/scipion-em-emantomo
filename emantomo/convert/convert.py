@@ -686,7 +686,6 @@ def ts2Json(mdObj, mode="w"):
     tltParams = []
     aliLoss = []
     ts = mdObj.ts
-    tiltAxisAngle = ts.getAcquisition().getTiltAxisAngle()
     apixTs = ts.getSamplingRate()
     jsonFile = mdObj.jsonFile
     tltFile = mdObj.tsHdfName

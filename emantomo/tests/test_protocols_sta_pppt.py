@@ -193,7 +193,8 @@ class TestEmanEstimateCtf(TestEmanBasePPPT):
                                            maxDefocus=4,
                                            stepDefocus=0.02,
                                            tilesize=512,
-                                           numberOfThreads=8)
+                                           numberOfThreads=1,
+                                           binThreads=8)
         self.launchProtocol(protEstimateCtf)
         outCtfs = getattr(protEstimateCtf, protEstimateCtf._possibleOutputs.CTFs.name, None)
         self.assertIsNotNone(outCtfs, "There was a problem estimating the CTFs")

@@ -63,7 +63,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._mdObjDict = {}
+        self.mdObjDict = {}
         self.inParticles = None
         self.inSamplingRate = -1.0
         self.scaleFactor = 1.0
@@ -93,7 +93,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
         logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
-        mdObj = self._mdObjDict[tsId]
+        mdObj = self.mdObjDict[tsId]
         inTsFName = mdObj.ts.getFirstItem().getFileName()
         sRate = mdObj.ts.getSamplingRate()
         self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)

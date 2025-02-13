@@ -23,6 +23,7 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
+from .protocol_check_handedness import EmanProtEstimateHandedness
 from .protocol_refine_multi_new import EmanProtMultiRefinementNew
 from .protocol_refine_new import EmanProtTomoRefinementNew
 from .protocol_template_matching import EmanProtTemplateMatching

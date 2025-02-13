@@ -33,7 +33,7 @@ from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
-from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
+from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo, TiltSeries
 from emantomo.convert import loadJson, ts2Json
 
 
@@ -47,6 +47,7 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
     """
     _label = 'ctf estimation'
     _possibleOutputs = EstimateCtfOutputs
+    program = Plugin.getProgram('e2spt_tomoctf.py')
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,11 +55,6 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
     # --------------------------- DEFINE param functions ----------------------
     @staticmethod
     def _defineCTFParams(form):
-        # form.addSection(label='Input')
-        # form.addParam(IN_TS, PointerParam,
-        #               pointerClass='TiltSeries',  #'SetOfTiltSeries',
-        #               label="Tilt Series",
-        #               important=True)
         lineDefocus = form.addLine('Defocus range (μm)',
                                    help="Search range of defocus (start, end, step). Note that "
                                         "they must be introduced in microns.")
@@ -93,17 +89,6 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
                       default=40,
                       help='Number of tiles to generate on y-axis (same defocus)')
 
-        # --------------------------- INSERT steps functions ----------------------
-
-    def _insertAllSteps(self):
-        mdObjDict = self._initialize()
-        for mdObj in mdObjDict.values():
-            self._insertFunctionStep(self.convertTsStep, mdObj)
-            self._insertFunctionStep(self.writeData2JsonFileStep, mdObj)
-            self._insertFunctionStep(self.estimateCtfStep, mdObj)
-        self._insertFunctionStep(self.createOutputStep, mdObjDict)
-
-
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
         inTsSet = self.getAttrib(IN_TS)
@@ -115,56 +100,23 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
         self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
         self.voltage = inTsSet.getAcquisition().getVoltage()
         # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
-        mdObjDict = {}
         for tomoId, ts in tsIdsDict.items():
-            mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
-                                             ts=ts,
-                                             tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
-                                             jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
-        return mdObjDict
+            self.mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
+                                                  ts=ts,
+                                                  tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
+                                                  jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
 
-    @staticmethod
-    def writeData2JsonFileStep(mdObj):
+    def writeData2JsonFileStep(self, tsId: str):
+        mdObj = self.mdObjDict[tsId]
         mode = 'a' if exists(mdObj.jsonFile) else 'w'
         ts2Json(mdObj, mode=mode)
 
-    def estimateCtfStep(self, mdObj):
-        program = Plugin.getProgram('e2spt_tomoctf.py')
-        self.runJob(program, self._genCtfEstimationArgs(mdObj), cwd=self._getExtraPath())
-
-    def createOutputStep(self, mdObjDict):
-        inTsSet = self.getAttrib(IN_TS)
-        outCtfSet = SetOfCTFTomoSeries.create(self._getPath(), template='CTFmodels%s.sqlite')
-        outCtfSet.setSetOfTiltSeries(inTsSet)
-
-        for tsId, mdObj in mdObjDict.items():
-            ts = mdObj.ts
-            newCTFTomoSeries = CTFTomoSeries()
-            newCTFTomoSeries.copyInfo(ts)
-            newCTFTomoSeries.setTiltSeries(ts)
-            newCTFTomoSeries.setObjId(ts.getObjId())
-            newCTFTomoSeries.setTsId(tsId)
-            outCtfSet.append(newCTFTomoSeries)
-            jsonDict = loadJson(mdObj.jsonFile)
-            defocus = jsonDict['defocus']
-            phase_shift = jsonDict['phase']
-            for idx, tiltImage in enumerate(ts.iterItems()):
-                defocusU = defocusV = 10000.0 * defocus[idx]
-                newCTFTomo = CTFTomo()
-                newCTFTomo.setIndex(idx + 1)
-                newCTFTomo.setAcquisitionOrder(tiltImage.getAcquisitionOrder())
-                if phase_shift[idx] != 0:
-                    newCTFTomo.setPhaseShift(phase_shift[idx])
-                newCTFTomo.setDefocusU(defocusU)
-                newCTFTomo.setDefocusV(defocusV)
-                newCTFTomo.setDefocusAngle(0)
-                newCTFTomoSeries.append(newCTFTomo)
-
-        self._defineOutputs(**{self._possibleOutputs.CTFs.name: outCtfSet})
-        self._defineSourceRelation(getattr(self, IN_TS), outCtfSet)
+    def estimateCtfStep(self, tsId: str):
+        mdObj = self.mdObjDict[tsId]
+        self.runJob(self.program, self._genCtfEstimationArgs(mdObj), cwd=self._getExtraPath())
 
     # --------------------------- UTILS functions -----------------------------
-    def _genCtfEstimationArgs(self, mdObj):
+    def _genCtfEstimationArgs(self, mdObj: EmanMetaData):
         args = '%s ' % mdObj.tsHdfName
         args += '--dfrange %s ' % ','.join([str(self.minDefocus.get()),
                                             str(self.maxDefocus.get()),
@@ -178,8 +130,7 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
         args += '--nref %i ' % self.nref.get()
         args += '--stepx %i ' % self.stepx.get()
         args += '--stepy %i ' % self.stepy.get()
-        args += '--threads %i ' % self.numberOfThreads.get()
+        args += '--threads %i ' % self.binThreads.get()
         args += '--verbose 9 '
         return args
-
 
