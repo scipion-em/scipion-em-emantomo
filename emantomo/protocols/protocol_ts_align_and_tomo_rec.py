@@ -260,7 +260,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     def _insertAllSteps(self):
         closeSetStepDeps = []
         self._initialize()
-        for tsId in self._mdObjDict.keys():
+        for tsId in self.mdObjDict.keys():
             cInId = self._insertFunctionStep(self.convertTsStep, tsId,
                                              prerequisites=[],
                                              needsGPU=False)
@@ -290,7 +290,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         if self.tiltAxisAngle.get():  # Value from form
             self._doUpdateTiltAxisAng = True
 
-        self._mdObjDict = {}
         presentTsIds = getPresentTsIdsInSet(self.inTsSet)
         tsDict = {ts.getTsId(): ts.clone() for ts in self.inTsSet if ts.getTsId() in presentTsIds}
         counter = 0
@@ -298,7 +297,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             if not self.letEmanEstimateTilts.get():
                 # Generate tlt file depending on the user choice about the tilt angles
                 ts.generateTltFile(join(tltDir, tsId + '.tlt'))
-            self._mdObjDict[tsId] = EmanMetaData(tsId=tsId,
+            self.mdObjDict[tsId] = EmanMetaData(tsId=tsId,
                                                  ts=ts,
                                                  tsHdfName=join(TS_DIR, f'{tsId}.hdf'),
                                                  jsonFile=genJsonFileName(self.getInfoDir(), tsId),
@@ -310,7 +309,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         try:
             # Generate initial json file required by EMAN for the reconstruction considering a previous alignment
             if self.doRec.get() and not self.doAlignment.get():
-                mdObj = self._mdObjDict[tsId]
+                mdObj = self.mdObjDict[tsId]
                 # This only applies to the reconstruction
                 ts2Json(mdObj, mode='w')
         except Exception as e:
@@ -323,7 +322,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             try:
                 cmd = [self.getCommonArgs(tsId)]
                 if self.doAlignment.get():
-                    mdObj = self._mdObjDict[tsId]
+                    mdObj = self.mdObjDict[tsId]
                     cmd.append(self._getAlignArgs(mdObj))
                 if self.doRec.get():
                     cmd.append(self._getRecArgs())
@@ -338,7 +337,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         if tsId not in self.failedItems:
             try:
                 # Create a link that will be the non-interpolated TS output file name
-                mdObj = self._mdObjDict[tsId]
+                mdObj = self.mdObjDict[tsId]
                 inFile = mdObj.ts.getFirstItem().getFileName()
                 outFile = self.getOutTsNonInterpFName(tsId)
                 createLink(inFile, outFile)
@@ -357,7 +356,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def createOutputStep(self, tsId: str):
         with self._lock:
-            mdObj = self._mdObjDict[tsId]
+            mdObj = self.mdObjDict[tsId]
             if tsId in self.failedItems:
                 logger.info(cyanStr(f'===> tsId = {tsId} FAILED: creating the failed output...'))
                 inputSet = self.getAttrib(IN_TS, getPointer=True)
