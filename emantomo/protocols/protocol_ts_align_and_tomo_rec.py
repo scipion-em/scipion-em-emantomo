@@ -472,7 +472,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             args.append('--notmp')
         if tAx:
             args.append(f'--tltax={tAx:.2f}')
-        args.append('--verbose=9')
+        args.append('--dryrun --verbose=9')
         return ' '.join(args)
 
     def getOutputSetOfTs(self, interpolated: bool = False) -> SetOfTiltSeries:
