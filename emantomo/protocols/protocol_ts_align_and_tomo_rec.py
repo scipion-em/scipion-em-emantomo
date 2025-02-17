@@ -352,7 +352,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                     inputSet = self.getAttrib(IN_TS, getPointer=True)
                     output = self.getOutputFailedSet(inputSet)
                     newItem = ts.clone()
-                    # newItem.copyInfo(item)
                     output.append(newItem)
                     newItem.copyItems(ts)
                     newItem.write()
@@ -548,9 +547,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             # Append the current tilt image to the corresponding tilt series
             tiltSeries.append(outTi)
 
-        # tiltSeries.write()
+        tiltSeries.write()
         outTsSet.update(tiltSeries)
-        # outTsSet.write()
+        outTsSet.write()
         self._store(outTsSet)
         return tiltSeries
 
@@ -580,9 +579,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         acq = tiltSeries.getAcquisition()
         acq.setTiltAxisAngle(0.)  # 0 because the TS is aligned
         tiltSeries.setAcquisition(acq)
-        # tiltSeries.write()
+        tiltSeries.write()
         outTsSet.update(tiltSeries)
-        # outTsSet.write()
+        outTsSet.write()
         self._store(outTsSet)
         return outTsSet
 
