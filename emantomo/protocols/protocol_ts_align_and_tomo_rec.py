@@ -627,11 +627,9 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 f'--clipz={self.clipz.get()}',
                 f'--filterres={self.filterres.get():.2f}',
                 f'--rmbeadthr={self.rmbeadthr.get():.2f}',
-                f'--tltkeep={self.tltkeep.get()}']
-
-        if self.doRec.get() and not self.doAlignment.get():
-            args.append('--load')  # Load existing tilt parameters
-            args.append('--noali')  # Skip initial alignment
+                f'--tltkeep={self.tltkeep.get()}',
+                '--load']
+                # '--noali']
 
         if self.bytile.get():
             args.append('--bytile')
