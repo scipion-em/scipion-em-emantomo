@@ -306,20 +306,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         sRate = ts.getSamplingRate()
         self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
 
-        # presentTsIds = getPresentTsIdsInSet(self.inTsSet)
-        # tsDict = {ts.getTsId(): ts.clone() for ts in self.inTsSet if ts.getTsId() in presentTsIds}
-        # counter = 0
-        # for tsId, ts in tsDict.items():
-        #     if not self.letEmanEstimateTilts.get():
-        #         # Generate tlt file depending on the user choice about the tilt angles
-        #         ts.generateTltFile(join(tltDir, tsId + '.tlt'))
-        #     self.mdObjDict[tsId] = EmanMetaData(tsId=tsId,
-        #                                          ts=ts,
-        #                                          tsHdfName=join(TS_DIR, f'{tsId}.hdf'),
-        #                                          jsonFile=genJsonFileName(self.getInfoDir(), tsId),
-        #                                          processingInd=counter)
-        #     counter += 1
-
     def writeData2JsonFileStep(self, tsId: str):
         logger.info(cyanStr(f'===> tsId = {tsId}: writing the json files...'))
         try:
@@ -341,9 +327,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         if self.doAlignment.get() and tsId not in self.failedItems:
             logger.info(cyanStr(f'===> tsId = {tsId}: running EMAN align TS...'))
             try:
-                cmd = [self.getCommonArgs(tsId)]
-                mdObj = self.mdObjDict[tsId]
-                cmd.append(self._getAlignArgs(mdObj))
+                ts = self.getCurrentTs(tsId)
+                cmd = [self.getCommonArgs(tsId), self._getAlignArgs(ts)]
                 self.runJob(self.program, ' '.join(cmd), cwd=self._getExtraPath())
             except Exception as e:
                 self.failedItems.append(tsId)
