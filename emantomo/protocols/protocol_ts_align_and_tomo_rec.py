@@ -267,11 +267,14 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             wDataId = self._insertFunctionStep(self.writeData2JsonFileStep, tsId,
                                                prerequisites=cInId,
                                                needsGPU=False)
-            runId = self._insertFunctionStep(self.emanStep, tsId,
+            aliId = self._insertFunctionStep(self.emanAliStep, tsId,
                                              prerequisites=wDataId,
                                              needsGPU=False)
+            recId = self._insertFunctionStep(self.emanRecStep, tsId,
+                                             prerequisites=aliId,
+                                             needsGPU=False)
             cOutId = self._insertFunctionStep(self.convertOutputStep, tsId,
-                                              prerequisites=runId,
+                                              prerequisites=recId,
                                               needsGPU=False)
             crOutId = self._insertFunctionStep(self.createOutputStep, tsId,
                                                prerequisites=cOutId,
@@ -316,22 +319,27 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             self.failedItems.append(tsId)
             logger.error(redStr(f'Execution failed for tsId {tsId} -> {e}'))
 
-    def emanStep(self, tsId: str):
-        if tsId not in self.failedItems:
-            logger.info(cyanStr(f'===> tsId = {tsId}: running EMAN align TS and rec tomograms program...'))
+    def emanAliStep(self, tsId: str):
+        if self.doAlignment.get() and tsId not in self.failedItems:
+            logger.info(cyanStr(f'===> tsId = {tsId}: running EMAN align TS...'))
             try:
                 cmd = [self.getCommonArgs(tsId)]
-                if self.doAlignment.get():
-                    mdObj = self.mdObjDict[tsId]
-                    cmd.append(self._getAlignArgs(mdObj))
-                if self.doRec.get():
-                    cmd.append(self._getRecArgs())
-                else:
-                    cmd.append('--dryrun')
+                mdObj = self.mdObjDict[tsId]
+                cmd.append(self._getAlignArgs(mdObj))
                 self.runJob(self.program, ' '.join(cmd), cwd=self._getExtraPath())
             except Exception as e:
                 self.failedItems.append(tsId)
-                logger.error(redStr(f'Execution failed for tsId {tsId} -> {e}'))
+                logger.error(redStr(f'Tilt-series alignment failed for tsId {tsId} -> {e}'))
+
+    def emanRecStep(self, tsId: str):
+        if self.doRec.get() and tsId not in self.failedItems:
+            logger.info(cyanStr(f'===> tsId = {tsId}: running EMAN reconstruct tomogram...'))
+            try:
+                cmd = [self.getCommonArgs(tsId), self._getRecArgs()]
+                self.runJob(self.program, ' '.join(cmd), cwd=self._getExtraPath())
+            except Exception as e:
+                self.failedItems.append(tsId)
+                logger.error(redStr(f'Tomogram reconstruction failed for tsId {tsId} -> {e}'))
 
     def convertOutputStep(self, tsId: str):
         if tsId not in self.failedItems:
@@ -461,7 +469,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             args.append('--notmp')
         if tAx:
             args.append(f'--tltax={tAx:.2f}')
-        args.append('--verbose=9')
+        args.append('--dryrun --verbose=9')
         return ' '.join(args)
 
     def getOutputSetOfTs(self, interpolated: bool = False) -> SetOfTiltSeries:
