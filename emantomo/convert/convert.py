@@ -31,6 +31,8 @@ import itertools
 import json
 import time
 from os.path import join, abspath, splitext, dirname, isfile, basename
+from typing import Union
+
 import numpy as np
 import numpy
 from ast import literal_eval
@@ -40,11 +42,11 @@ import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries, SetOfTomograms, Tomogram
+from tomo.objects import SetOfTiltSeries, SetOfTomograms, Tomogram, TiltSeries, CTFTomoSeries
 from tomo.constants import TR_EMAN
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
-    TS_FILE, EMAN_OFF_TILT_AXIS
+    TS_FILE, EMAN_OFF_TILT_AXIS, TS_DIR
 import logging
 
 logger = logging.getLogger(__name__)
@@ -679,6 +681,48 @@ def ctfTomo2Json(mdObj, sphAb, voltage, mode="w"):
         appendJson(ctfDict, jsonFile)
         paths.append(jsonFile)
     return paths
+
+
+def ts2Json_(ts: TiltSeries, jsonFile:str,
+             ctf: Union[CTFTomoSeries, None] = None,
+             mode: str = "w"):
+    paths = []
+    tltParams = []
+    aliLoss = []
+    tltFile = join(TS_DIR, f'{ts.getTsId()}.hdf')
+    # The alignment could have been calculated using a binned TS, while the CTF is usually estimated at the original
+    # size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to
+    shiftsScale = 1
+    apixUnbinned = ts.getSamplingRate()
+    if ctf:
+        tsUnbinned = ctf.getTiltSeries()
+        apixUnbinned = tsUnbinned.getSamplingRate()
+        apixTs = ts.getSamplingRate()
+        shiftsScale = apixTs / apixUnbinned
+    for tiltImage in ts.iterItems():
+        paths.append(abspath(tiltImage.getFileName()))
+        tiltAngle = tiltImage.getTiltAngle()
+        trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
+        trMatrixInv = np.linalg.inv(trMatrix)
+        sx = - trMatrixInv[0, 2] * shiftsScale
+        sy = - trMatrixInv[1, 2] * shiftsScale
+        rotzCorrected = np.rad2deg(np.arctan2(trMatrixInv[0, 1], trMatrixInv[0, 0]))
+        offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
+        rotz = rotzCorrected + offTiltAngle
+        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
+        aliLoss.append(getattr(tiltImage, EMAN_ALI_LOSS, Float(0)).get())
+    tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
+    tltDict = {ALI_LOSS: aliLoss,
+               APIX_UNBIN: apixUnbinned,
+               TS_FILE: tltFile,
+               TLT_PARAMS: tltParams}
+    if mode == "w":
+        writeJson(tltDict, jsonFile)
+        paths.append(jsonFile)
+    elif mode == "a":
+        appendJson(tltDict, jsonFile)
+        paths.append(jsonFile)
+    return
 
 
 def ts2Json(mdObj, mode="w"):
