@@ -273,13 +273,16 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             aliId = self._insertFunctionStep(self.emanAliStep, tsId,
                                              prerequisites=wDataId,
                                              needsGPU=False)
-            recId = self._insertFunctionStep(self.emanRecStep, tsId,
+            cOutTsId = self._insertFunctionStep(self.createOutTsStep, tsId,
                                              prerequisites=aliId,
+                                             needsGPU=False)
+            recId = self._insertFunctionStep(self.emanRecStep, tsId,
+                                             prerequisites=cOutTsId,
                                              needsGPU=False)
             cOutId = self._insertFunctionStep(self.convertOutputStep, tsId,
                                               prerequisites=recId,
                                               needsGPU=False)
-            crOutId = self._insertFunctionStep(self.createOutputStep, tsId,
+            crOutId = self._insertFunctionStep(self.createOutputTomoStep, tsId,
                                                prerequisites=cOutId,
                                                needsGPU=False)
             closeSetStepDeps.append(crOutId)
@@ -334,6 +337,40 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 self.failedItems.append(tsId)
                 logger.error(redStr(f'Tilt-series alignment failed for tsId {tsId} -> {e}'))
 
+    def createOutTsStep(self, tsId: str):
+        if self.doAlignment.get():
+            # Create a link that will be the non-interpolated TS output file name
+            ts = self.getCurrentTs(tsId)
+            inFile = ts.getFirstItem().getFileName()
+            outFile = self.getOutTsNonInterpFName(tsId)
+            createLink(inFile, outFile)
+            # Create and/or write the output
+            with self._lock:
+                ts = self.getCurrentTs(tsId, doLock=False)
+                if tsId in self.failedItems:
+                    logger.info(cyanStr(f'===> tsId = {tsId} FAILED: creating the failed TS output...'))
+                    inputSet = self.getAttrib(IN_TS, getPointer=True)
+                    output = self.getOutputFailedSet(inputSet)
+                    newItem = ts.clone()
+                    # newItem.copyInfo(item)
+                    output.append(newItem)
+                    newItem.copyItems(ts)
+                    newItem.write()
+
+                    output.update(newItem)
+                    output.write()
+                    self._store(output)
+                else:
+                    logger.info(cyanStr(f'===> tsId = {tsId}: creating the TS output...'))
+                    # TS alignment
+                    if self.doAlignment.get():
+                        jsonDict = loadJson(genJsonFileName(self.getInfoDir(), tsId))
+                        aliLoss = jsonDict[ALI_LOSS]
+                        alignParams = jsonDict[TLT_PARAMS]
+                        tsNonInterp = self._createOutputTs(ts, alignParams, aliLoss)
+                        if self.genInterpolatedTs.get():
+                            self._createOutputTsInterpolated(ts, alignParams, tsNonInterp)
+
     def emanRecStep(self, tsId: str):
         if self.doRec.get() and tsId not in self.failedItems:
             logger.info(cyanStr(f'===> tsId = {tsId}: running EMAN reconstruct tomogram...'))
@@ -345,55 +382,29 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 logger.error(redStr(f'Tomogram reconstruction failed for tsId {tsId} -> {e}'))
 
     def convertOutputStep(self, tsId: str):
-        if tsId not in self.failedItems:
+        if self.doRec.get() and tsId not in self.failedItems:
             try:
-                # Create a link that will be the non-interpolated TS output file name
-                ts = self.getCurrentTs(tsId)
-                inFile = ts.getFirstItem().getFileName()
-                outFile = self.getOutTsNonInterpFName(tsId)
-                createLink(inFile, outFile)
                 # Convert the tomogram from HDF format into MRC
-                if self.doRec.get():
-                    logger.info(cyanStr(f'===> tsId = {tsId}: converting the tomogram into MRC...'))
-                    outFName = self.getOutTomoFName(tsId)
-                    hdfTomo = self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId)
-                    eh = EmanHdf5Handler(hdfTomo)
-                    extraArgs = '--apix %.3f ' % eh.getSamplingRate()
-                    convertBetweenHdfAndMrc(self, hdfTomo, outFName, extraArgs=extraArgs)
-                    fixVolume(outFName)
+                logger.info(cyanStr(f'===> tsId = {tsId}: converting the tomogram into MRC...'))
+                outFName = self.getOutTomoFName(tsId)
+                hdfTomo = self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId)
+                eh = EmanHdf5Handler(hdfTomo)
+                extraArgs = '--apix %.3f ' % eh.getSamplingRate()
+                convertBetweenHdfAndMrc(self, hdfTomo, outFName, extraArgs=extraArgs)
+                fixVolume(outFName)
             except Exception as e:
                 self.failedItems.append(tsId)
                 logger.error(redStr(f'Execution failed for tsId {tsId} -> {e}'))
 
-    def createOutputStep(self, tsId: str):
+    def createOutputTomoStep(self, tsId: str):
         with self._lock:
-            ts = self.getCurrentTs(tsId, doLock=False)
-            if tsId in self.failedItems:
-                logger.info(cyanStr(f'===> tsId = {tsId} FAILED: creating the failed output...'))
-                inputSet = self.getAttrib(IN_TS, getPointer=True)
-                output = self.getOutputFailedSet(inputSet)
-                newItem = ts.clone()
-                # newItem.copyInfo(item)
-                output.append(newItem)
-                newItem.copyItems(ts)
-                newItem.write()
-
-                output.update(newItem)
-                output.write()
-                self._store(output)
-            else:
-                logger.info(cyanStr(f'===> tsId = {tsId}: creating the output...'))
-                # TS alignment
-                if self.doAlignment.get():
-                    jsonDict = loadJson(genJsonFileName(self.getInfoDir(), tsId))
-                    aliLoss = jsonDict[ALI_LOSS]
-                    alignParams = jsonDict[TLT_PARAMS]
-                    tsNonInterp = self._createOutputTs(ts, alignParams, aliLoss)
-                    if self.genInterpolatedTs.get():
-                        self._createOutputTsInterpolated(ts, alignParams, tsNonInterp)
-
-                # Tomogram reconstruction
-                if self.doRec.get():
+            if self.doRec.get():
+                ts = self.getCurrentTs(tsId, doLock=False)
+                if tsId in self.failedItems:
+                    logger.info(cyanStr(f'===> tsId = {tsId} FAILED.'))
+                else:
+                    logger.info(cyanStr(f'===> tsId = {tsId}: creating the output tomogram...'))
+                    # Tomogram reconstruction
                     eh = EmanHdf5Handler(self.getCurrentHdfFile(TOMOGRAMS_DIR, tsId))
                     tomogram = Tomogram()
                     tomogram.setFileName(self.getOutTomoFName(tsId))
