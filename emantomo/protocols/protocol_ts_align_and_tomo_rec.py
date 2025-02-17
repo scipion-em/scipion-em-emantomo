@@ -628,8 +628,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                 f'--filterres={self.filterres.get():.2f}',
                 f'--rmbeadthr={self.rmbeadthr.get():.2f}',
                 f'--tltkeep={self.tltkeep.get()}',
-                '--load']
-                # '--noali']
+                '--load',
+                '--noali']
 
         if self.bytile.get():
             args.append('--bytile')
