@@ -27,6 +27,7 @@
 from enum import Enum
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
+from emantomo.utils import genJsonFileName
 from pyworkflow.object import Set
 from pyworkflow.protocol import PointerParam, STEPS_PARALLEL
 from pyworkflow.utils import Message
@@ -64,7 +65,8 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
     def _insertAllSteps(self):
         closeSetStepDeps = []
         self._initialize()
-        for tsId in self.mdObjDict.keys():
+        for ts in self.inTsSet.iterItems():
+            tsId = ts.getTsId()
             cId = self._insertFunctionStep(self.convertTsStep, tsId,
                                            prerequisites=[],
                                            needsGPU=False)
@@ -85,16 +87,16 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
     # --------------------------- STEPS functions -----------------------------
     def createOutputStep(self, tsId: str):
         with self._lock:
-            mdObj = self.mdObjDict[tsId]
+            ts = self.getCurrentTs(tsId, doLock=False)
+            jsonFile = genJsonFileName(self.getInfoDir(), tsId)
             outCtfSet = self.getOutputCtfTomoSet()
-            ts = mdObj.ts
             newCTFTomoSeries = CTFTomoSeries()
             newCTFTomoSeries.copyInfo(ts)
             newCTFTomoSeries.setTiltSeries(ts)
             newCTFTomoSeries.setObjId(ts.getObjId())
             newCTFTomoSeries.setTsId(tsId)
             outCtfSet.append(newCTFTomoSeries)
-            jsonDict = loadJson(mdObj.jsonFile)
+            jsonDict = loadJson(jsonFile)
             defocus = jsonDict['defocus']
             phase_shift = jsonDict['phase']
             for idx, tiltImage in enumerate(ts.iterItems()):

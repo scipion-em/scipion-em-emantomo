@@ -25,16 +25,18 @@
 # *
 # **************************************************************************
 import logging
+import subprocess
 import typing
-from os.path import join
 import numpy as np
+
+from eman2 import EMAN_ENV_ACTIVATION
 from emantomo.constants import TS_DIR
-from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
-from emantomo.utils import genJsonFileName
 from pyworkflow.protocol import PointerParam
 from pyworkflow.utils import Message, cyanStr
+import eman2
+
 
 logger = logging.getLogger(__name__)
 
@@ -70,31 +72,29 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
         self._insertFunctionStep(self.createOutputStep, needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
-    def _initialize(self):
-        ts = self.getAttrib(IN_TS)
-        tsId = ts.getTsId()
-        self.createInitEmanPrjDirs()
-        # Get the required acquisition data
-        acq = ts.getAcquisition()
-        self.sphAb = acq.getSphericalAberration()
-        self.voltage = acq.getVoltage()
-        # Do this to take advantage of the super-class methods, prepared to work with a dict of EmanMetadata objects
-        self.mdObjDict[tsId] = EmanMetaData(tsId=tsId,
-                                            ts=ts,
-                                            tsHdfName=join(TS_DIR, f'{tsId}.hdf'),
-                                            jsonFile=genJsonFileName(self.getInfoDir(), tsId))
+    def convertTsStep(self, tsId: str):
+        logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
+        ts = self.inTsSet  # The input in this protocol is a single TS
+        inTsFName = ts.getFirstItem().getFileName()
+        sRate = ts.getSamplingRate()
+        self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
 
     def estimateCtfStep(self, tsId: str):
         logger.info(cyanStr(f'===> tsId = {tsId}: estimating the handedness...'))
-        super().estimateCtfStep(tsId)
+        args = ' '.join(self._genCtfEstimationArgs(tsId))
+        cmd = f'{eman2.Plugin.getVar(EMAN_ENV_ACTIVATION)} && {args}'
+        res = subprocess.run(cmd, capture_output=True, text=True, shell=True)
+        stdoutMsg = res.stdout
+        stderrMsg = res.stderr
 
     def createOutputStep(self):
         pass
 
     # --------------------------- UTILS functions -----------------------------
-    def _genCtfEstimationArgs(self, mdObj: EmanMetaData):
-        args = super()._genCtfEstimationArgs(mdObj)
-        args += '--checkhand --writetmp'
+    def _genCtfEstimationArgs(self, tsId: str) -> typing.List[str]:
+        args = super()._genCtfEstimationArgs(str)
+        args.append('--checkhand')
+        args.append('--writetmp')
         return args
 
     # --------------------------- INFO functions ------------------------------

@@ -27,6 +27,8 @@
 
 from enum import Enum
 from os.path import exists, join
+from typing import List
+
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
 from emantomo.objects import EmanMetaData
@@ -34,7 +36,7 @@ from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo, TiltSeries
-from emantomo.convert import loadJson, ts2Json
+from emantomo.convert import loadJson, ts2Json, ts2Json_
 
 
 class EstimateCtfOutputs(Enum):
@@ -91,46 +93,32 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        inTsSet = self.getAttrib(IN_TS)
+        self.inTsSet = self.getAttrib(IN_TS)
         self.createInitEmanPrjDirs()
-        # Manage the TS
-        presentTsIds = set(getPresentTsIdsInSet(inTsSet))
-        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
-        # Get the required acquisition data
-        self.sphAb = inTsSet.getAcquisition().getSphericalAberration()
-        self.voltage = inTsSet.getAcquisition().getVoltage()
-        # Split all the data into subunits (EmanMetaData objects) referred to the same tsId
-        for tomoId, ts in tsIdsDict.items():
-            self.mdObjDict[tomoId] = EmanMetaData(tsId=tomoId,
-                                                  ts=ts,
-                                                  tsHdfName=join(TS_DIR, f'{tomoId}.hdf'),
-                                                  jsonFile=genJsonFileName(self.getInfoDir(), tomoId))
 
     def writeData2JsonFileStep(self, tsId: str):
-        mdObj = self.mdObjDict[tsId]
-        mode = 'a' if exists(mdObj.jsonFile) else 'w'
-        ts2Json(mdObj, mode=mode)
+        ts = self.getCurrentTs(tsId)
+        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
+        mode = 'a' if exists(jsonFile) else 'w'
+        ts2Json_(ts, jsonFile, mode=mode)
 
     def estimateCtfStep(self, tsId: str):
-        mdObj = self.mdObjDict[tsId]
-        self.runJob(self.program, self._genCtfEstimationArgs(mdObj), cwd=self._getExtraPath())
+        args = ' '.join(self._genCtfEstimationArgs(tsId))
+        self.runJob(self.program, args, cwd=self._getExtraPath())
 
     # --------------------------- UTILS functions -----------------------------
-    def _genCtfEstimationArgs(self, mdObj: EmanMetaData):
-        args = '%s ' % mdObj.tsHdfName
-        args += '--dfrange %s ' % ','.join([str(self.minDefocus.get()),
-                                            str(self.maxDefocus.get()),
-                                            str(self.stepDefocus.get())])
-        args += '--psrange %s ' % ','.join([str(self.minPhaseShift.get()),
-                                            str(self.maxPhaseShift.get()),
-                                            str(self.stepPhaseShift.get())])
-        args += '--tilesize %i ' % self.tilesize.get()
-        args += '--voltage %i ' % self.voltage
-        args += '--cs %.2f ' % self.sphAb
-        args += '--nref %i ' % self.nref.get()
-        args += '--stepx %i ' % self.stepx.get()
-        args += '--stepy %i ' % self.stepy.get()
-        args += '--threads %i ' % self.binThreads.get()
-        args += '--verbose 9 '
+    def _genCtfEstimationArgs(self, tsId: str) -> List[str]:
+        ts = self.getCurrentTs(tsId)
+        acq = ts.getAcquisition()
+        args = ['%s ' % join(TS_DIR, f'{tsId}.hdf'),
+                f'--dfrange {self.minDefocus.get()},{self.maxDefocus.get()},{self.stepDefocus.get()}',
+                f'--psrange {self.minPhaseShift.get()},{self.maxPhaseShift.get()},{self.stepPhaseShift.get()}',
+                '--tilesize %i ' % self.tilesize.get(),
+                '--voltage %i ' % acq.getVoltage(),
+                '--cs %.2f ' % acq.getSphericalAberration(),
+                '--nref %i ' % self.nref.get(),
+                '--stepx %i ' % self.stepx.get(),
+                '--stepy %i ' % self.stepy.get(),
+                '--threads %i ' % self.binThreads.get(),
+                '--verbose 9 ']
         return args
-

@@ -89,7 +89,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         self.failedItems = []
         self._tiltAxisAngle = None
         self._finalSamplingRate = None
-        self.inTsSet = None
         self._doUpdateTiltAxisAng = False  # If the user introduces a value manually, it must be updated in the metadata
 
     # --------------------------- DEFINE param functions ----------------------
@@ -298,16 +297,6 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         makePath(tltDir)
         if self.tiltAxisAngle.get():  # Value from form
             self._doUpdateTiltAxisAng = True
-
-    def convertTsStep(self, tsId: str):
-        # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
-        # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
-        # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
-        logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
-        ts = self.getCurrentTs(tsId)
-        inTsFName = ts.getFirstItem().getFileName()
-        sRate = ts.getSamplingRate()
-        self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
 
     def writeData2JsonFileStep(self, tsId: str):
         logger.info(cyanStr(f'===> tsId = {tsId}: writing the json files...'))
@@ -735,10 +724,3 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
         return failedTsSet
 
-    def getCurrentTs(self, tsId: str, doLock: bool = True):
-        if doLock:
-            with self._lock:
-                ts = self.inTsSet.getItem(TiltSeries.TS_ID_FIELD, tsId)
-                return ts
-        else:
-            return self.inTsSet.getItem(TiltSeries.TS_ID_FIELD, tsId)

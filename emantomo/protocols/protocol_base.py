@@ -43,7 +43,7 @@ from pyworkflow import BETA
 from pyworkflow.object import Pointer, String
 from pyworkflow.protocol import IntParam
 from pyworkflow.utils import makePath, createLink, cyanStr
-from tomo.objects import SetOfTiltSeries
+from tomo.objects import SetOfTiltSeries, TiltSeries
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
 
@@ -64,6 +64,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mdObjDict = {}
+        self.inTsSet = None
         self.inParticles = None
         self.inSamplingRate = -1.0
         self.scaleFactor = 1.0
@@ -83,7 +84,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                        'tomograms, tilt-series, etc specified by Scipion threads.')
         form.addParam('binThreads', IntParam,
                       label='Eman threads',
-                      default=3,
+                      default=6,
                       important=True,
                       help=helpMsg)
 
@@ -93,10 +94,10 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
         logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
-        mdObj = self.mdObjDict[tsId]
-        inTsFName = mdObj.ts.getFirstItem().getFileName()
-        sRate = mdObj.ts.getSamplingRate()
-        self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
+        ts = self.getCurrentTs(tsId)
+        inTsFName = ts.getFirstItem().getFileName()
+        sRate = ts.getSamplingRate()
+        self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
 
     def createEmanPrjPostExtractionStep(self):
         inSubtomos = getattr(self, IN_SUBTOMOS).get()
@@ -137,6 +138,14 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                 self.convertOrLink(halves[1], f'{REFERENCE_NAME}_odd', '', sRate)
 
     # --------------------------- UTILS functions ----------------------------------
+    def getCurrentTs(self, tsId: str, doLock: bool = True):
+        if doLock:
+            with self._lock:
+                ts = self.inTsSet.getItem(TiltSeries.TS_ID_FIELD, tsId)
+                return ts
+        else:
+            return self.inTsSet.getItem(TiltSeries.TS_ID_FIELD, tsId)
+
     def buildEmanSets(self, outAliPath=SPT_00_DIR):
         # LST with the particles
         EmanLstWriter.writeSimpleLst(self.inParticles, self.getLstEmanRelPath())

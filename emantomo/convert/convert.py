@@ -699,7 +699,7 @@ def ts2Json_(ts: TiltSeries, jsonFile:str,
         apixUnbinned = tsUnbinned.getSamplingRate()
         apixTs = ts.getSamplingRate()
         shiftsScale = apixTs / apixUnbinned
-    for tiltImage in ts.iterItems():
+    for tiltImage in ts:
         paths.append(abspath(tiltImage.getFileName()))
         tiltAngle = tiltImage.getTiltAngle()
         trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
