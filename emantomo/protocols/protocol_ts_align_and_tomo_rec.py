@@ -725,7 +725,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
 
     def getOutTomoSRate(self) -> float:
         scaleFactor = 1
-        outSize = self.outSize.get()
+        outSize = self.outsize.get()
         tsSRate = self.inTsSet.getSamplingRate()
         if outSize == SIZE_2K:
             scaleFactor = 2
