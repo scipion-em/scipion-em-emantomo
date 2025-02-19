@@ -26,17 +26,14 @@
 # **************************************************************************
 
 from enum import Enum
-from os.path import exists, join
+from os.path import join
 from typing import List
 
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
-from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
-from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
-from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
-from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo, TiltSeries
-from emantomo.convert import loadJson, ts2Json, ts2Json_
+from pyworkflow.protocol import FloatParam, IntParam, BooleanParam
+from tomo.objects import SetOfCTFTomoSeries
 
 
 class EstimateCtfOutputs(Enum):
@@ -95,12 +92,6 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
     def _initialize(self):
         self.inTsSet = self.getAttrib(IN_TS)
         self.createInitEmanPrjDirs()
-
-    def writeData2JsonFileStep(self, tsId: str):
-        ts = self.getCurrentTs(tsId)
-        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
-        mode = 'a' if exists(jsonFile) else 'w'
-        ts2Json_(ts, jsonFile, mode=mode)
 
     def estimateCtfStep(self, tsId: str):
         args = ' '.join(self._genCtfEstimationArgs(tsId))

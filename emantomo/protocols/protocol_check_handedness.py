@@ -27,12 +27,16 @@
 import logging
 import subprocess
 import typing
+from os.path import exists
+
 import numpy as np
 
 from eman2 import EMAN_ENV_ACTIVATION
 from emantomo.constants import TS_DIR
+from emantomo.convert import ts2Json_
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
+from emantomo.utils import genJsonFileName
 from pyworkflow.protocol import PointerParam
 from pyworkflow.utils import Message, cyanStr
 import eman2
@@ -79,6 +83,12 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
         sRate = ts.getSamplingRate()
         self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
 
+    def writeData2JsonFileStep(self, tsId: str):
+        ts = self.inTsSet  # The input in this protocol is a single TS
+        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
+        mode = 'a' if exists(jsonFile) else 'w'
+        ts2Json_(ts, jsonFile, mode=mode)
+
     def estimateCtfStep(self, tsId: str):
         logger.info(cyanStr(f'===> tsId = {tsId}: estimating the handedness...'))
         args = ' '.join(self._genCtfEstimationArgs(tsId))
@@ -92,7 +102,7 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
 
     # --------------------------- UTILS functions -----------------------------
     def _genCtfEstimationArgs(self, tsId: str) -> typing.List[str]:
-        args = super()._genCtfEstimationArgs(str)
+        args = super()._genCtfEstimationArgs(tsId)
         args.append('--checkhand')
         args.append('--writetmp')
         return args

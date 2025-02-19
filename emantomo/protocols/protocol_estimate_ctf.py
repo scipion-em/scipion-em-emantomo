@@ -25,6 +25,8 @@
 # *
 # **************************************************************************
 from enum import Enum
+from os.path import exists
+
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
 from emantomo.utils import genJsonFileName
@@ -32,7 +34,7 @@ from pyworkflow.object import Set
 from pyworkflow.protocol import PointerParam, STEPS_PARALLEL
 from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
-from emantomo.convert import loadJson
+from emantomo.convert import loadJson, ts2Json_
 
 
 class EstimateCtfOutputs(Enum):
@@ -85,6 +87,12 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
                                  needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
+    def writeData2JsonFileStep(self, tsId: str):
+        ts = self.getCurrentTs(tsId)
+        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
+        mode = 'a' if exists(jsonFile) else 'w'
+        ts2Json_(ts, jsonFile, mode=mode)
+
     def createOutputStep(self, tsId: str):
         with self._lock:
             ts = self.getCurrentTs(tsId, doLock=False)
