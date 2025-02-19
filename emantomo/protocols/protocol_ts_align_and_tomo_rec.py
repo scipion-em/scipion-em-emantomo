@@ -273,8 +273,8 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                                              prerequisites=wDataId,
                                              needsGPU=False)
             cOutTsId = self._insertFunctionStep(self.createOutTsStep, tsId,
-                                             prerequisites=aliId,
-                                             needsGPU=False)
+                                                prerequisites=aliId,
+                                                needsGPU=False)
             recId = self._insertFunctionStep(self.emanRecStep, tsId,
                                              prerequisites=cOutTsId,
                                              needsGPU=False)
@@ -610,6 +610,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         return tiltSeries
 
         # --------------------------- reconstruct tomograms UTILS functions ----------------------------
+
     def _getRecArgs(self):
         args = [f'--outsize={OUT_TOMO_SIZE_CHOICES[self.outsize.get()]}',
                 f'--niter={self.nIters.get()}',
@@ -647,9 +648,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         else:
             outTomograms = SetOfTomograms.create(self._getPath(), template='tomograms%s.sqlite')
             outTomograms.copyInfo(self.inputTS.get())
-            # Get the sampling rate from the header of a HDF file present in the tomograms directory
-            eh = EmanHdf5Handler(glob.glob(join(self.getTomogramsDir(), '*.hdf'))[0])
-            outTomograms.setSamplingRate(eh.getSamplingRate())
+            outTomograms.setSamplingRate(self.getOutTomoSRate())
             outTomograms.setStreamState(Set.STREAM_OPEN)
             self.setTomograms(outTomograms)
 
@@ -723,4 +722,16 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             self._defineSourceRelation(inputPtr, failedTsSet)
 
         return failedTsSet
+
+    def getOutTomoSRate(self) -> float:
+        scaleFactor = 1
+        outSize = self.outSize.get()
+        tsSRate = self.inTsSet.getSamplingRate()
+        if outSize == SIZE_2K:
+            scaleFactor = 2
+        elif outSize == SIZE_4K:
+            scaleFactor = 4
+        return scaleFactor * tsSRate
+
+
 
