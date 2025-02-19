@@ -26,13 +26,16 @@
 # **************************************************************************
 
 from enum import Enum
-from os.path import join
+from os.path import join, exists
 from typing import List
 
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
+from emantomo.convert import ts2Json_
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
-from pyworkflow.protocol import FloatParam, IntParam, BooleanParam
+from emantomo.utils import genJsonFileName
+from pyworkflow.protocol import FloatParam, IntParam, BooleanParam, PointerParam
+from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries
 
 
@@ -52,6 +55,15 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
         super().__init__(**kwargs)
 
     # --------------------------- DEFINE param functions ----------------------
+    def _defineParams(self, form):
+        form.addSection(label=Message.LABEL_INPUT)
+        form.addParam(IN_TS, PointerParam,
+                      pointerClass='SetOfTiltSeries',
+                      label="Tilt Series",
+                      important=True)
+        self._defineCTFParams(form)
+        self._addBinThreads(form)
+
     @staticmethod
     def _defineCTFParams(form):
         lineDefocus = form.addLine('Defocus range (μm)',
@@ -92,6 +104,12 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
     def _initialize(self):
         self.inTsSet = self.getAttrib(IN_TS)
         self.createInitEmanPrjDirs()
+
+    def writeData2JsonFileStep(self, tsId: str):
+        ts = self.getCurrentTs(tsId)
+        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
+        mode = 'a' if exists(jsonFile) else 'w'
+        ts2Json_(ts, jsonFile, mode=mode)
 
     def estimateCtfStep(self, tsId: str):
         args = ' '.join(self._genCtfEstimationArgs(tsId))

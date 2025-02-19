@@ -25,16 +25,13 @@
 # *
 # **************************************************************************
 from enum import Enum
-from os.path import exists
-
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
 from emantomo.utils import genJsonFileName
 from pyworkflow.object import Set
-from pyworkflow.protocol import PointerParam, STEPS_PARALLEL
-from pyworkflow.utils import Message
+from pyworkflow.protocol import  STEPS_PARALLEL
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
-from emantomo.convert import loadJson, ts2Json_
+from emantomo.convert import loadJson
 
 
 class EstimateCtfOutputs(Enum):
@@ -54,13 +51,7 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_TS, PointerParam,
-                      pointerClass='SetOfTiltSeries',
-                      label="Tilt Series",
-                      important=True)
-        self._defineCTFParams(form)
-        self._addBinThreads(form)
+        super()._defineParams(form)
         form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
@@ -87,12 +78,6 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
                                  needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
-    def writeData2JsonFileStep(self, tsId: str):
-        ts = self.getCurrentTs(tsId)
-        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
-        mode = 'a' if exists(jsonFile) else 'w'
-        ts2Json_(ts, jsonFile, mode=mode)
-
     def createOutputStep(self, tsId: str):
         with self._lock:
             ts = self.getCurrentTs(tsId, doLock=False)

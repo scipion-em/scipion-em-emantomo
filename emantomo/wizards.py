@@ -25,8 +25,10 @@
 # **************************************************************************
 
 from pwem.wizards.wizard import EmWizard
-from pyworkflow.gui import showInfo
-from .protocols import EmanProtTomoExtraction
+from pyworkflow.gui import showInfo, ListTreeProviderString, dialog
+from pyworkflow.object import String
+from .protocols import EmanProtTomoExtraction, EmanProtEstimateHandedness
+from .protocols.protocol_base import IN_TS
 
 
 class EmanTomoExtractionWizard(EmWizard):
@@ -56,33 +58,22 @@ class EmanTomoExtractionWizard(EmWizard):
         form.setVar('boxSize', boxSize)
 
 
-# class EmanTomoTempMatchWizard(EmWizard):
-#     _targets = [(EmanProtTomoTempMatch, ['boxSize'])]
-#
-#     def show(self, form):
-#         tomoExtractProt = form.protocol
-#         inputReference = tomoExtractProt.ref.get()
-#         if not inputReference:
-#             print('You must specify input reference volume')
-#             return
-#
-#         boxSize = inputReference.getDim()[0]
-#
-#         form.setVar('boxSize', boxSize)
+class EmantomoTsIdsWizard(EmWizard):
+    tsIdParamName = 'chosenTsId'
+    _targets = [(EmanProtEstimateHandedness, [tsIdParamName])]
 
+    def show(self, form, *args):
+        prot = form.protocol
+        tsSet = getattr(prot, IN_TS).get()
+        tsIds = tsSet.getTSIds()
+        tsIds = [String(tsId) for tsId in tsIds]
 
-# class EmanTomoResizeWizard(EmWizard):
-#     _targets = [(EmanProtTomoResize, ['xDim', 'yDim', 'zDim'])]
-#
-#     def show(self, form):
-#         tomoResizeProt = form.protocol
-#         inputTomos = tomoResizeProt.inputTomograms.get()
-#         if not inputTomos:
-#             print('You must specify input tomograms first')
-#             return
-#
-#         dim = inputTomos.getFirstItem().getDim()
-#
-#         form.setVar('xDim', dim[0])
-#         form.setVar('yDim', dim[1])
-#         form.setVar('zDim', dim[2])
+        # Get a data provider from the operations to be used in the tree (dialog)
+        provider = ListTreeProviderString(tsIds)
+
+        # Show the dialog
+        dlg = dialog.ListDialog(form.root, "Tilt-series ids", provider,
+                                "Select one of the tilt-series")
+
+        # Set the chosen value back to the form
+        form.setVar(self.tsIdParamName, dlg.values[0].get())

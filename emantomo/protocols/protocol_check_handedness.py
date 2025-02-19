@@ -37,10 +37,10 @@ from emantomo.convert import ts2Json_
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
 from emantomo.utils import genJsonFileName
-from pyworkflow.protocol import PointerParam
+from pyworkflow.protocol import PointerParam, StringParam
 from pyworkflow.utils import Message, cyanStr
 import eman2
-
+from tomo.objects import SetOfTiltSeries, TiltSeries
 
 logger = logging.getLogger(__name__)
 
@@ -56,39 +56,25 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_TS, PointerParam,
-                      pointerClass='TiltSeries',
-                      label="Tilt Series",
-                      important=True)
-        self._defineCTFParams(form)
-        self._addBinThreads(form)
-        form.addParallelSection(threads=1, mpi=0)
+        super()._defineParams(form)
+        form.addParam('chosenTsId', StringParam,
+                      label='Tilt-series id',
+                      help='Tilt-series identifier of the tilt-series that will be used to '
+                           'estimate the handedness. The wizard provided by this parameter displays a '
+                           'list with the tilt-series ids of the tilt-series contained in the set of '
+                           'tilt-series introduced.')
 
         # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
         self._initialize()
-        tsId = self.getAttrib(IN_TS).getTsId()
+        tsId = self.chosenTsId.get()
         self._insertFunctionStep(self.convertTsStep, tsId, needsGPU=False)
         self._insertFunctionStep(self.writeData2JsonFileStep, tsId, needsGPU=False)
         self._insertFunctionStep(self.estimateCtfStep, tsId, needsGPU=False)
         self._insertFunctionStep(self.createOutputStep, needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
-    def convertTsStep(self, tsId: str):
-        logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
-        ts = self.inTsSet  # The input in this protocol is a single TS
-        inTsFName = ts.getFirstItem().getFileName()
-        sRate = ts.getSamplingRate()
-        self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
-
-    def writeData2JsonFileStep(self, tsId: str):
-        ts = self.inTsSet  # The input in this protocol is a single TS
-        jsonFile = genJsonFileName(self.getInfoDir(), tsId)
-        mode = 'a' if exists(jsonFile) else 'w'
-        ts2Json_(ts, jsonFile, mode=mode)
-
     def estimateCtfStep(self, tsId: str):
         logger.info(cyanStr(f'===> tsId = {tsId}: estimating the handedness...'))
         args = ' '.join(self._genCtfEstimationArgs(tsId))
@@ -110,8 +96,8 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
     # --------------------------- INFO functions ------------------------------
     def _validate(self) -> typing.List[str]:
         msg = []
-        firstTi = self.getAttrib(IN_TS).getFirstItem()
-        transform = firstTi.getTransform()
+        ts = self.getAttrib(IN_TS).getItem(TiltSeries.TS_ID_FIELD, self.chosenTsId.get())
+        transform = ts.getFirstItem().getTransform()
         errorMsg = 'The tilt-series introduced must contain alignment data.'
         if transform:
             trMatrix = transform.getMatrix()
