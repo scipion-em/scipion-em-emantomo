@@ -729,7 +729,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
         tsSRate = self.inTsSet.getSamplingRate()
         if outSize == SIZE_2K:
             scaleFactor = 2
-        elif outSize == SIZE_4K:
+        elif outSize == SIZE_1K:
             scaleFactor = 4
         return scaleFactor * tsSRate
 
