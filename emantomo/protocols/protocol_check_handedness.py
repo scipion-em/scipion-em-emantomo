@@ -25,24 +25,24 @@
 # *
 # **************************************************************************
 import logging
+import re
 import subprocess
 import typing
-from os.path import exists
+from enum import Enum
 
 import numpy as np
-
-from eman2 import EMAN_ENV_ACTIVATION
-from emantomo.constants import TS_DIR
-from emantomo.convert import ts2Json_
 from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
-from emantomo.utils import genJsonFileName
-from pyworkflow.protocol import PointerParam, StringParam
-from pyworkflow.utils import Message, cyanStr
-import eman2
-from tomo.objects import SetOfTiltSeries, TiltSeries
+from pyworkflow import BETA
+from pyworkflow.object import Boolean, String
+from pyworkflow.protocol import StringParam
+from pyworkflow.utils import cyanStr, greenStr
+from tomo.objects import TiltSeries
 
 logger = logging.getLogger(__name__)
+
+class EstimatedHandednessOutputs(Enum):
+    EmanHandedness = Boolean
 
 
 class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
@@ -50,9 +50,12 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
     Protocol for checking handedness by CTF using e2spt_tomoctf.py
     """
     _label = 'check handedness'
+    _possibleOutputs = EstimatedHandednessOutputs
+    _devStatus = BETA
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.parsedMsg = String()
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -72,19 +75,23 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
         self._insertFunctionStep(self.convertTsStep, tsId, needsGPU=False)
         self._insertFunctionStep(self.writeData2JsonFileStep, tsId, needsGPU=False)
         self._insertFunctionStep(self.estimateCtfStep, tsId, needsGPU=False)
-        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def estimateCtfStep(self, tsId: str):
         logger.info(cyanStr(f'===> tsId = {tsId}: estimating the handedness...'))
         args = ' '.join(self._genCtfEstimationArgs(tsId))
-        cmd = f'{eman2.Plugin.getVar(EMAN_ENV_ACTIVATION)} && {args}'
-        res = subprocess.run(cmd, capture_output=True, text=True, shell=True)
-        stdoutMsg = res.stdout
+        cmd = f'{self.program} {args}'
+        logger.info(greenStr(cmd))
+        res = subprocess.run(cmd, cwd=self._getExtraPath(), capture_output=True, text=True, shell=True)
         stderrMsg = res.stderr
-
-    def createOutputStep(self):
-        pass
+        if stderrMsg:
+            raise Exception(stderrMsg)
+        parsedMsg, isFlipped = self._parseStdOut(res.stdout)
+        self.parsedMsg.set(parsedMsg)
+        isFlipped = Boolean(isFlipped)
+        self._store(self.parsedMsg)
+        self._defineOutputs(**{self._possibleOutputs.EmanHandedness.name: isFlipped})
+        self._defineSourceRelation(getattr(self, IN_TS), isFlipped)
 
     # --------------------------- UTILS functions -----------------------------
     def _genCtfEstimationArgs(self, tsId: str) -> typing.List[str]:
@@ -93,7 +100,46 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
         args.append('--writetmp')
         return args
 
+    @staticmethod
+    def _parseStdOut(stdoutMsg: str) -> typing.Tuple[str, bool]:
+        """Parses the stdout of the EMAN handedness estimation program and returns a substring with
+        the relevant information.
+
+        Example of favorable case:
+
+        [...]
+        Average score: Current hand - 0.452, flipped hand - 0.379
+        Defocus std: Current hand - 0.753, flipped hand - 0.744
+        Current hand is better than the flipped hand in 82.5% tilt images
+        tiltseries/TS_03.hdf: Result: the handedness (--tltax=85.3) seems to be correct.
+        Rerun CTF estimation without the checkhand option to finish the process.
+
+        Example of non-favorable case:
+        Average score: Current hand - 0.382, flipped hand - 0.445
+        Defocus std: Current hand - 0.888, flipped hand - 0.530
+        Current hand is better than the flipped hand in 15.0% tilt images
+        tiltseries/TS_03.hdf: Result: the handedness seems to be flipped.
+        Consider rerun the tomogram reconstruction with --tltax=-274.7
+        then rerun the CTF estimation.
+        [...]
+        """
+        pattern = r"(current hand is.*?rerun)"
+        matchList = re.findall(pattern, stdoutMsg.lower(), re.DOTALL)
+        parsedMsg = matchList[0].replace(' consider rerun', '').replace(' rerun', '')
+        isFlipped = False if 'correct' in parsedMsg else True
+        return parsedMsg, isFlipped
+
     # --------------------------- INFO functions ------------------------------
+    def _summary(self) -> typing.List[str]:
+        msg = []
+        if self.isFinished():
+            msg.append(f'*IsFlipped: {getattr(self, self._possibleOutputs.EmanHandedness.name).get()}*\n'
+                       f'{self.parsedMsg.get()}\n\n'
+                       f'NOTE: The result relies on the fitting of CTF rings in the micrographs, and can be '
+                       f'unreliable if there is not enough signal. Only believe the result when more than the'
+                       f'80% of the tilt angles have the same handedness.')
+        return msg
+
     def _validate(self) -> typing.List[str]:
         msg = []
         ts = self.getAttrib(IN_TS).getItem(TiltSeries.TS_ID_FIELD, self.chosenTsId.get())

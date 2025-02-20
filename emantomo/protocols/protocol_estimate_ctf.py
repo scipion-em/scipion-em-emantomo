@@ -78,6 +78,10 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
                                  needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
+    def estimateCtfStep(self, tsId: str):
+        args = ' '.join(self._genCtfEstimationArgs(tsId))
+        self.runJob(self.program, args, cwd=self._getExtraPath())
+
     def createOutputStep(self, tsId: str):
         with self._lock:
             ts = self.getCurrentTs(tsId, doLock=False)

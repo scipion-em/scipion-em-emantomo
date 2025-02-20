@@ -24,11 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-
-from enum import Enum
 from os.path import join, exists
 from typing import List
-
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
 from emantomo.convert import ts2Json_
@@ -36,11 +33,6 @@ from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName
 from pyworkflow.protocol import FloatParam, IntParam, BooleanParam, PointerParam
 from pyworkflow.utils import Message
-from tomo.objects import SetOfCTFTomoSeries
-
-
-class EstimateCtfOutputs(Enum):
-    CTFs = SetOfCTFTomoSeries
 
 
 class EmanProtEstimateCTFBase(ProtEmantomoBase):
@@ -48,7 +40,6 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
     Protocol for CTF estimation from tilt series using e2spt_tomoctf.py
     """
     _label = 'ctf estimation'
-    _possibleOutputs = EstimateCtfOutputs
     program = Plugin.getProgram('e2spt_tomoctf.py')
 
     def __init__(self, **kwargs):
@@ -110,10 +101,6 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
         jsonFile = genJsonFileName(self.getInfoDir(), tsId)
         mode = 'a' if exists(jsonFile) else 'w'
         ts2Json_(ts, jsonFile, mode=mode)
-
-    def estimateCtfStep(self, tsId: str):
-        args = ' '.join(self._genCtfEstimationArgs(tsId))
-        self.runJob(self.program, args, cwd=self._getExtraPath())
 
     # --------------------------- UTILS functions -----------------------------
     def _genCtfEstimationArgs(self, tsId: str) -> List[str]:
