@@ -136,7 +136,7 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
             msg.append(f'*IsFlipped: {getattr(self, self._possibleOutputs.EmanHandedness.name).get()}*\n'
                        f'{self.parsedMsg.get()}\n\n'
                        f'NOTE: The result relies on the fitting of CTF rings in the micrographs, and can be '
-                       f'unreliable if there is not enough signal. Only believe the result when more than the'
+                       f'unreliable if there is not enough signal. Only believe the result when more than the '
                        f'80% of the tilt angles have the same handedness.')
         return msg
 
