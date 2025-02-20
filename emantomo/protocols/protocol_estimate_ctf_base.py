@@ -32,7 +32,6 @@ from emantomo.convert import ts2Json_
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName
 from pyworkflow.protocol import FloatParam, IntParam, BooleanParam, PointerParam
-from pyworkflow.utils import Message
 
 
 class EmanProtEstimateCTFBase(ProtEmantomoBase):
@@ -46,14 +45,12 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
         super().__init__(**kwargs)
 
     # --------------------------- DEFINE param functions ----------------------
-    def _defineParams(self, form):
-        form.addSection(label=Message.LABEL_INPUT)
+    @staticmethod
+    def _insertInTsSetParam(form):
         form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
                       label="Tilt Series",
                       important=True)
-        self._defineCTFParams(form)
-        self._addBinThreads(form)
 
     @staticmethod
     def _defineCTFParams(form):

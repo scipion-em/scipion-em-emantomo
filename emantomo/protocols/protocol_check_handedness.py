@@ -36,7 +36,7 @@ from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBas
 from pyworkflow import BETA
 from pyworkflow.object import Boolean, String
 from pyworkflow.protocol import StringParam
-from pyworkflow.utils import cyanStr, greenStr
+from pyworkflow.utils import cyanStr, greenStr, Message
 from tomo.objects import TiltSeries
 
 logger = logging.getLogger(__name__)
@@ -59,13 +59,18 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        super()._defineParams(form)
+        form.addSection(label=Message.LABEL_INPUT)
+        self._insertInTsSetParam(form)
         form.addParam('chosenTsId', StringParam,
                       label='Tilt-series id',
+                      important=True,
+                      allowsNull=False,
                       help='Tilt-series identifier of the tilt-series that will be used to '
                            'estimate the handedness. The wizard provided by this parameter displays a '
                            'list with the tilt-series ids of the tilt-series contained in the set of '
                            'tilt-series introduced.')
+        self._defineCTFParams(form)
+        self._addBinThreads(form)
 
         # --------------------------- INSERT steps functions ----------------------
 
@@ -142,17 +147,21 @@ class EmanProtEstimateHandedness(EmanProtEstimateCTFBase):
 
     def _validate(self) -> typing.List[str]:
         msg = []
-        ts = self.getAttrib(IN_TS).getItem(TiltSeries.TS_ID_FIELD, self.chosenTsId.get())
-        transform = ts.getFirstItem().getTransform()
-        errorMsg = 'The tilt-series introduced must contain alignment data.'
-        if transform:
-            trMatrix = transform.getMatrix()
-            if trMatrix is not None:
-                idMatrix = np.eye(3)
-                if np.array_equal(trMatrix, idMatrix):
+        chosenTsId = self.chosenTsId.get()
+        if chosenTsId:
+            ts = self.getAttrib(IN_TS).getItem(TiltSeries.TS_ID_FIELD, chosenTsId)
+            transform = ts.getFirstItem().getTransform()
+            errorMsg = 'The tilt-series introduced must contain alignment data.'
+            if transform:
+                trMatrix = transform.getMatrix()
+                if trMatrix is not None:
+                    idMatrix = np.eye(3)
+                    if np.array_equal(trMatrix, idMatrix):
+                        msg.append(errorMsg)
+                else:
                     msg.append(errorMsg)
             else:
                 msg.append(errorMsg)
         else:
-            msg.append(errorMsg)
+            msg.append('Tilt-series id must be set.')
         return msg

@@ -29,7 +29,8 @@ from emantomo.protocols.protocol_base import IN_TS
 from emantomo.protocols.protocol_estimate_ctf_base import EmanProtEstimateCTFBase
 from emantomo.utils import genJsonFileName
 from pyworkflow.object import Set
-from pyworkflow.protocol import  STEPS_PARALLEL
+from pyworkflow.protocol import STEPS_PARALLEL
+from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
 from emantomo.convert import loadJson
 
@@ -51,7 +52,10 @@ class EmanProtEstimateCTF(EmanProtEstimateCTFBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        super()._defineParams(form)
+        form.addSection(label=Message.LABEL_INPUT)
+        self._insertInTsSetParam(form)
+        self._defineCTFParams(form)
+        self._addBinThreads(form)
         form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
