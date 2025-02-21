@@ -28,6 +28,8 @@ import glob
 import logging
 from enum import Enum
 from os.path import join, exists, basename, abspath
+from typing import Dict, Union, Set, Any
+
 import numpy as np
 from emantomo import Plugin
 from emantomo.constants import GROUP_ID, PARTICLES_3D_DIR, PARTICLES_DIR, TOMOBOX, TOMOGRAMS_DIR, TS_DIR
@@ -39,12 +41,11 @@ from pwem.convert.headers import fixVolume
 from pwem.objects import Transform
 from pyworkflow.protocol import PointerParam, FloatParam, LEVEL_ADVANCED, GE, LE, GT, IntParam, BooleanParam, \
     STEPS_PARALLEL
-from pyworkflow.utils import Message, replaceExt, removeExt, createLink
+from pyworkflow.utils import Message, replaceExt, removeExt, createLink, cyanStr, yellowStr
 from emantomo.convert import coords2Json, ts2Json, ctfTomo2Json
 from tomo.constants import TR_EMAN, SCIPION
 from tomo.objects import SetOfLandmarkModels, LandmarkModel, Coordinate3D, SetOfSubTomograms, SetOfCoordinates3D, \
-    SetOfMeshes
-
+    SetOfMeshes, SetOfCTFTomoSeries, SetOfTiltSeries
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +60,12 @@ class EmanProtTSExtraction(ProtEmantomoBase):
 
     _label = 'Extraction from TS'
     _possibleOutputs = outputObjects
+    stepsExecutionMode = STEPS_PARALLEL
+    program = Plugin.getProgram('e2spt_extract.py')
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.stepsExecutionMode = STEPS_PARALLEL
+        self.mdObjDict = {}
         self.groupIds = None
         self.emanDict = None
         self.sphAb = None
@@ -143,26 +146,26 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       label='Minimum distance between particles (Å)',
                       default=10,
                       validators=[GE(0)],
-                      expertLevel=LEVEL_ADVANCED, )
-        form.addParallelSection(threads=4, mpi=0)
+                      expertLevel=LEVEL_ADVANCED)
+        self._addBinThreads(form)
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         pIds = []
-        mdObjDict = self._initialize()
-        for mdObj in mdObjDict.values():
-            createPrjId = self._insertFunctionStep(self.createExtractionEmanPrjStep, mdObj)
-            convertInId = self._insertFunctionStep(self.convertTsStep, mdObj, prerequisites=createPrjId)
-            writeJsonId = self._insertFunctionStep(self.writeData2JsonFileStep, mdObj, prerequisites=convertInId)
-            extractId = self._insertFunctionStep(self.extractParticlesStep, mdObj, prerequisites=writeJsonId)
-            convertOutId = self._insertFunctionStep(self.convertOutputStep, mdObj, prerequisites=extractId)
-            createOutputId = self._insertFunctionStep(self.createOutputStep, mdObj, prerequisites=convertOutId)
-            pIds.extend([createPrjId, convertInId, writeJsonId, extractId, convertOutId, createOutputId])
+        self._initialize()
+        for tsId in self.mdObjDict.keys():
+            convertInId = self._insertFunctionStep(self.convertTsStep, tsId, prerequisites=[])
+            writeJsonId = self._insertFunctionStep(self.writeData2JsonFileStep, tsId, prerequisites=convertInId)
+            extractId = self._insertFunctionStep(self.extractParticlesStep, tsId, prerequisites=writeJsonId)
+            convertOutId = self._insertFunctionStep(self.convertOutputStep, tsId, prerequisites=extractId)
+            createOutputId = self._insertFunctionStep(self.createOutputStep, tsId, prerequisites=convertOutId)
+            pIds.append(createOutputId)
         self._insertFunctionStep(self._closeOutputSet, prerequisites=pIds)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        logger.info('Initializing...')
+        logger.info(cyanStr('Initializing...'))
         self.createInitEmanPrjDirs()
         inParticles = getattr(self, IN_SUBTOMOS).get()
         inCtfSet = getattr(self, IN_CTF).get()
@@ -188,32 +191,43 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # The fiducial size is the diameter in nm
         self.fiducialSize = 0.1 * self.getAttrib(IN_BOXSIZE) * self.getAttrib(IN_TS).getSamplingRate() / 2
         # Generate the md object data units as a dict
-        return self.genMdObjDict(inTsSet, inCtfSet, coords)
+        self.mdObjDict = self.genMdObjDict(inTsSet, inCtfSet, coords)
 
-    def createExtractionEmanPrjStep(self, mdObj):
-        logger.info(f'Creating the project for tsIf = {mdObj.tsId}...')
+    def convertTsStep(self, tsId: str):
         # Create project dir structure
         tomogramsDir = self.getTomogramsDir()
         # TS must be in HDF (in EMAN's native code it is searched in hardcoded HDF format based on the tomogram
         # basename), so it will be converted later. However, the tomograms can be linked in MRC without any problem
+        mdObj = self.mdObjDict[tsId]
         tomoFName = mdObj.inTomo.getFileName()
         createLink(tomoFName, join(tomogramsDir, basename(tomoFName)))
+        # Convert the TS into HDF
+        # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
+        # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
+        # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
+        logger.info(cyanStr(f'===> tsId = {tsId}: converting the tilt-series into HDF...'))
+        ts = mdObj.ts
+        inTsFName = ts.getFirstItem().getFileName()
+        sRate = ts.getSamplingRate()
+        self.convertOrLink(inTsFName, tsId, TS_DIR, sRate)
 
-    def writeData2JsonFileStep(self, mdObj):
-        logger.info(f'Writing the json files for TS {mdObj.tsId}...')
+    def writeData2JsonFileStep(self, tsId: str):
+        logger.info(cyanStr(f'===> tsId = {tsId}: writing the json files...'))
+        mdObj = self.mdObjDict[tsId]
         mode = 'a' if exists(mdObj.jsonFile) else 'w'
         coords2Json(mdObj, self.emanDict, self.groupIds, self.getBoxSize(), doFlipZ=self.doFlipZInTomo.get(),
                     mode=mode)
         ts2Json(mdObj, mode='a')
         ctfTomo2Json(mdObj, self.sphAb, self.voltage, mode='a')
 
-    def extractParticlesStep(self, mdObj):
-        logger.info(f'Extracting the particles from TS {mdObj.tsId}...')
-        program = Plugin.getProgram('e2spt_extract.py')
-        self.runJob(program, self._genExtractArgs(mdObj), cwd=self._getExtraPath())
+    def extractParticlesStep(self, tsId: str):
+        logger.info(cyanStr(f'===> tsId = {tsId}: extracting the particles...'))
+        mdObj = self.mdObjDict[tsId]
+        self.runJob(self.program, self._genExtractArgs(mdObj), cwd=self._getExtraPath())
 
-    def convertOutputStep(self, mdObj):
-        logger.info(f'Converting and unstacking the 3D particles from TS {mdObj.tsId} into MRC...')
+    def convertOutputStep(self, tsId: str):
+        logger.info(f'===> {tsId}: converting and unstacking the 3D particles into MRC...')
+        mdObj = self.mdObjDict[tsId]
         fName = self._getEmanFName(mdObj.tsId)
         # Unstack the 3d particles HDF stack into individual MRC files
         stack3d = join(PARTICLES_3D_DIR, fName)
@@ -225,9 +239,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # outFile = replaceExt(inFile, 'mrc')
         # self.convertBetweenHdfAndMrc(inFile, outFile)
 
-    def createOutputStep(self, mdObj):
-        tsId = mdObj.tsId
-        logger.info(f'Creating the outputs corresponding to TS {tsId}...')
+    def createOutputStep(self, tsId: str):
+        logger.info(f'===> {tsId}: creating the corresponding outputs...')
+        mdObj = self.mdObjDict[tsId]
         subtomoSet = self.getOutSetOfParticles()
         # Generate the fiducial model (for data visualization purpose)
         fiducialModelGaps = self.getOutSetIfFiducials()
@@ -293,25 +307,30 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         return warnMsg
 
     # --------------------------- UTILS functions ----------------------------------
-    def genMdObjDict(self, inTsSet, inCtfSet, coords):
+    def genMdObjDict(self,
+                     inTsSet: SetOfTiltSeries,
+                     inCtfSet: SetOfCTFTomoSeries,
+                     coords: Union[SetOfCoordinates3D, SetOfSubTomograms]) -> Dict[Any, EmanMetaData]:
         self.createInitEmanPrjDirs()
         if type(coords) is SetOfSubTomograms:
             coords = coords.getCoordinates3D()
         # Considering the possibility of subsets, let's find the tsIds present in all the sets ob objects introduced,
         # which means the intersection of the tsId lists
-        presentCtfTsIds = set(getPresentTsIdsInSet(inCtfSet))
-        self.info("TsIds present in the CTF tomo series are: %s" % presentCtfTsIds)
-        presentTsSetTsIds = set(getPresentTsIdsInSet(inTsSet))
-        self.info("TsIds present in the tilt series are: %s" % presentTsSetTsIds)
-        presentTomoSetTsIds = set(coords.getUniqueValues(Coordinate3D.TOMO_ID_ATTR))
-        self.info("TsIds present in the coordinates are: %s" % presentTomoSetTsIds)
+        presentCtfTsIds = set(inCtfSet.getTSIds())
+        presentTsSetTsIds = set(inTsSet.getTSIds())
+        presentTomoSetTsIds = set(coords.getTSIds())
         presentTsIds = presentCtfTsIds & presentTsSetTsIds & presentTomoSetTsIds
+        logger.info(cyanStr(f"TsIds present the introduced sets of tilt-series, CTFs and coordinates are: "
+                            f"{presentTsIds}" ))
+        nonPresentTsIds = self.getNonCommonTsIds(presentTsSetTsIds, presentCtfTsIds, presentTomoSetTsIds)
+        logger.warning(yellowStr(f'Some tsIds are not present in all the sets intriduced (tilt-series, '
+                                 f'CTFs and coordinates): {nonPresentTsIds}'))
         # The tomograms are obtained as the coordinates precedents. Operating this way, the code considers the case of
         # subsets of coordinates
         presentTomograms = getPresentPrecedents(coords, presentTsIds)
 
         # Manage the TS, CTF tomo Series and tomograms
-        tsIdsDict = {ts.getTsId(): ts.clone(ignoreAttrs=[]) for ts in inTsSet if ts.getTsId() in presentTsIds}
+        tsIdsDict = {ts.getTsId(): ts.clone() for ts in inTsSet if ts.getTsId() in presentTsIds}
         ctfIdsDict = {ctf.getTsId(): ctf.clone(ignoreAttrs=[]) for ctf in inCtfSet if ctf.getTsId() in presentTsIds}
         tomoIdsDict = {tomo.getTsId(): tomo for tomo in presentTomograms}
 
@@ -491,4 +510,15 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         # iteration, being more efficient
         reducedList = scipionCoords[:minDistInd] + scipionCoords[minDistInd+1:]
         return matchingCoord, reducedList
+
+    @staticmethod
+    def getNonCommonTsIds(tsIds: Set[str],
+                          ctfTsIds: Set[str],
+                          tomoTsIds: Set[str]) -> Set[str]:
+        # Union
+        union_todos = tsIds | ctfTsIds | tomoTsIds
+        # Intersection
+        interseccion_todos = tsIds & ctfTsIds & tomoTsIds
+        # Elements present in one or two sets, but not in all the three sets
+        return union_todos - interseccion_todos
 

@@ -278,7 +278,8 @@ class TestBaseRefineCyclePPPT(TestEmanBasePPPT):
                                             inputTS=cls.tsWithAlignment,
                                             boxSize=cls.particlesUnbinnedBoxSize,
                                             shrink=4,
-                                            numberOfThreads=8)
+                                            binThreads=8,
+                                            numberOfThreads=1)
         cls.launchProtocol(protExtractFromTs)
         outParticles = getattr(protExtractFromTs, protExtractFromTs._possibleOutputs.subtomograms.name, None)
         return outParticles

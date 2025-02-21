@@ -63,7 +63,6 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mdObjDict = {}
         self.inTsSet = None
         self.inParticles = None
         self.inSamplingRate = -1.0
