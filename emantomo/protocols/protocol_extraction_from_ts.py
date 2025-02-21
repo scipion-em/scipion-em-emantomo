@@ -323,8 +323,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
         logger.info(cyanStr(f"TsIds present the introduced sets of tilt-series, CTFs and coordinates are: "
                             f"{presentTsIds}" ))
         nonPresentTsIds = self.getNonCommonTsIds(presentTsSetTsIds, presentCtfTsIds, presentTomoSetTsIds)
-        logger.warning(yellowStr(f'Some tsIds are not present in all the sets intriduced (tilt-series, '
-                                 f'CTFs and coordinates): {nonPresentTsIds}'))
+        if nonPresentTsIds:
+            logger.warning(yellowStr(f'Some tsIds are not present in all the sets introduced (tilt-series, '
+                                     f'CTFs and coordinates): {nonPresentTsIds}'))
         # The tomograms are obtained as the coordinates precedents. Operating this way, the code considers the case of
         # subsets of coordinates
         presentTomograms = getPresentPrecedents(coords, presentTsIds)
