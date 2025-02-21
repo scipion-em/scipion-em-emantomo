@@ -703,10 +703,15 @@ def ts2Json_(ts: TiltSeries, jsonFile:str,
         paths.append(abspath(tiltImage.getFileName()))
         tiltAngle = tiltImage.getTiltAngle()
         trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
-        trMatrixInv = np.linalg.inv(trMatrix)
-        sx = - trMatrixInv[0, 2] * shiftsScale
-        sy = - trMatrixInv[1, 2] * shiftsScale
-        rotzCorrected = np.rad2deg(np.arctan2(trMatrixInv[0, 1], trMatrixInv[0, 0]))
+        rotMatrix = trMatrix[:2, :2]
+        sxScipion = trMatrix[0, 2]
+        syScipion = trMatrix[1, 2]
+        rotMatrixInv = np.linalg.inv(rotMatrix)
+        shiftsScipion = np.array([sxScipion, syScipion])
+        shiftsEman = rotMatrixInv.dot(shiftsScipion)
+        sx = - shiftsEman[0] * shiftsScale
+        sy = - shiftsEman[1] * shiftsScale
+        rotzCorrected = np.rad2deg(np.arctan2(rotMatrixInv[0, 1], rotMatrixInv[0, 0]))
         offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
         rotz = rotzCorrected + offTiltAngle
         tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
@@ -741,10 +746,15 @@ def ts2Json(mdObj, mode="w"):
         paths.append(abspath(tiltImage.getFileName()))
         tiltAngle = tiltImage.getTiltAngle()
         trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
-        trMatrixInv = np.linalg.inv(trMatrix)
-        sx = - trMatrixInv[0, 2] * shiftsScale
-        sy = - trMatrixInv[1, 2] * shiftsScale
-        rotzCorrected = np.rad2deg(np.arctan2(trMatrixInv[0, 1], trMatrixInv[0, 0]))
+        rotMatrix = trMatrix[:2, :2]
+        sxScipion = trMatrix[0, 2]
+        syScipion = trMatrix[1, 2]
+        rotMatrixInv = np.linalg.inv(rotMatrix)
+        shiftsScipion = np.array([sxScipion, syScipion])
+        shiftsEman = rotMatrixInv.dot(shiftsScipion)
+        sx = - shiftsEman[0] * shiftsScale
+        sy = - shiftsEman[1] * shiftsScale
+        rotzCorrected = np.rad2deg(np.arctan2(rotMatrixInv[0, 1], rotMatrixInv[0, 0]))
         offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
         rotz = rotzCorrected + offTiltAngle
         tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
