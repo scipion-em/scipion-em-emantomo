@@ -137,7 +137,9 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
                 self.convertOrLink(halves[1], f'{REFERENCE_NAME}_odd', '', sRate)
 
     # --------------------------- UTILS functions ----------------------------------
-    def getCurrentTs(self, tsId: str, doLock: bool = True):
+    def getCurrentTs(self,
+                     tsId: str,
+                     doLock: bool = True):
         if doLock:
             with self._lock:
                 ts = self.inTsSet.getItem(TiltSeries.TS_ID_FIELD, tsId)

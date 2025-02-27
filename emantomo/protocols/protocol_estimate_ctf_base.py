@@ -28,7 +28,7 @@ from os.path import join, exists
 from typing import List
 from emantomo import Plugin
 from emantomo.constants import TS_DIR
-from emantomo.convert import ts2Json_
+from emantomo.convert import ts2Json
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName
 from pyworkflow.protocol import FloatParam, IntParam, BooleanParam, PointerParam
@@ -97,7 +97,7 @@ class EmanProtEstimateCTFBase(ProtEmantomoBase):
         ts = self.getCurrentTs(tsId)
         jsonFile = genJsonFileName(self.getInfoDir(), tsId)
         mode = 'a' if exists(jsonFile) else 'w'
-        ts2Json_(ts, jsonFile, mode=mode)
+        ts2Json(ts, jsonFile, mode=mode)
 
     # --------------------------- UTILS functions -----------------------------
     def _genCtfEstimationArgs(self, tsId: str) -> List[str]:

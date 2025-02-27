@@ -34,7 +34,7 @@ import numpy as np
 import emantomo
 from emantomo.constants import TS_DIR, TLT_DIR, TOMOGRAMS_DIR, EMAN_ALI_LOSS, ALI_LOSS, TLT_PARAMS, \
     EMAN_OFF_TILT_AXIS
-from emantomo.convert import loadJson, convertBetweenHdfAndMrc, ts2Json_
+from emantomo.convert import loadJson, convertBetweenHdfAndMrc, ts2Json
 from emantomo.objects import EmanHdf5Handler
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import genJsonFileName
@@ -310,7 +310,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
             if self.doRec.get() and not self.doAlignment.get():
                 # This only applies to the reconstruction
                 jsonFile = genJsonFileName(self.getInfoDir(), tsId)
-                ts2Json_(ts, jsonFile, mode='w')
+                ts2Json(ts, jsonFile, mode='w')
         except Exception as e:
             self.failedItems.append(tsId)
             logger.error(redStr(f'Execution failed for tsId {tsId} -> {e}'))

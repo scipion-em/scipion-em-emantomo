@@ -31,7 +31,7 @@ import itertools
 import json
 import time
 from os.path import join, abspath, splitext, dirname, isfile, basename
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 import numpy
@@ -42,7 +42,7 @@ import pyworkflow.utils as pwutils
 from pwem.objects.data import Transform
 from pyworkflow.object import Float, RELATION_SOURCE, OBJECT_PARENT_ID, Pointer
 import tomo.constants as const
-from tomo.objects import SetOfTiltSeries, SetOfTomograms, Tomogram, TiltSeries, CTFTomoSeries
+from tomo.objects import SetOfTiltSeries, SetOfTomograms, Tomogram, TiltSeries, CTFTomoSeries, Coordinate3D
 from tomo.constants import TR_EMAN
 from .. import Plugin
 from emantomo.constants import EMAN_SCORE, EMAN_COVERAGE, TOMOBOX, EMAN_ALI_LOSS, ALI_LOSS, APIX_UNBIN, TLT_PARAMS, \
@@ -658,12 +658,14 @@ def emanFSCsToScipion(fscSet, *fscFiles):
         fscSet.append(fsc)
 
 
-def ctfTomo2Json(mdObj, sphAb, voltage, mode="w"):
-    paths = []
+def ctfTomo2Json(ctf: CTFTomoSeries,
+                 jsonFile:str,
+                 sphAb: float,
+                 voltage:float,
+                 mode: str="w") -> None:
     defocus = []
     phase = []
-    jsonFile = mdObj.jsonFile
-    for ctfTi in mdObj.ctf:
+    for ctfTi in ctf:
         defocus_eman = (ctfTi.getDefocusU() + ctfTi.getDefocusV()) / 20000.0
         phaseShift = ctfTi.getPhaseShift()
         phase.append(phaseShift if phaseShift else 0)
@@ -676,16 +678,14 @@ def ctfTomo2Json(mdObj, sphAb, voltage, mode="w"):
                }
     if mode == "w":
         writeJson(ctfDict, jsonFile)
-        paths.append(jsonFile)
     elif mode == "a":
         appendJson(ctfDict, jsonFile)
-        paths.append(jsonFile)
-    return paths
 
 
-def ts2Json_(ts: TiltSeries, jsonFile:str,
-             ctf: Union[CTFTomoSeries, None] = None,
-             mode: str = "w"):
+def ts2Json(ts: TiltSeries,
+            jsonFile:str,
+            ctf: Union[CTFTomoSeries, None] = None,
+            mode: str = "w"):
     paths = []
     tltParams = []
     aliLoss = []
@@ -730,52 +730,15 @@ def ts2Json_(ts: TiltSeries, jsonFile:str,
     return
 
 
-def ts2Json(mdObj, mode="w"):
-    paths = []
-    tltParams = []
-    aliLoss = []
-    ts = mdObj.ts
-    apixTs = ts.getSamplingRate()
-    jsonFile = mdObj.jsonFile
-    tltFile = mdObj.tsHdfName
-    # The alignment could have been calculated using a binned TS, while the CTF is usually estimated at the original
-    # size. Thus, we consider the unbinned sampling rate the one associated to the TS to which the CTF points to
-    apixUnbinned = getApixUnbinnedFromMd(mdObj)
-    shiftsScale = apixTs / apixUnbinned
-    for tiltImage in ts:
-        paths.append(abspath(tiltImage.getFileName()))
-        tiltAngle = tiltImage.getTiltAngle()
-        trMatrix = tiltImage.getTransform().getMatrix() if tiltImage.getTransform() is not None else numpy.eye(3)
-        rotMatrix = trMatrix[:2, :2]
-        sxScipion = trMatrix[0, 2]
-        syScipion = trMatrix[1, 2]
-        rotMatrixInv = np.linalg.inv(rotMatrix)
-        shiftsScipion = np.array([sxScipion, syScipion])
-        shiftsEman = rotMatrixInv.dot(shiftsScipion)
-        sx = - shiftsEman[0] * shiftsScale
-        sy = - shiftsEman[1] * shiftsScale
-        rotzCorrected = np.rad2deg(np.arctan2(rotMatrixInv[0, 1], rotMatrixInv[0, 0]))
-        offTiltAngle = getattr(tiltImage, EMAN_OFF_TILT_AXIS, Float(0.0)).get()
-        rotz = rotzCorrected + offTiltAngle
-        tltParams.append([sx, sy, rotz, tiltAngle, offTiltAngle])
-        aliLoss.append(getattr(tiltImage, EMAN_ALI_LOSS, Float(0)).get())
-    tltParams.sort(key=lambda x: x[3])  # Sort by tilt angle
-    tltDict = {ALI_LOSS: aliLoss,
-               APIX_UNBIN: apixUnbinned,
-               TS_FILE: tltFile,
-               TLT_PARAMS: tltParams}
-    if mode == "w":
-        writeJson(tltDict, jsonFile)
-        paths.append(jsonFile)
-    elif mode == "a":
-        appendJson(tltDict, jsonFile)
-        paths.append(jsonFile)
-    return
-
-
-def coords2Json(mdObj, emanDict, groupIds, boxSize, doFlipZ=True, mode='w'):
-    paths = []
-    coords = []
+def coords2Json(inCoords: List[Coordinate3D],
+                inTomo: Tomogram,
+                unbinnedSRate: float,
+                jsonFile: str,
+                emanDict: dict,
+                groupIds: List[int],
+                boxSize: int,
+                doFlipZ: bool=True,
+                mode: str='w'):
     ###########################################################################################
     # From EMAN's e2spt_boxer (this is how it stores the coordinates picked):
     # def SaveJson(self):
@@ -791,17 +754,15 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, doFlipZ=True, mode='w'):
     #                  b0[3], b0[4], b0[5]]
     #             bxs.append(b)
     ###########################################################################################
-    tomo = mdObj.inTomo
-    apix = tomo.getSamplingRate()
-    apixUnbin = getApixUnbinnedFromMd(mdObj)
-    nx, ny, nz = tomo.getDim()
+    coords = []
+    apix = inTomo.getSamplingRate()
+    nx, ny, nz = inTomo.getDim()
     sx = nx // 2
     sy = ny // 2
     sz = nz // 2
-    scaleFactor = apix / apixUnbin
-    jsonFile = mdObj.jsonFile
+    scaleFactor = apix / unbinnedSRate
     zInvertFactor = -1 if doFlipZ else 1
-    for coord in mdObj.coords:
+    for coord in inCoords:
         x, y, z = coord.getPosition(const.BOTTOM_LEFT_CORNER)
         x = (x - sx) * scaleFactor
         y = (y - sy) * scaleFactor
@@ -815,12 +776,8 @@ def coords2Json(mdObj, emanDict, groupIds, boxSize, doFlipZ=True, mode='w'):
                                                              "name": TOMOBOX}  # ("class_%i" % i).zfill(3)}
     if mode == "w":
         writeJson(coordDict, jsonFile)
-        paths.append(jsonFile)
     elif mode == "a":
         appendJson(coordDict, jsonFile)
-        paths.append(jsonFile)
-
-    return paths
 
 
 def convertBetweenHdfAndMrc(prot, inFile, outFile, extraArgs=''):
