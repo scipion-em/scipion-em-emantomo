@@ -169,7 +169,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     def templateMatchingStep(self, tsId, inTomoName):
         try:
-            self.runJob(self.program, self._genTempMatchArgs(inTomoName), cwd=self._getExtraPath())
+            self.runJob(self.program, self._genTempMatchArgs(tsId), cwd=self._getExtraPath())
         except Exception as e:
             logger.error(f'--------->Template matching failed for:'
                          f'\n\ttsId = {tsId}, tomoName = {inTomoName}', exc_info=e)
@@ -202,8 +202,9 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             raise ValueError('ERROR!!! No coordinates were registered.')
 
     # --------------------------- UTILS functions -----------------------------
-    def _genTempMatchArgs(self, inTomoName):
-        args = [f" {self._getTomoName(inTomoName)}",
+    def _genTempMatchArgs(self, tsId):
+        convertedOrLinkedTomo = join(self.getTomogramsDir(), tsId + '.hdf')
+        args = [f" {self._getTomoName(convertedOrLinkedTomo)}",
                 f"--ref {REFERENCE_NAME}.hdf ",
                 f"--nptcl {self.nptcl.get()}",
                 f"--dthr {self.dthr.get():.2f}",
