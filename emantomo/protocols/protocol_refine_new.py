@@ -89,6 +89,7 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
                       help='This will be the maximum resolution considered for the first iteration. In later '
                            'iterations, the maximum resolution is calculated from the FSC of the previous iteration '
                            '(unless the parameter max. resolution is specified).')
+        self._addBinThreads(form)
 
         form.addSection(label='Refinement')
         form.addParam('iters', StringParam,
@@ -176,7 +177,6 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
                       label="Extra params",
                       help="Here you can add any extra parameters to run Eman's  new subtomogram refinement. "
                            "Parameters should be written in Eman's command line format (--param val)")
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
@@ -275,7 +275,7 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
             args.append(f'--smooth={self.smooth.get():.2f}')
             args.append(f'--smoothN={self.smoothN.get()}')
         # Extra params
-        args.append(f'--parallel=thread:{self.numberOfThreads.get()}')
+        args.append(f'--parallel=thread:{self.binThreads.get()}')
         args.append(f'--threads={self.threadsPostProc.get()}')
         if self.make3dThread.get():
             args.append('--m3dthread')

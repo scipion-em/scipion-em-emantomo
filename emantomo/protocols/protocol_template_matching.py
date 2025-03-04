@@ -27,14 +27,16 @@ import glob
 import logging
 from enum import Enum
 from os.path import basename, join, exists
+import numpy as np
 from emantomo import Plugin
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
 from emantomo.convert import loadJson, readCoordinate3D
 from emantomo.protocols.protocol_base import ProtEmantomoBase, REF_VOL, IN_TOMOS
+from pwem.emlib.image.image_readers import MRCImageReader
 from pyworkflow.object import Set, String
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam, GE, LE, \
     STEPS_PARALLEL
-from pyworkflow.utils import Message, replaceExt
+from pyworkflow.utils import Message, replaceExt, redStr, cyanStr
 from tomo.objects import SetOfCoordinates3D, Tomogram
 
 logger = logging.getLogger(__name__)
@@ -75,14 +77,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                       important=True,
                       label="Reference volume",
                       help="This should be 'light contrast'.")
-        form.addParam('binThreads', IntParam,
-                      label='Emantomo threads',
-                      default=2,
-                      help='Number of threads used by EMAN each time it is called in the protocol execution. For '
-                           'example, if 2 Scipion threads and 3 Emantomo threads are set, the tomograms will be '
-                           'processed in groups of 2 at the same time with a call of EMAN with 3 threads each, so '
-                           '6 threads will be used at the same time. Beware the memory of your machine has '
-                           'memory enough to load together the number of tomograms specified by Scipion threads.')
+        self._addBinThreads(form)
 
         form.addSection(label='options')
         form.addParam('nptcl', IntParam,
@@ -128,7 +123,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         form.addParam('rmgold', BooleanParam,
                       default=True,
                       label='Remove particles near gold fiducials?')
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -169,14 +164,16 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     def templateMatchingStep(self, tsId, inTomoName):
         try:
+            logger.info(cyanStr(f'tsId = {tsId}: running the template matching...'))
             self.runJob(self.program, self._genTempMatchArgs(tsId), cwd=self._getExtraPath())
         except Exception as e:
-            logger.error(f'--------->Template matching failed for:'
-                         f'\n\ttsId = {tsId}, tomoName = {inTomoName}', exc_info=e)
+            logger.error(redStr(f'--------->Template matching failed for:'
+                         f'\n\ttsId = {tsId}, tomoName = {inTomoName}'), exc_info=e)
             self.badTsIds.set(self.badTsIds.get() + f' {tsId}')
 
     def createOutputStep(self, tsId):
         with self._lock:
+            logger.info(cyanStr(f'tsId = {tsId}: registering the picked coordinates...'))
             tomo = self.inTomos.getItem(Tomogram.TS_ID_FIELD, tsId)
             outCoords = self.createOutputSet()
             tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
@@ -249,11 +246,24 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def _validate(self):
         errorMsg = []
         tol = 1e-03
-        tomosSRate = self.getAttrib(IN_TOMOS).getSamplingRate()
-        refSRate = self.getAttrib(REF_VOL).getSamplingRate()
+        inTomos = self.getAttrib(IN_TOMOS)
+        reference = self.getAttrib(REF_VOL)
+        tomosSRate = inTomos.getSamplingRate()
+        refSRate = reference.getSamplingRate()
+        refDims = MRCImageReader.getDimensions(reference.getFileName())
+        tomoXDims, tomoYDims, _, _ = zip(*[MRCImageReader.getDimensions(tomo.getFileName())
+                                                   for tomo in inTomos])
+        tomoXDims = np.array(tomoXDims)
+        tomoYDims = np.array(tomoYDims)
         if abs(tomosSRate - refSRate) >= tol:
             errorMsg.append(f'The sampling rate of the input tomograms [{tomosSRate} Å/pix] and the reference volume '
                             f'[{refSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        if refDims[0] < 32:
+            errorMsg.append(f'Box sizes below 32 px are not allowed.')
+        if np.any(tomoXDims < 900) or np.any(tomoYDims < 900):
+            errorMsg.append('The lowest value admitted for X, Y dimensions of the introduced tomograms is 900 px. '
+                            'This is because the lowest tomogram reconstruction allowed by native EMAN is around 1k '
+                            'px.')
         return errorMsg
 
     def _summary(self):

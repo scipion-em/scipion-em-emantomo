@@ -80,6 +80,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
                       default=0,
                       label='Min. resolution (Å)',
                       help='Minimum resolution (the larger number) to consider in alignment (in Å).')
+        self._addBinThreads(form)
 
         form.addSection(label='Classification')
         group = form.addGroup('Reference management')
@@ -144,7 +145,6 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
                       label="Extra params",
                       help="Here you can add any extra parameters to run Eman's  new subtomogram refinement. "
                            "Parameters should be written in Eman's command line format (--param val)")
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
@@ -219,7 +219,7 @@ class EmanProtMultiRefinementNew(ProtEmantomoBase):
             f'--ptcls {self.getNewAliFile(outPath=SPT_00_DIR)}',
             f'--niter {self.nIter.get()}',
             f'--sym {self.symmetry.get()}',
-            f'--parallel thread:{self.numberOfThreads.get()}',
+            f'--parallel thread:{self.binThreads.get()}',
             f'--threads {self.threadsPostProc.get()}',
             f'--maxres {self.maxRes.get():.2f}',
             f'--minres {self.minRes.get():.2f}',

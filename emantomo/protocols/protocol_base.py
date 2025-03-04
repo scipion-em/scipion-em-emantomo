@@ -41,6 +41,7 @@ from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer, String
+from pyworkflow.protocol import IntParam
 from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
 from tomo.utils import getNonInterpolatedTsFromRelations
@@ -68,6 +69,17 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         self.scaleFactor = 1.0
         self.voltage = 300.0
         self.sphAb = 2.7
+
+    @staticmethod
+    def _addBinThreads(form):
+        form.addParam('binThreads', IntParam,
+                      label='Emantomo threads',
+                      default=6,
+                      help='Number of threads used by EMAN each time it is called in the protocol execution. For '
+                           'example, if 2 Scipion threads and 3 Emantomo threads are set, the tomograms will be '
+                           'processed in groups of 2 at the same time with a call of EMAN with 3 threads each, so '
+                           '6 threads will be used at the same time. Beware the memory of your machine has '
+                           'memory enough to load together the number of tomograms specified by Scipion threads.')
 
     # --------------------------- STEPS functions -----------------------------
     def convertTsStep(self, mdObj):

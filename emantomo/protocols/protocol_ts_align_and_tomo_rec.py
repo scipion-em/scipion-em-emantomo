@@ -109,6 +109,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
                       help='If set to Yes, the generated files will be saved in both HDF and MRC formats. They are '
                            'generated in HDF and then converted into MRC. The HDF files are deleted by default to '
                            'save storage.')
+        self._addBinThreads(form)
 
         form.addSection(label='Tilt series alignment')
         form.addParam('doAlignment', BooleanParam,
@@ -410,7 +411,7 @@ class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     # --------------------------- UTILS functions ----------------------------
     def getCommonArgs(self, tsId):
         args = ' %s ' % self._getTsFile(tsId)
-        args += '--threads=%i ' % self.numberOfThreads.get()
+        args += '--threads=%i ' % self.binThreads.get()
         return args
 
         # --------------------------- TS alignment UTILS functions ----------------------------

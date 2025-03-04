@@ -143,8 +143,9 @@ class EmanProtTSExtraction(ProtEmantomoBase):
                       label='Minimum distance between particles (Å)',
                       default=10,
                       validators=[GE(0)],
-                      expertLevel=LEVEL_ADVANCED, )
-        form.addParallelSection(threads=4, mpi=0)
+                      expertLevel=LEVEL_ADVANCED)
+        self._addBinThreads(form)
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -362,7 +363,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             f'--padtwod={self.paddingFactor.get():.2f}',
             f'--rmbeadthr={self.rmThr.get():.2f}',
             f'--mindist={self.minDist.get():.2f}',
-            f'--threads={self.numberOfThreads.get()}',
+            f'--threads={self.binThreads.get()}',
             '--append',
             '--verbose=9'
         ]

@@ -643,9 +643,20 @@ def emanFSCsToScipion(fscSet, *fscFiles):
     def _getFscValues(fscFn):
         resolution_inv, frc = [], []
         with open(fscFn) as f1:
-            for l in f1:
-                resolution_inv.append(float(l.split()[0]))
-                frc.append(float(l.split()[1]))
+            lines = f1.readlines()
+
+        # Depending on EMAN's version, the FSC files may begin with a comment line or directly
+        # with the numeric values:
+        #
+        # #Spatial Freq (1/A); FSC
+        # 0.001661	0.72034
+        # 0.003323	0.36510
+        # 0.004984	0.39391
+        # 0.006645	0.23513
+        lines = lines[1:] if lines[0].startswith("#") else lines
+        for l in lines:
+            resolution_inv.append(float(l.split()[0]))
+            frc.append(float(l.split()[1]))
 
         return resolution_inv, frc
 

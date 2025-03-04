@@ -74,6 +74,7 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
                       label='Binning factor',
                       help='This option can be used to shrink the input particles by an integer amount '
                            'prior to reconstruction, making them smaller. Default = 1 means no shrinking')
+        self._addBinThreads(form)
 
         form.addSection(label='Optimization')
         form.addParam('nIters', IntParam,
@@ -119,7 +120,6 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
                            "It typically involves a trade-off between convergence speed and accuracy, and may require "
                            "tuning through trial and error or more advanced optimization techniques such as adaptive "
                            "learning rate methods.")
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -175,7 +175,7 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
                      f"--batch {self.batchSize.get()}",
                      f"--keep {self.keptParticles.get():.2f}",
                      f"--learnrate {self.learningRate.get():.2f}",
-                     f"--parallel thread:{self.numberOfThreads.get()}",
+                     f"--parallel thread:{self.binThreads.get()}",
                      "--verbose 9 "])
         return ' '.join(args)
 

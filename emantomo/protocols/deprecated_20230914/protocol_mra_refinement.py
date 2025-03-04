@@ -30,13 +30,13 @@ from os.path import join, abspath
 import emantomo
 from emantomo.constants import SYMMETRY_HELP_MSG, INPUT_PTCLS_LST, SUBTOMOGRAMS_DIR, SPT_00_DIR, REFS_DIR
 from emantomo.convert import writeSetOfSubTomograms, refinement2Json
+from emantomo.protocols.protocol_base import ProtEmantomoBase
 from pwem import ALIGN_3D
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.protocol import PointerParam, IntParam, StringParam, LEVEL_ADVANCED, FloatParam, BooleanParam
 from pyworkflow.utils import Message, removeBaseExt, makePath
 from tomo.objects import SetOfSubTomograms, SetOfClassesSubTomograms, AverageSubTomogram
-from tomo.protocols import ProtTomoBase
 
 
 class mraOutputObjects(Enum):
@@ -44,7 +44,7 @@ class mraOutputObjects(Enum):
     classes = SetOfClassesSubTomograms
 
 
-class EmanMraClassifySubtomos(EMProtocol, ProtTomoBase):
+class EmanMraClassifySubtomos(ProtEmantomoBase):
     """This protocol wraps *e2spt_classify.py* EMAN2 program, which performs a
     multi-reference refinement of subtomograms."""
 
@@ -73,6 +73,7 @@ class EmanMraClassifySubtomos(EMProtocol, ProtTomoBase):
                       label='Mask (opt.)',
                       allowsNull=True,
                       pointerClass='VolumeMask')
+        self._addBinThreads(form)
 
         form.addSection(label='Optimization')
         form.addParam('nIter', IntParam,
@@ -96,7 +97,6 @@ class EmanMraClassifySubtomos(EMProtocol, ProtTomoBase):
         form.addParam('doLocalFilter', BooleanParam,
                       default=False,
                       label='Do local filter (top hat)?')
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
@@ -169,7 +169,7 @@ class EmanMraClassifySubtomos(EMProtocol, ProtTomoBase):
         if self.doLocalFilter.get():
             args += '--localfilter '
         args += '--path=%s ' % self._getExtraPath(SPT_00_DIR)
-        args += '--threads=%i ' % self.numberOfThreads.get()
+        args += '--threads=%i ' % self.binThreads.get()
         args += '--verbose=9 '
         return args
 
