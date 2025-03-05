@@ -61,7 +61,8 @@ class TestEmantomoStaClassicBase(TestBaseCentralizedLayer):
         cls.tomoImported = cls.runImportTomograms()  # Import tomograms
         cls.tomosBinned = cls.runBinTomograms(cls.tomoImported)  # Bin the tomogram to make it smaller
         cls.coordsImported = cls.runImport3dCoords(
-            cls.tomosBinned)  # Import the coordinates from the binned tomogram
+            cls.tomosBinned,
+            cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name))  # Import the coordinates from the binned tomogram
         # Extract subtomograms
         cls.subtomosExtracted = cls.runExtractSubtomograms(cls.coordsImported,
                                                            tomoSource=SAME_AS_PICKING,
@@ -100,11 +101,11 @@ class TestEmantomoStaClassicBase(TestBaseCentralizedLayer):
         return tomoImported
 
     @classmethod
-    def runImport3dCoords(cls, tomoImported):
+    def runImport3dCoords(cls, tomoImported, sqliteFile):
         # Import coordinates
         print(magentaStr("\n==> Importing the 3D coordinates:"))
         protImportCoordinates3d = cls.newProtocol(ProtImportCoordinates3DFromScipion,
-                                                  sqliteFile=cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name),
+                                                  sqliteFile=sqliteFile,
                                                   importTomograms=tomoImported,
                                                   boxSize=cls.boxSize)
 
@@ -150,7 +151,8 @@ class TestEmantomoStaClassicBase(TestBaseCentralizedLayer):
     @classmethod
     def runAverageSubtomograms(cls):
         print(magentaStr("\n==> Averaging the subtomograms:"))
-        protAvgSubtomo = cls.newProtocol(EmanProtSubTomoAverage, inputSetOfSubTomogram=cls.subtomosExtracted)
+        protAvgSubtomo = cls.newProtocol(EmanProtSubTomoAverage,
+                                         inputSetOfSubTomogram=cls.subtomosExtracted)
         cls.launchProtocol(protAvgSubtomo)
         avgSubtomo = getattr(protAvgSubtomo, OutputsAverageSubtomos.averageSubTomos.name, None)
         cls.assertIsNotNone(avgSubtomo, "There was a problem calculating the average subtomogram")

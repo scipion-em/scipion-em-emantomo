@@ -31,6 +31,14 @@ from emantomo.utils import genJsonFileName
 from pyworkflow.object import Set
 from pyworkflow.protocol import STEPS_PARALLEL
 from pyworkflow.utils import Message
+from os.path import exists, join
+from emantomo import Plugin
+from emantomo.constants import TS_DIR
+from emantomo.objects import EmanMetaData
+from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
+from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
+from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
+from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
 from emantomo.convert import loadJson
 

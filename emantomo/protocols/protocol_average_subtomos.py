@@ -30,18 +30,12 @@ import glob
 import os
 import shutil
 from os.path import join, basename, abspath
-
-from pyworkflow import BETA
-
-from pwem.protocols import EMProtocol
 from pyworkflow.protocol import PointerParam, FloatParam, StringParam, BooleanParam, LEVEL_ADVANCED
-from pyworkflow.utils import Message, makePath, removeBaseExt, replaceExt, createLink
+from pyworkflow.utils import Message, makePath, replaceExt, createLink
+from .protocol_base import ProtEmantomoBase
 from ..constants import SPT_00_DIR, INPUT_PTCLS_LST, THREED_01, SYMMETRY_HELP_MSG, SUBTOMOGRAMS_DIR
-
 from ..convert import writeSetOfSubTomograms, refinement2Json
 import emantomo
-
-from tomo.protocols import ProtTomoBase
 from tomo.objects import AverageSubTomogram
 from ..objects import EmanParticle, EmanSetOfParticles
 
@@ -50,7 +44,7 @@ class OutputsAverageSubtomos(enum.Enum):
     averageSubTomos = AverageSubTomogram
 
 
-class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
+class EmanProtSubTomoAverage(ProtEmantomoBase):
     """
     This protocol wraps *e2spt_average.py* EMAN2 program.
     Computes the average a selected subset of a SetOfSubtomograms in the predetermined orientation
@@ -60,13 +54,12 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
     _possibleOutputs = OutputsAverageSubtomos
 
     def __init__(self, **kwargs):
-        EMProtocol.__init__(self, **kwargs)
+        super().__init__(**kwargs)
         self.projectPath = None
         self.volumeFileHdf = None
         self.halfEvenFileHdf = None
         self.halfOddFileHdf = None
         self.hdfSubtomosDir = None
-        # self.stepsExecutionMode = STEPS_PARALLEL
 
     # --------------- DEFINE param functions ---------------
     def _defineParams(self, form):
@@ -100,7 +93,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
                       help='If set to Yes, the generated files will be saved in both HDF and MRC formats. They are '
                            'generated in HDF and then converted into MRC. The HDF files are deleted by default to '
                            'save storage.')
-        form.addParallelSection(threads=4, mpi=0)
+        self._addBinThreads(form)
 
     # --------------- INSERT steps functions ----------------
 
@@ -135,7 +128,7 @@ class EmanProtSubTomoAverage(EMProtocol, ProtTomoBase):
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def computeAverageStep(self):
-        args = "--keep 1 --wedgesigma=%f --threads %i " % (self.msWedge.get(), self.numberOfThreads.get())
+        args = "--keep 1 --wedgesigma=%f --threads %i " % (self.msWedge.get(), self.binThreads.get())
         if self.skipPostProc.get():
             args += '--skippostp '
         program = emantomo.Plugin.getProgram('e2spt_average.py')

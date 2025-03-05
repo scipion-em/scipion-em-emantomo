@@ -45,7 +45,6 @@ from pyworkflow.protocol import IntParam
 from pyworkflow.utils import makePath, createLink, cyanStr
 from tomo.objects import SetOfTiltSeries, TiltSeries
 from tomo.protocols import ProtTomoBase
-from tomo.utils import getNonInterpolatedTsFromRelations
 
 logger = logging.getLogger(__name__)
 

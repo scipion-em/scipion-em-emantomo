@@ -34,7 +34,8 @@ from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
 from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
-from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
+from pwem.emlib.image import ImageHandler
+from pyworkflow.protocol import StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfAverageSubTomograms
 
@@ -59,15 +60,7 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_SUBTOMOS, PointerParam,
-                      pointerClass='EmanSetOfParticles',
-                      label='Particles',
-                      important=True,
-                      help='Select the set of subtomograms to build an initial model')
-        form.addParam(REF_VOL, PointerParam,
-                      pointerClass='Volume',
-                      allowsNull=True,
-                      label="Reference volume (opt.)")
+        self._addCommonInputParams(form)
         form.addParam('shrink', IntParam,
                       default=1,
                       expertLevel=LEVEL_ADVANCED,
@@ -119,7 +112,6 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
                            "It typically involves a trade-off between convergence speed and accuracy, and may require "
                            "tuning through trial and error or more advanced optimization techniques such as adaptive "
                            "learning rate methods.")
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
@@ -175,7 +167,7 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
                      f"--batch {self.batchSize.get()}",
                      f"--keep {self.keptParticles.get():.2f}",
                      f"--learnrate {self.learningRate.get():.2f}",
-                     f"--parallel thread:{self.numberOfThreads.get()}",
+                     f"--parallel thread:{self.binThreads.get()}",
                      "--verbose 9 "])
         return ' '.join(args)
 
@@ -205,4 +197,27 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
         return averageSubTomogram
 
     # -------------------------- INFO functions -------------------------------
+    def _validate(self):
+        errorMsg = []
+        refVol = self.getAttrib(REF_VOL)
+        if refVol:
+            # Check the dimensions
+            ih = ImageHandler()
+            x, y, z, _ = ih.getDimensions(refVol.getFileName())
+            refVolDims = (x, y, z)
+            inParticles = self.getAttrib(IN_SUBTOMOS)
+            inParticlesDims = inParticles.getBoxSize()
+            if refVolDims != inParticlesDims:
+                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            # Check the sampling rate
+            tol = 1e-03
+            inParticlesSRate = inParticles.getSamplingRate()
+            refVolSRate = refVol.getSamplingRate()
+            if abs(inParticlesSRate - refVolSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
+                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        return errorMsg
+
 

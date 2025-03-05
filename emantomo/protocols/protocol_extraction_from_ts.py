@@ -427,7 +427,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             f'--padtwod={self.paddingFactor.get():.2f}',
             f'--rmbeadthr={self.rmThr.get():.2f}',
             f'--mindist={self.minDist.get():.2f}',
-            f'--threads={self.numberOfThreads.get()}',
+            f'--threads={self.binThreads.get()}',
             '--append',
             '--verbose=9'
         ]
