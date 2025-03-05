@@ -24,22 +24,8 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import shutil
-from enum import Enum
-from os.path import exists
-
-from emantomo import Plugin
-from emantomo.convert import convertBetweenHdfAndMrc
-from emantomo.convert.lstConvert import EmanLstReader
-from emantomo.objects import EmanSetOfParticles
-from pwem.convert.headers import fixVolume
-from pwem.emlib.image import ImageHandler
-from pwem.objects import SetOfFSCs
-from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
-from pyworkflow.utils import Message
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms
+from pyworkflow.protocol import PointerParam
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, SPT_00_DIR
 
 
 class EmanProtRefineNewBase(ProtEmantomoBase):
@@ -48,6 +34,17 @@ class EmanProtRefineNewBase(ProtEmantomoBase):
         super().__init__(**kwargs)
 
     # --------------- DEFINE param functions ----------------
+    def _addCommonInputParams(self, form):
+        form.addParam(IN_SUBTOMOS, PointerParam,
+                      pointerClass='EmanSetOfParticles',
+                      label='Particles',
+                      important=True,
+                      help='Select the set of subtomograms to build an initial model')
+        form.addParam(REF_VOL, PointerParam,
+                      pointerClass='Volume',
+                      allowsNull=True,
+                      label="Reference volume (opt.)")
+        self._addBinThreads(form)
 
     # --------------- INSERT steps functions ----------------
 
@@ -56,25 +53,3 @@ class EmanProtRefineNewBase(ProtEmantomoBase):
     # --------------- UTILS functions -----------------------
 
     # --------------- INFO functions ------------------------
-    def _validate(self):
-        errorMsg = []
-        refVol = self.getAttrib(REF_VOL)
-        if refVol:
-            # Check the dimensions
-            ih = ImageHandler()
-            x, y, z, _ = ih.getDimensions(refVol.getFileName())
-            refVolDims = (x, y, z)
-            inParticles = self.getAttrib(IN_SUBTOMOS)
-            inParticlesDims = inParticles.getBoxSize()
-            if refVolDims != inParticlesDims:
-                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
-                                f'{inParticlesDims} px must be the same')
-            # Check the sampling rate
-            tol = 1e-03
-            inParticlesSRate = inParticles.getSamplingRate()
-            refVolSRate = refVol.getSamplingRate()
-            if abs(inParticlesSRate - refVolSRate) >= tol:
-                errorMsg.append(
-                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
-                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
-        return errorMsg

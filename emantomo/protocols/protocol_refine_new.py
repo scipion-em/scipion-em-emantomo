@@ -34,13 +34,12 @@ from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
 from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
-from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfFSCs
-from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
+from pyworkflow.protocol import IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, SPT_00_DIR
+from emantomo.protocols.protocol_base import IN_SUBTOMOS
+from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME
 
 # 3D maps filtering options
 WIENER = 'wiener'
@@ -75,21 +74,13 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
 
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_SUBTOMOS, PointerParam,
-                      pointerClass='EmanSetOfParticles',
-                      label='Particles',
-                      important=True)
-        form.addParam(REF_VOL, PointerParam,
-                      pointerClass='Volume',
-                      allowsNull=True,
-                      label="Reference volume (opt.)")
+        self._addCommonInputParams(form)
         form.addParam('startRes', FloatParam,
                       default=50,
                       label='Refinement initial resolution (Å)',
                       help='This will be the maximum resolution considered for the first iteration. In later '
                            'iterations, the maximum resolution is calculated from the FSC of the previous iteration '
                            '(unless the parameter max. resolution is specified).')
-        self._addBinThreads(form)
 
         form.addSection(label='Refinement')
         form.addParam('iters', StringParam,

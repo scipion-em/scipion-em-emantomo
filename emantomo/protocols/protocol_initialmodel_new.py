@@ -34,7 +34,8 @@ from emantomo.convert import convertBetweenHdfAndMrc
 from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
 from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
-from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
+from pwem.emlib.image import ImageHandler
+from pyworkflow.protocol import StringParam, FloatParam, LEVEL_ADVANCED, IntParam, GT, LE
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfAverageSubTomograms
 
@@ -59,22 +60,13 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_SUBTOMOS, PointerParam,
-                      pointerClass='EmanSetOfParticles',
-                      label='Particles',
-                      important=True,
-                      help='Select the set of subtomograms to build an initial model')
-        form.addParam(REF_VOL, PointerParam,
-                      pointerClass='Volume',
-                      allowsNull=True,
-                      label="Reference volume (opt.)")
+        self._addCommonInputParams(form)
         form.addParam('shrink', IntParam,
                       default=1,
                       expertLevel=LEVEL_ADVANCED,
                       label='Binning factor',
                       help='This option can be used to shrink the input particles by an integer amount '
                            'prior to reconstruction, making them smaller. Default = 1 means no shrinking')
-        self._addBinThreads(form)
 
         form.addSection(label='Optimization')
         form.addParam('nIters', IntParam,
@@ -205,4 +197,27 @@ class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
         return averageSubTomogram
 
     # -------------------------- INFO functions -------------------------------
+    def _validate(self):
+        errorMsg = []
+        refVol = self.getAttrib(REF_VOL)
+        if refVol:
+            # Check the dimensions
+            ih = ImageHandler()
+            x, y, z, _ = ih.getDimensions(refVol.getFileName())
+            refVolDims = (x, y, z)
+            inParticles = self.getAttrib(IN_SUBTOMOS)
+            inParticlesDims = inParticles.getBoxSize()
+            if refVolDims != inParticlesDims:
+                errorMsg.append(f'The dimensions of the reference volume {refVolDims} px and the particles '
+                                f'{inParticlesDims} px must be the same')
+            # Check the sampling rate
+            tol = 1e-03
+            inParticlesSRate = inParticles.getSamplingRate()
+            refVolSRate = refVol.getSamplingRate()
+            if abs(inParticlesSRate - refVolSRate) >= tol:
+                errorMsg.append(
+                    f'The sampling rate of the input particles [{inParticlesSRate} Å/pix] and the reference volume '
+                    f'[{refVolSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        return errorMsg
+
 

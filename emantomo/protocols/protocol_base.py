@@ -44,7 +44,6 @@ from pyworkflow.object import Pointer, String
 from pyworkflow.protocol import IntParam
 from pyworkflow.utils import makePath, createLink
 from tomo.protocols import ProtTomoBase
-from tomo.utils import getNonInterpolatedTsFromRelations
 
 
 logger = logging.getLogger(__name__)
@@ -75,6 +74,7 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         form.addParam('binThreads', IntParam,
                       label='Emantomo threads',
                       default=6,
+                      important=True,
                       help='Number of threads used by EMAN each time it is called in the protocol execution. For '
                            'example, if 2 Scipion threads and 3 Emantomo threads are set, the tomograms will be '
                            'processed in groups of 2 at the same time with a call of EMAN with 3 threads each, so '
