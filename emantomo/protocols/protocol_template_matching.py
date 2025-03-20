@@ -229,7 +229,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             outCoords.setStreamState(Set.STREAM_OPEN)
 
             self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
-            self._defineSourceRelation(self.inTomos, outCoords)
+            self._defineSourceRelation(getattr(self, IN_TOMOS), outCoords)
 
         return outCoords
 
