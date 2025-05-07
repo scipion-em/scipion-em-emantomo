@@ -221,14 +221,15 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         if outCoords:
             outCoords.enableAppend()
         else:
+            inTomosPointer = getattr(self, IN_TOMOS)
             outCoords = SetOfCoordinates3D.create(self._getPath(), template="coordinates%s")
-            outCoords.setPrecedents(self.inTomosDict)
-            outCoords.setSamplingRate(self.inTomosDict.getSamplingRate())
+            outCoords.setPrecedents(inTomosPointer)
+            outCoords.setSamplingRate(inTomosPointer.get().getSamplingRate())
             outCoords.setBoxSize(self.getRefVol().getDim()[0])
             outCoords.setStreamState(Set.STREAM_OPEN)
 
             self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
-            self._defineSourceRelation(getattr(self, IN_TOMOS), outCoords)
+            self._defineSourceRelation(inTomosPointer, outCoords)
 
         return outCoords
 
