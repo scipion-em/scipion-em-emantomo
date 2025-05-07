@@ -59,8 +59,8 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.inTomosDict = None
-        self.badTsIds = String('')
-        self.zeroCoordsTsIds = String('')
+        self.badTsIds = String()
+        self.zeroCoordsTsIds = String()
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -168,7 +168,8 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             tomo = self.inTomosDict[tsId]
             logger.error(redStr(f'--------->Template matching failed for:'
                          f'\n\ttsId = {tsId}, tomoName = {tomo.getFileName()}'), exc_info=e)
-            self.badTsIds.set(self.badTsIds.get() + f' {tsId}')
+            prevMsg = '' if not self.badTsIds.get() else self.badTsIds.get()
+            self.badTsIds.set(prevMsg + f' {tsId}')
 
     def createOutputStep(self, tsId: str):
         with self._lock:
@@ -187,7 +188,8 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                     self._store(outCoords)
                 else:
                     logger.error(redStr(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})'))
-                    self.zeroCoordsTsIds.set(self.zeroCoordsTsIds.get() + f' {tsId}')
+                    prevMsg = '' if not self.zeroCoordsTsIds.get() else self.zeroCoordsTsIds.get()
+                    self.zeroCoordsTsIds.set(prevMsg + f' {tsId}')
             else:
                 logger.error(redStr(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})'))
 
