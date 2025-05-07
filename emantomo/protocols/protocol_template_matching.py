@@ -173,7 +173,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def createOutputStep(self, tsId: str):
         with self._lock:
             logger.info(cyanStr(f'tsId = {tsId}: registering the picked coordinates...'))
-            tomo = self.inTomosDict.getItem(Tomogram.TS_ID_FIELD, tsId)
+            tomo = self.inTomosDict[tsId]
             outCoords = self.createOutputSet()
             tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
             if exists(tomoJsonFile):
