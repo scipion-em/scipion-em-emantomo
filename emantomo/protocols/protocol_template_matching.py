@@ -23,7 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 import logging
 from enum import Enum
 from os.path import basename, join, exists
@@ -133,7 +132,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                                             prerequisites=[],
                                             needsGPU=False)
         for tsId in self.inTomosDict.keys():
-            prjId = self._insertFunctionStep(self.prepareEmanPrj,
+            prjId = self._insertFunctionStep(self.prepareEmanPrj, tsId,
                                              prerequisites=[cInputId],
                                              needsGPU=False)
             tmId = self._insertFunctionStep(self.templateMatchingStep, tsId,
