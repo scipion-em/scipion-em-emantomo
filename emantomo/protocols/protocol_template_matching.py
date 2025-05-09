@@ -23,7 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
 import logging
 from enum import Enum
 from os.path import basename, join, exists
@@ -59,8 +58,8 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.inTomos = None
-        self.badTsIds = String('')
+        self.inTomosDict = None
+        self.badTsIds = String()
         self.zeroCoordsTsIds = String()
 
     # --------------------------- DEFINE param functions ----------------------
@@ -129,17 +128,15 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     def _insertAllSteps(self):
         self._initialize()
         closeSetStepDeps = []
-        prjId = self._insertFunctionStep(self.prepareEmanPrj,
-                                         prerequisites=[],
-                                         needsGPU=False)
         cInputId = self._insertFunctionStep(self.convertRefVolStep,
-                                            prerequisites=prjId,
+                                            prerequisites=[],
                                             needsGPU=False)
-        for tomo in self.inTomos:
-            inTomoName = tomo.getFileName()
-            tsId = tomo.getTsId()
-            tmId = self._insertFunctionStep(self.templateMatchingStep, tsId, inTomoName,
-                                            prerequisites=cInputId,
+        for tsId in self.inTomosDict.keys():
+            prjId = self._insertFunctionStep(self.prepareEmanPrj, tsId,
+                                             prerequisites=[cInputId],
+                                             needsGPU=False)
+            tmId = self._insertFunctionStep(self.templateMatchingStep, tsId,
+                                            prerequisites=prjId,
                                             needsGPU=False)
             cOutId = self._insertFunctionStep(self.createOutputStep, tsId,
                                               prerequisites=tmId,
@@ -151,30 +148,33 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.inTomos = getattr(self, IN_TOMOS).get()
+        self.inTomosDict = {tomo.getTsId(): tomo.clone() for tomo in getattr(self, IN_TOMOS).get()}
 
-    def prepareEmanPrj(self):
+    def prepareEmanPrj(self, tsId: str):
+        logger.info(cyanStr(f'tsId = {tsId}: preparing the EMAN project...'))
         super().createInitEmanPrjDirs()
-        sRate = self.inTomos.getSamplingRate()
-        for tomo in self.inTomos:
-            inTomoName = tomo.getFileName()
-            # Required to ensure that the sampling rate is correct in the header, as EMAN reads and compares it
-            # with the sampling rate of the reference volume to scale the data
-            self.convertOrLink(inTomoName, tomo.getTsId(), TOMOGRAMS_DIR, sRate)
+        tomo = self.inTomosDict[tsId]
+        sRate = tomo.getSamplingRate()
+        inTomoName = tomo.getFileName()
+        # Required to ensure that the sampling rate is correct in the header, as EMAN reads and compares it
+        # with the sampling rate of the reference volume to scale the data
+        self.convertOrLink(inTomoName, tsId, TOMOGRAMS_DIR, sRate)
 
-    def templateMatchingStep(self, tsId, inTomoName):
+    def templateMatchingStep(self, tsId: str):
         try:
             logger.info(cyanStr(f'tsId = {tsId}: running the template matching...'))
             self.runJob(self.program, self._genTempMatchArgs(tsId), cwd=self._getExtraPath())
         except Exception as e:
+            tomo = self.inTomosDict[tsId]
             logger.error(redStr(f'--------->Template matching failed for:'
-                         f'\n\ttsId = {tsId}, tomoName = {inTomoName}'), exc_info=e)
-            self.badTsIds.set(self.badTsIds.get() + f' {tsId}')
+                         f'\n\ttsId = {tsId}, tomoName = {tomo.getFileName()}'), exc_info=e)
+            prevMsg = '' if not self.badTsIds.get() else self.badTsIds.get()
+            self.badTsIds.set(prevMsg + f' {tsId}')
 
-    def createOutputStep(self, tsId):
+    def createOutputStep(self, tsId: str):
         with self._lock:
             logger.info(cyanStr(f'tsId = {tsId}: registering the picked coordinates...'))
-            tomo = self.inTomos.getItem(Tomogram.TS_ID_FIELD, tsId)
+            tomo = self.inTomosDict[tsId]
             outCoords = self.createOutputSet()
             tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
             if exists(tomoJsonFile):
@@ -187,10 +187,11 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                     outCoords.write()
                     self._store(outCoords)
                 else:
-                    logger.warning(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})')
-                    self.zeroCoordsTsIds.set(self.zeroCoordsTsIds.get() + f' {tsId}')
+                    logger.error(redStr(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})'))
+                    prevMsg = '' if not self.zeroCoordsTsIds.get() else self.zeroCoordsTsIds.get()
+                    self.zeroCoordsTsIds.set(prevMsg + f' {tsId}')
             else:
-                logger.warning(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})')
+                logger.error(redStr(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})'))
 
     def closeOutputSet(self):
         self._closeOutputSet()
@@ -199,7 +200,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             raise ValueError('ERROR!!! No coordinates were registered.')
 
     # --------------------------- UTILS functions -----------------------------
-    def _genTempMatchArgs(self, tsId):
+    def _genTempMatchArgs(self, tsId: str) -> str:
         convertedOrLinkedTomo = join(self.getTomogramsDir(), tsId + '.hdf')
         args = [f" {self._getTomoName(convertedOrLinkedTomo)}",
                 f"--ref {REFERENCE_NAME}.hdf ",
@@ -217,30 +218,26 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             args.append('--rmgold')
         return ' '.join(args)
 
-    def createOutputSet(self):
+    def createOutputSet(self) -> SetOfCoordinates3D:
         outCoords = getattr(self, self._possibleOutputs.coordinates.name, None)
         if outCoords:
             outCoords.enableAppend()
         else:
+            inTomosPointer = getattr(self, IN_TOMOS)
             outCoords = SetOfCoordinates3D.create(self._getPath(), template="coordinates%s")
-            outCoords.setPrecedents(self.inTomos)
-            outCoords.setSamplingRate(self.inTomos.getSamplingRate())
+            outCoords.setPrecedents(inTomosPointer)
+            outCoords.setSamplingRate(inTomosPointer.get().getSamplingRate())
             outCoords.setBoxSize(self.getRefVol().getDim()[0])
             outCoords.setStreamState(Set.STREAM_OPEN)
 
             self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
-            self._defineSourceRelation(getattr(self, IN_TOMOS), outCoords)
+            self._defineSourceRelation(inTomosPointer, outCoords)
 
         return outCoords
 
     @staticmethod
-    def _getTomoName(tomoFile):
+    def _getTomoName(tomoFile: str) -> str:
         return join(TOMOGRAMS_DIR, replaceExt(basename(tomoFile), 'hdf'))
-
-    def _genTomolist(self):
-        tomoFileList = [join(TOMOGRAMS_DIR, basename(tomoFile)) for tomoFile
-                        in glob.glob(join(self.getTomogramsDir(), '*'))]
-        return ' '.join(tomoFileList)
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
