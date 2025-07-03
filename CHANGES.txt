@@ -1,3 +1,5 @@
+v3.4.1: protocol extract particles from tomograms was fixed and improved in terms of tsId matching and protocol +
+ execution.
 v3.4.0:
  Users:
   - Template matching protocol semi-streamified.
