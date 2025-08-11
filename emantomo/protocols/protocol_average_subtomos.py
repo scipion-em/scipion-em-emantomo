@@ -128,7 +128,9 @@ class EmanProtSubTomoAverage(ProtEmantomoBase):
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def computeAverageStep(self):
-        args = "--keep 1 --wedgesigma=%f --threads %i " % (self.msWedge.get(), self.binThreads.get())
+        args = "--keep 1 --wedgesigma=%f --sym %s --threads %i " % (self.msWedge.get(),
+                                                                    self.symmetry.get(),
+                                                                    self.binThreads.get())
         if self.skipPostProc.get():
             args += '--skippostp '
         program = emantomo.Plugin.getProgram('e2spt_average.py')
