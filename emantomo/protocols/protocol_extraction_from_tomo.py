@@ -202,11 +202,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         samplingRateInput = inCoords.getSamplingRate()
         samplingRateTomo = firstTomo.getSamplingRate()
         factor = samplingRateInput / samplingRateTomo
-        counter = 0
 
         for tomo in self.tomosDict.values():
             coordSet = [item.clone() for item in inCoords.iterCoordinates(volume=tomo)]
-            self.readSetOfSubTomograms(tomo, outputSubTomogramsSet, coordSet, factor, counter)
+            self.readSetOfSubTomograms(tomo, outputSubTomogramsSet, coordSet, factor)
 
         self._defineOutputs(**{OutputExtraction.subtomograms.name: outputSubTomogramsSet})
         self._defineSourceRelation(self._getSetOfCoordinates(), outputSubTomogramsSet)
@@ -301,8 +300,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                               tomo: Tomogram,
                               outputSubTomogramsSet: SetOfSubTomograms,
                               inputSet: list,
-                              scaleFactor: int,
-                              counter: int):
+                              scaleFactor: int):
         """
         Populates the set of subtomograms
 
@@ -310,7 +308,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         :param outputSubTomogramsSet: output set of subtomograms
         :param inputSet: Subtomograms or 3D coordinates set
         :param scaleFactor: factor between the inputSet and the tomogram
-        :param counter: counter for eman hdf index
         """
         tsId = tomo.getTsId()
         logger.info(cyanStr('Registegring the subtomograms from tomogram %s' % tsId))
@@ -328,7 +325,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             subtomogram.setTransform(transform, convention=TR_SCIPION)
             subtomogram.setVolName(tomo.getFileName())
             outputSubTomogramsSet.append(subtomogram)
-            counter += 1
 
     def getOutputSamplingRate(self) -> float:
         return self.getInputTomograms().getSamplingRate()
