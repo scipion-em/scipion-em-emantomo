@@ -1,6 +1,6 @@
 v3.4.1:
  Users:
-  - Extrac subtomograms from tomograms protocol: Invert contrast and normalization set as True as default values.
+  - Extract subtomograms from tomograms protocol: Invert contrast and normalization set as True as default values.
 v3.4.0:
  Users:
   - Template matching protocol semi-streamified.
