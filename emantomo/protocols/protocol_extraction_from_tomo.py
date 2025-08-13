@@ -98,7 +98,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                            'introduced coordinates and the tomograms that will br used for the extraction.')
 
         form.addSection(label='Preprocess')
-        form.addParam('doInvert', params.BooleanParam, default=False,
+        form.addParam('doInvert', params.BooleanParam, default=True,
                       label='Invert contrast?',
                       help='Invert the contrast if your tomogram is black '
                            'over a white background.  Xmipp, Spider, Relion '
@@ -106,7 +106,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                            'background. Frealign (up to v9.07) requires black '
                            'particles over a white background')
 
-        form.addParam('doNormalize', params.BooleanParam, default=False,
+        form.addParam('doNormalize', params.BooleanParam, default=True,
                       label='Normalize subtomogram?',
                       help='Normalization processor applied to subtomograms before extraction.')
 

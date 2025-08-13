@@ -4,6 +4,7 @@ v3.4.0:
   - Protocol extract particles from tomograms was fixed and improved in terms of tsId matching and protocol
     execution.
   - Protocol average now considers the symmetry.
+  - Extract subtomograms from tomograms protocol: Invert contrast and normalization set as True as default values.
  Developers:
   - Replace the setup.py by the corresponding pyproject.toml.
   - Update the gh actions.
