@@ -30,6 +30,8 @@ import logging
 from os.path import abspath, join
 from typing import Set, Tuple
 
+import numpy as np
+
 from emantomo import Plugin
 from emantomo.constants import PROC_NORMALIZE
 from pyworkflow.mapper.sqlite import ID
@@ -39,7 +41,7 @@ import pyworkflow.protocol.params as params
 from pyworkflow.utils import Message, yellowStr, cyanStr
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from pwem.protocols import EMProtocol
-from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION, SCIPION
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D, Tomogram
 # Tomogram type constants for particle extraction
@@ -185,7 +187,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         args += ' %s' % self._getExtraPath(pwutils.replaceBaseExt(hdfFile, 'mrc'))
         args += ' --apix %.3f' % self.getOutputSamplingRate()
         self.runJob(program, args)
-        cleanPattern(hdfFile)
+        # cleanPattern(hdfFile)
 
     def createOutputStep(self):
         logger.info(cyanStr("Registering the results"))
@@ -282,7 +284,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         return matches, notMatches
 
     @staticmethod
-    def _getCoordinateFromItem(item):
+    def _getCoordinateFromItem(item) -> Coordinate3D:
         """ Returns the coordinate 3d either because the item is the Coordinate or is a subtomogram"""
         if isinstance(item, Coordinate3D):
             return item
@@ -320,9 +322,33 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             subtomogram.setLocation(subtomoFile)
             currentItem = inputSet[idx]
             coord = EmanProtTomoExtraction._getCoordinateFromItem(currentItem)
+
+            # redondear las coordenadas ############################################################3
+            origX = coord.getX(SCIPION)
+            origY = coord.getY(SCIPION)
+            origZ = coord.getZ(SCIPION)
+            roundCoordX = round(origX)
+            roundCoordY = round(origY)
+            roundCoordZ = round(origZ)
+            coord.setX(roundCoordX, SCIPION)
+            coord.setY(roundCoordY, SCIPION)
+            coord.setZ(roundCoordZ, SCIPION)
+            #########################################################################################
+
             subtomogram.setCoordinate3D(coord)
             trMatrix = copy.copy(EmanProtTomoExtraction._getMatrixFromItem(currentItem))
-            transform.setMatrix(scaleTrMatrixShifts(trMatrix, scaleFactor))
+
+            # Añadir el desplazamiento adicional del redondeo de las coordenadas ####################
+            shifts = np.array([trMatrix[0, 3], trMatrix[1, 3], trMatrix[2, 3]])
+            scaledShifts = scaleFactor * shifts
+
+            trMatrix[0, 3] = scaledShifts[0] + roundCoordX - origX
+            trMatrix[1, 3] = scaledShifts[1] + roundCoordY - origY
+            trMatrix[2, 3] = scaledShifts[2] + roundCoordY - origY
+            #########################################################################################
+
+            # transform.setMatrix(scaleTrMatrixShifts(trMatrix, scaleFactor))
+            transform.setMatrix(trMatrix)
             subtomogram.setTransform(transform, convention=TR_SCIPION)
             subtomogram.setVolName(tomo.getFileName())
             outputSubTomogramsSet.append(subtomogram)
