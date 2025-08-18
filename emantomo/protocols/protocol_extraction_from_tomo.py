@@ -342,9 +342,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             shifts = np.array([trMatrix[0, 3], trMatrix[1, 3], trMatrix[2, 3]])
             scaledShifts = scaleFactor * shifts
 
-            trMatrix[0, 3] = scaledShifts[0] + roundCoordX + origX
-            trMatrix[1, 3] = scaledShifts[1] + roundCoordY + origY
-            trMatrix[2, 3] = scaledShifts[2] + roundCoordY + origY
+            trMatrix[0, 3] = scaledShifts[0] + roundCoordX - origX
+            trMatrix[1, 3] = scaledShifts[1] + roundCoordY - origY
+            trMatrix[2, 3] = scaledShifts[2] + roundCoordY - origY
             #########################################################################################
 
             # transform.setMatrix(scaleTrMatrixShifts(trMatrix, scaleFactor))
