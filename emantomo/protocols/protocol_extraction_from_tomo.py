@@ -154,9 +154,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         with open(self._getCoordsFile(tsId), "w") as emanCoordFile:
             for item in inputSet.iterCoordinates(volume=tomo, orderBy=[Coordinate3D.TOMO_ID_ATTR, ID]):
                 coord3D = self._getCoordinateFromItem(item)
-                emanCoordFile.write("%d\t%d\t%d\n" % (coord3D.getX(BOTTOM_LEFT_CORNER) * scale,
-                                                      coord3D.getY(BOTTOM_LEFT_CORNER) * scale,
-                                                      coord3D.getZ(BOTTOM_LEFT_CORNER) * scale))
+                xScaled = coord3D.getX(BOTTOM_LEFT_CORNER) * scale
+                yScaled = coord3D.getY(BOTTOM_LEFT_CORNER) * scale
+                zScaled = coord3D.getZ(BOTTOM_LEFT_CORNER) * scale
+                emanCoordFile.write(f"{xScaled:.3f}\t{yScaled:.3f}\t{zScaled:.3f}\n")
 
     def extractParticles(self, tsId: str):
         logger.info(cyanStr("Extracting the particles from tomogram %s." % tsId))
