@@ -143,7 +143,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                           if tomo.getTsId() in matchingTsIds}
 
     def writeSetOfCoordinates3D(self, tsId: str):
-        logger.info(cyanStr("Writing the coordinates of tomogram %s into EMAN format." % tsId))
+        logger.info(cyanStr(f"tsId = {tsId} - Writing the coordinates of tomogram into EMAN format..."))
         inputSet = self._getSetOfCoordinates()
         tomo = self.tomosDict[tsId]
 
@@ -162,7 +162,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                 emanCoordFile.write(f"{xScaled:.3f}\t{yScaled:.3f}\t{zScaled:.3f}\n")
 
     def extractParticles(self, tsId: str):
-        logger.info(cyanStr("Extracting the particles from tomogram %s." % tsId))
+        logger.info(cyanStr(f"tsId = {tsId} - Extracting the particles from tomogram..."))
         tomo = self.tomosDict[tsId]
         args = '%s ' % abspath(tomo.getFileName())
         args += "--coords %s --boxsize %i" % (f'{tsId}.coords', self.boxSize.get())
@@ -179,7 +179,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         cleanPath(self._getExtraPath("sptboxer_01"))
 
     def convertOutput(self, tsId: str):
-        logger.info(cyanStr("Unstacking the particles extracted from tomogram %s." % tsId))
+        logger.info(cyanStr(f"tsId = {tsId} - Unstacking the particles extracted from tomogram..."))
         program = Plugin.getProgram('e2proc3d.py')
         hdfFile = self._getOutHdfCoordsStack(tsId)
         args = ' --unstacking'
