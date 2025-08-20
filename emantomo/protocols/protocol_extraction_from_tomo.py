@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
-# * [1] EyeSeeTea Ltd, London, UK
+# *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -29,9 +29,7 @@ import glob
 import logging
 from os.path import abspath, join
 from typing import Set, Tuple
-
 import numpy as np
-
 from emantomo import Plugin
 from emantomo.constants import PROC_NORMALIZE
 from pyworkflow.mapper.sqlite import ID
@@ -44,8 +42,6 @@ from pwem.protocols import EMProtocol
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION, SCIPION
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D, Tomogram
-# Tomogram type constants for particle extraction
-from tomo.utils import scaleTrMatrixShifts
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +183,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         args += ' %s' % self._getExtraPath(pwutils.replaceBaseExt(hdfFile, 'mrc'))
         args += ' --apix %.3f' % self.getOutputSamplingRate()
         self.runJob(program, args)
-        # cleanPattern(hdfFile)
+        cleanPattern(hdfFile)
 
     def createOutputStep(self):
         logger.info(cyanStr("Registering the results"))
@@ -323,7 +319,9 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             currentItem = inputSet[idx]
             coord = EmanProtTomoExtraction._getCoordinateFromItem(currentItem)
 
-            # redondear las coordenadas ############################################################3
+            #########################################################################################
+            # EMAN work with the coordinates as integers, so we round them and add the decimal part
+            # as shifts to the transformation matrix, so all the information is preserved
             origX = coord.getX(SCIPION)
             origY = coord.getY(SCIPION)
             origZ = coord.getZ(SCIPION)
@@ -333,15 +331,10 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             coord.setX(roundCoordX, SCIPION)
             coord.setY(roundCoordY, SCIPION)
             coord.setZ(roundCoordZ, SCIPION)
-            #########################################################################################
-
             subtomogram.setCoordinate3D(coord)
             trMatrix = copy.copy(EmanProtTomoExtraction._getMatrixFromItem(currentItem))
-
-            # Añadir el desplazamiento adicional del redondeo de las coordenadas ####################
             shifts = np.array([trMatrix[0, 3], trMatrix[1, 3], trMatrix[2, 3]])
             scaledShifts = scaleFactor * shifts
-
             trMatrix[0, 3] = scaledShifts[0] + roundCoordX - origX
             trMatrix[1, 3] = scaledShifts[1] + roundCoordY - origY
             trMatrix[2, 3] = scaledShifts[2] + roundCoordY - origY
