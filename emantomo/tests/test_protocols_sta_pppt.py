@@ -96,26 +96,22 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
     def test_ts_align_tomo_rec_01(self):
         print(magentaStr("\n==> Testing Emantomo Tilt-Series Alignment and Tomogram Reconstruction:"
                          "\n\t- Align the TS"
-                         "\n\t- Generate the interpolated TS"
                          "\n\t- Reconstruct the tomograms"))
         protTsAlignTomoRec = self.newProtocol(EmanProtTsAlignTomoRec,
                                               inputTS=self.importedTs,
                                               boxSizeTrk=32,
                                               clipz=self.expectedTomoThk,
-                                              genInterpolatedTs=True,
                                               correctrot=True,
                                               extrapad=True,
                                               numberOfThreads=8)
-        protTsAlignTomoRec.setObjLabel('Align & Interp & Rec')
+        protTsAlignTomoRec.setObjLabel('Align & Rec')
         self.launchProtocol(protTsAlignTomoRec)
 
         # CHECK THE OUTPUTS
         self.expectedTomoDimsDict[TS_03] = [1024, 1000, self.expectedTomoThk]
         tsAligned = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeries.name, None)
-        tsInterp = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeriesInterpolated.name, None)
         tomosRec = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tomograms.name, None)
         self.assertIsNotNone(tsAligned, msg="There was a problem aligning the tilt-series")
-        self.assertIsNotNone(tsInterp, msg="There was a problem with the interpolated the tilt-series")
         self.assertIsNotNone(tomosRec, msg="There was a problem reconstructing the tomograms")
         # Check the tilt series
         self.checkTiltSeries(tsAligned,
@@ -126,15 +122,6 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
                              hasAlignment=True,
                              alignment=ALIGN_2D,
                              anglesCount=self.nAnglesDict)
-        # Check the interpolated tilt series
-        testAcqInterpDict = DataSetRe4STATuto.tsAcqInterpDict.value
-        self.checkTiltSeries(tsInterp,
-                             expectedSetSize=self.nTiltSeries,
-                             expectedSRate=self.unbinnedSRate,
-                             expectedDimensions=DataSetRe4STATuto.dimsTsInterpBin1Dict.value,
-                             testAcqObj=testAcqInterpDict,
-                             anglesCount=self.nAnglesDict,
-                             isInterpolated=True)
         # Check the tomograms
         self.checkTomograms(tomosRec,
                             expectedSetSize=self.nTiltSeries,
@@ -166,9 +153,7 @@ class TestEmanTsAlignAndTomoRec(TestEmanBasePPPT):
         self.expectedTomoDimsDict[TS_03] = [1050, 1000, self.expectedTomoThk]
         tomosRec = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tomograms.name, None)
         tsAligned = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeries.name, None)
-        tsInterp = getattr(protTsAlignTomoRec, protTsAlignTomoRec._possibleOutputs.tiltSeriesInterpolated.name, None)
         self.assertIsNone(tsAligned, msg="There was a problem aligning the tilt-series")
-        self.assertIsNone(tsInterp, msg="There was a problem with the interpolated the tilt-series")
         self.assertIsNotNone(tomosRec, msg="There was a problem reconstructing the tomograms")
         # Check the tomograms
         self.checkTomograms(tomosRec,
