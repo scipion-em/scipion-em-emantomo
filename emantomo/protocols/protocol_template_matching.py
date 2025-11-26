@@ -242,7 +242,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errorMsg = []
-        tol = 1e-03
+        tol = 2e-02
         inTomos = self.getAttrib(IN_TOMOS)
         reference = self.getAttrib(REF_VOL)
         tomosSRate = inTomos.getSamplingRate()
