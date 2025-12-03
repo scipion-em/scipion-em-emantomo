@@ -27,8 +27,9 @@ import copy
 import enum
 import glob
 import logging
+import typing
 from os.path import abspath, join
-from typing import Set, Tuple
+from typing import Tuple
 import numpy as np
 from emantomo import Plugin
 from emantomo.constants import PROC_NORMALIZE
@@ -36,6 +37,8 @@ from pyworkflow.mapper.sqlite import ID
 from pwem.objects import Transform
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
+from pyworkflow.object import Set
+from pyworkflow.protocol import STEPS_PARALLEL
 from pyworkflow.utils import Message, yellowStr, cyanStr
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from pwem.protocols import EMProtocol
@@ -57,11 +60,13 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'Subtomograms extraction from tomogram'
     _possibleOutputs = OutputExtraction
+    stepsExecutionMode = STEPS_PARALLEL
     OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.tomosDict = None
+        self.scaleFactor = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -116,19 +121,30 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       display=params.EnumParam.DISPLAY_COMBO,
                       help='Use normalize.edgemean if the particles have a clear solvent background '
                            '(i.e., they are not part of a larger complex or embeded in a membrane)')
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
         self._initialize()
+        closeSetStepDeps = []
         for tsId in self.tomosDict.keys():
-            self._insertFunctionStep(self.writeSetOfCoordinates3D, tsId,
-                                     needsGPU=False)
-            self._insertFunctionStep(self.extractParticles, tsId,
-                                     needsGPU=False)
-            self._insertFunctionStep(self.convertOutput, tsId,
-                                     needsGPU=False)
-        self._insertFunctionStep(self.createOutputStep, needsGPU=False)
+            pId = self._insertFunctionStep(self.writeSetOfCoordinates3D, tsId,
+                                           prerequisites=[],
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.extractParticles, tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.convertOutput, tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.createOutputStep, tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            closeSetStepDeps.append(pId)
+        self._insertFunctionStep(self.closeOutputSet,
+                                 prerequisites=closeSetStepDeps,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
@@ -137,6 +153,12 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             logger.warning(yellowStr(f'Some tsIds do not match: {nonMatchingTsIds}'))
         self.tomosDict = {tomo.getTsId(): tomo.clone() for tomo in self.getInputTomograms()
                           if tomo.getTsId() in matchingTsIds}
+        inCoords = self._getSetOfCoordinates()
+        # Calculate the scale factor
+        firstTomo = self.getInputTomograms().getFirstItem()
+        samplingRateInput = inCoords.getSamplingRate()
+        samplingRateTomo = firstTomo.getSamplingRate()
+        self.scaleFactor = samplingRateInput / samplingRateTomo
 
     def writeSetOfCoordinates3D(self, tsId: str):
         logger.info(cyanStr(f"tsId = {tsId} - Writing the coordinates of tomogram into EMAN format..."))
@@ -185,29 +207,20 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         self.runJob(program, args)
         cleanPattern(hdfFile)
 
-    def createOutputStep(self):
-        logger.info(cyanStr("Registering the results"))
-
-        outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        outputSubTomogramsSet.setSamplingRate(self.getOutputSamplingRate())
-        outputSubTomogramsSet.setCoordinates3D(self._getSetOfCoordinates())
-        acquisition = TomoAcquisition()
-
-        firstTomo = self.getInputTomograms().getFirstItem()
-        acquisition.copyInfo(firstTomo.getAcquisition())
-        outputSubTomogramsSet.setAcquisition(acquisition)
-
-        inCoords = self._getSetOfCoordinates()
-        samplingRateInput = inCoords.getSamplingRate()
-        samplingRateTomo = firstTomo.getSamplingRate()
-        factor = samplingRateInput / samplingRateTomo
-
-        for tomo in self.tomosDict.values():
+    def createOutputStep(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Registering the results..."))
+        with self._lock:
+            outSubtomos = self._createOutputSet()
+            tomo = self.tomosDict[tsId]
+            inCoords = self._getSetOfCoordinates()
             coordSet = [item.clone() for item in inCoords.iterCoordinates(volume=tomo)]
-            self.readSetOfSubTomograms(tomo, outputSubTomogramsSet, coordSet, factor)
+            self.readSetOfSubTomograms(tomo, outSubtomos, coordSet, self.scaleFactor)
 
-        self._defineOutputs(**{OutputExtraction.subtomograms.name: outputSubTomogramsSet})
-        self._defineSourceRelation(self._getSetOfCoordinates(), outputSubTomogramsSet)
+    def closeOutputSet(self):
+        self._closeOutputSet()
+        outSubtomos = getattr(self, self._possibleOutputs.subtomograms.name, None)
+        if outSubtomos.getSize() == 0:
+            raise Exception("No particles were extracted!")
 
     # --------------------------- INFO functions --------------------------------
     def _methods(self):
@@ -270,7 +283,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         """ Return True if other tomograms are used for extract. """
         return self.tomoSource.get() == OTHER
 
-    def _getMatchingTsIds(self) -> Tuple[Set, Set]:
+    def _getMatchingTsIds(self) -> Tuple[typing.Set, typing.Set]:
         tomograms = self.getInputTomograms()
         tomoIds = tomograms.getTSIds()
         coords = self._getSetOfCoordinates()
@@ -354,3 +367,20 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def _getOutHdfCoordsStack(self, tsId) -> str:
         return self._getExtraPath(f'{tsId}.hdf')
+
+    def _createOutputSet(self) -> SetOfSubTomograms:
+        outSubtomos = getattr(self, self._possibleOutputs.subtomograms.name, None)
+        if outSubtomos:
+            outSubtomos.enableAppend()
+        else:
+            outSubtomos = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
+            outSubtomos.setSamplingRate(self.getOutputSamplingRate())
+            outSubtomos.setCoordinates3D(self._getSetOfCoordinates())
+            acquisition = TomoAcquisition()
+            firstTomo = self.getInputTomograms().getFirstItem()
+            acquisition.copyInfo(firstTomo.getAcquisition())
+            outSubtomos.setAcquisition(acquisition)
+            outSubtomos.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{OutputExtraction.subtomograms.name: outSubtomos})
+            self._defineSourceRelation(self._getSetOfCoordinates(), outSubtomos)
+        return outSubtomos

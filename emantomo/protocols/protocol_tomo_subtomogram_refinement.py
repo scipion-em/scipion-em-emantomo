@@ -79,6 +79,7 @@ class EmanProtTomoRefinement(ProtEmantomoBase):
         form.addParam('inputSetOfSubTomogram', params.PointerParam,
                       pointerClass='SetOfSubTomograms',
                       important=True,
+                      strict=True,
                       label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
         form.addParam('inputRef', params.PointerParam,

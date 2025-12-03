@@ -67,6 +67,7 @@ class EmanProtSubTomoAverage(ProtEmantomoBase):
         form.addParam('inputSetOfSubTomogram', PointerParam,
                       pointerClass='SetOfSubTomograms',
                       important=True,
+                      strict=True,
                       label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
         form.addParam('symmetry', StringParam,
