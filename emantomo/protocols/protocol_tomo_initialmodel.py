@@ -59,7 +59,9 @@ class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
         form.addSection(label='Input')
         form.addParam('particles', params.PointerParam,
                       pointerClass='SetOfSubTomograms',
-                      label="Particles", important=True,
+                      strict=True,
+                      label="Particles",
+                      important=True,
                       help='Select the set of subtomograms to build an initial model')
 
         form.addParam('reference', params.PointerParam,
