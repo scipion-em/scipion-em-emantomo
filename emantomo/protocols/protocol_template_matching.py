@@ -26,6 +26,8 @@
 import logging
 from enum import Enum
 from os.path import basename, join, exists
+from typing import List, Optional
+
 import numpy as np
 from emantomo import Plugin
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
@@ -36,6 +38,7 @@ from pyworkflow.object import Set, String
 from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam, GE, LE, \
     STEPS_PARALLEL
 from pyworkflow.utils import Message, replaceExt, redStr, cyanStr
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.objects import SetOfCoordinates3D, Tomogram
 
 logger = logging.getLogger(__name__)
@@ -172,26 +175,31 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
             self.badTsIds.set(prevMsg + f' {tsId}')
 
     def createOutputStep(self, tsId: str):
+        logger.info(cyanStr(f'tsId = {tsId}: registering the picked coordinates...'))
+        tomo = self.inTomosDict[tsId]
+        tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
+        if not exists(tomoJsonFile):
+            logger.error(redStr(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})'))
+            return
+
+        jsonBoxDict = loadJson(tomoJsonFile)
+        boxes = jsonBoxDict.get("boxes_3d", None)
+        if boxes:
+            self._registerOutput(tomo, boxes)
+        else:
+            logger.error(redStr(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})'))
+            prevMsg = '' if not self.zeroCoordsTsIds.get() else self.zeroCoordsTsIds.get()
+            self.zeroCoordsTsIds.set(prevMsg + f' {tsId}')
+
+    @retry_on_sqlite_lock(log=logger)
+    def _registerOutput(self, tomo: Tomogram, boxes: Optional[List]):
         with self._lock:
-            logger.info(cyanStr(f'tsId = {tsId}: registering the picked coordinates...'))
-            tomo = self.inTomosDict[tsId]
             outCoords = self.createOutputSet()
-            tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
-            if exists(tomoJsonFile):
-                jsonBoxDict = loadJson(tomoJsonFile)
-                boxes = jsonBoxDict.get("boxes_3d", None)
-                if boxes:
-                    for box in boxes:
-                        newCoord = readCoordinate3D(box, tomo)
-                        outCoords.append(newCoord)
-                    outCoords.write()
-                    self._store(outCoords)
-                else:
-                    logger.error(redStr(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})'))
-                    prevMsg = '' if not self.zeroCoordsTsIds.get() else self.zeroCoordsTsIds.get()
-                    self.zeroCoordsTsIds.set(prevMsg + f' {tsId}')
-            else:
-                logger.error(redStr(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})'))
+            for box in boxes:
+                newCoord = readCoordinate3D(box, tomo)
+                outCoords.append(newCoord)
+            outCoords.write()
+            self._store(outCoords)
 
     def closeOutputSet(self):
         self._closeOutputSet()
