@@ -1,4 +1,4 @@
-scipion-em>=3.5.0
+scipion-pyworkflow @ git+https://github.com/scipion-em/scipion-pyworkflow.git@v3.11.3
+scipion-em-tomo @ git+https://github.com/scipion-em/scipion-em-tomo.git@v3.11.2
 scipion-em-eman2
-scipion-em-tomo>=3.7.0
 h5py==3.8.0
