@@ -42,6 +42,7 @@ from pyworkflow.protocol import STEPS_PARALLEL
 from pyworkflow.utils import Message, yellowStr, cyanStr
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from pwem.protocols import EMProtocol
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION, SCIPION
 from tomo.protocols import ProtTomoBase
 from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D, Tomogram
@@ -209,9 +210,13 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def createOutputStep(self, tsId: str):
         logger.info(cyanStr(f"tsId = {tsId} - Registering the results..."))
+        tomo = self.tomosDict[tsId]
+        self._registerOutput(tomo)
+
+    @retry_on_sqlite_lock(log=logger)
+    def _registerOutput(self, tomo: Tomogram):
         with self._lock:
             outSubtomos = self._createOutputSet()
-            tomo = self.tomosDict[tsId]
             inCoords = self._getSetOfCoordinates()
             coordSet = [item.clone() for item in inCoords.iterCoordinates(volume=tomo)]
             self.readSetOfSubTomograms(tomo, outSubtomos, coordSet, self.scaleFactor)

@@ -8,6 +8,8 @@ v3.4.0:
         * Improve tsId matching and protocol execution.
   - Tilt-series alignment and tomogram reconstruction: remove the interpolated tilt-series.
   - Classic protocols whose input is a set of subtomograms now implement the strict PointerParam arg.
+ Developers:
+  - Add decorator to manage the db lock to the protocols particle extraction from tomograms and template matching.
 v3.3.5:
  Users: template matching protocol stores the coordinates score.
  Developers: viewer efficiency improved and coordinates-tomograms matching is now more robust.
