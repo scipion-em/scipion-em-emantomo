@@ -25,10 +25,12 @@
 # **************************************************************************
 # from os.path import exists
 from pyworkflow.utils import magentaStr
+from tomo.tests import DataSetEmd10439
 from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
 # from ..constants import SPTCLS_00_DIR
 from tomo.constants import TR_EMAN
 from ..protocols import EmanProtTomoInitialModel, EmanProtTemplateMatching
+from ..protocols.protocol_extraction_from_tomo import SAME_AS_PICKING
 # from emantomo.protocols.deprecated_20230914.protocol_pca_kmeans_classify_subtomos import pcaOutputObjects, EmanProtPcaKMeansClassifySubtomos
 from ..protocols.protocol_tomo_initialmodel import OutputsInitModel
 from ..protocols.protocol_tomo_subtomogram_refinement import EmanTomoRefinementOutputs, EmanProtTomoRefinement
@@ -44,15 +46,22 @@ class TestEmanTomoAverageSubtomogramsStaClassic(TestEmantomoStaClassicBase):
     @classmethod
     def runPreviousProtocols(cls):
         try:
-            super().runPreviousProtocols()
+            cls.tomoImported = cls.runImportTomograms()  # Import tomograms
+            cls.coordsImported = cls.runImport3dCoords(
+                cls.tomoImported,
+                cls.ds.getFile(DataSetEmd10439.coords39Bin4Sqlite.name))  # Import the coordinates from the binned tomogram
+            # Extract subtomograms
+            cls.subtomosExtracted = cls.runExtractSubtomograms(cls.coordsImported,
+                                                               tomoSource=SAME_AS_PICKING,
+                                                               boxSize=cls.boxSize)
         except Exception as e:
             raise Exception('Some of the previous protocols failed --> \n%s' % e)
 
     def test_averageSubtomograms(self):
         avgSubtomo = super().runAverageSubtomograms()
         super().checkAverage(avgSubtomo,
-                             expectedSRate=self.binnedSRate,
-                             expectedBoxSize=self.binnedBoxSize)
+                             expectedSRate=self.origSRate,
+                             expectedBoxSize=self.boxSize)
 
 
 class TestEmanTomoInitialModelStaClassic(TestEmantomoStaClassicBase):
@@ -66,7 +75,14 @@ class TestEmanTomoInitialModelStaClassic(TestEmantomoStaClassicBase):
     @classmethod
     def runPreviousProtocols(cls):
         try:
-            super().runPreviousProtocols()
+            cls.tomoImported = cls.runImportTomograms()  # Import tomograms
+            cls.coordsImported = cls.runImport3dCoords(
+                cls.tomoImported,
+                cls.ds.getFile(DataSetEmd10439.coords39Bin4Sqlite.name))  # Import the coordinates from the binned tomogram
+            # Extract subtomograms
+            cls.subtomosExtracted = cls.runExtractSubtomograms(cls.coordsImported,
+                                                               tomoSource=SAME_AS_PICKING,
+                                                               boxSize=cls.boxSize)
             cls.avgSubtomo = super().runAverageSubtomograms()
         except Exception as e:
             raise Exception('Some of the previous protocols failed --> \n%s' % e)
@@ -86,8 +102,8 @@ class TestEmanTomoInitialModelStaClassic(TestEmantomoStaClassicBase):
     def test_genInitialModel(self):
         initModel = self.runGenInitialModel()
         super().checkAverage(initModel,
-                             expectedSRate=self.binnedSRate,
-                             expectedBoxSize=self.binnedBoxSize,
+                             expectedSRate=self.origSRate,
+                             expectedBoxSize=self.boxSize,
                              hasHalves=False)
 
 
@@ -205,8 +221,14 @@ class TestEmanTomoSubtomogramRefinementStaClassic(TestEmantomoStaClassicBase):
     @classmethod
     def runPreviousProtocols(cls):
         try:
-            cls.mask = super().runCreate3dMask()  # Generate a mask
-            super().runPreviousProtocols()
+            cls.tomoImported = cls.runImportTomograms()  # Import tomograms
+            cls.coordsImported = cls.runImport3dCoords(
+                cls.tomoImported,
+                cls.ds.getFile(DataSetEmd10439.coords39Bin4Sqlite.name))  # Import the coordinates from the binned tomogram
+            # Extract subtomograms
+            cls.subtomosExtracted = cls.runExtractSubtomograms(cls.coordsImported,
+                                                               tomoSource=SAME_AS_PICKING,
+                                                               boxSize=cls.boxSize)
             cls.avgSubtomo = super().runAverageSubtomograms()
         except Exception as e:
             raise Exception('Some of the previous protocols failed --> \n%s' % e)
@@ -218,7 +240,7 @@ class TestEmanTomoSubtomogramRefinementStaClassic(TestEmantomoStaClassicBase):
                      'inputRef': inputRef,
                      'pkeep': 1,
                      'niter': 2,
-                     'numberOfThreads': 10}
+                     'binThreads': 10}
 
         objLabel = 'Subtomo refinement'
         if mask:
@@ -243,8 +265,8 @@ class TestEmanTomoSubtomogramRefinementStaClassic(TestEmantomoStaClassicBase):
     def _checkRefinmentResults(self, outSubtomos):
         self.checkRefinedSubtomograms(self.subtomosExtracted, outSubtomos,
                                       expectedSetSize=self.nParticles,
-                                      expectedBoxSize=self.binnedBoxSize,
-                                      expectedSRate=self.binnedSRate,
+                                      expectedBoxSize=self.boxSize,
+                                      expectedSRate=self.origSRate,
                                       convention=TR_EMAN,
                                       orientedParticles=True)  # The coords imported were picked with PySeg
 
@@ -261,7 +283,13 @@ class TestEmanTemplateMatchingStaClassic(TestEmantomoStaClassicBase):
     @classmethod
     def runPreviousProtocols(cls):
         try:
-            super().runPreviousProtocols()
+            cls.tomoImported = cls.runImportTomograms()  # Import tomograms
+            cls.coordsImported = cls.runImport3dCoords(
+                cls.tomoImported,
+                cls.ds.getFile(DataSetEmd10439.coords39Bin4Sqlite.name))
+            cls.subtomosExtracted = cls.runExtractSubtomograms(cls.coordsImported,
+                                                               tomoSource=SAME_AS_PICKING,
+                                                               boxSize=cls.boxSize)
             cls.avgSubtomo = super().runAverageSubtomograms()
         except Exception as e:
             raise Exception('Some of the previous protocols failed --> \n%s' % e)
@@ -270,7 +298,7 @@ class TestEmanTemplateMatchingStaClassic(TestEmantomoStaClassicBase):
     def runTemplateMatching(cls):
         print(magentaStr("\n==> Running the template matching:"))
         protTempMatch = cls.newProtocol(EmanProtTemplateMatching,
-                                        inputTomograms=cls.tomosBinned,
+                                        inputTomograms=cls.tomoImported,
                                         refVol=cls.avgSubtomo,
                                         nptcl=cls.outNoParticles,
                                         delta=45,
@@ -283,7 +311,7 @@ class TestEmanTemplateMatchingStaClassic(TestEmantomoStaClassicBase):
         extractedCoords = self.runTemplateMatching()
         self.checkCoordinates(extractedCoords,
                               expectedSetSize=self.outNoParticles,
-                              expectedSRate=self.binnedSRate,
-                              expectedBoxSize=self.binnedBoxSize,
+                              expectedSRate=self.origSRate,
+                              expectedBoxSize=self.boxSize,
                               orientedParticles=False)  # The template matching generates non-oriented coords
 

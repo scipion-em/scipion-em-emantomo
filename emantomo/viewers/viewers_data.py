@@ -49,7 +49,7 @@ class EmanDataViewer(pwviewer.Viewer):
     with the Xmipp program xmipp_showj
     """
     _environments = [pwviewer.DESKTOP_TKINTER]
-    _name = 'Open with Eman'
+    _name = 'Eman'
     _targets = [
         ProtImportCoordinates3D,
         SetOfCoordinates3D

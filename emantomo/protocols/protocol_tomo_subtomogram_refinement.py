@@ -30,18 +30,16 @@ import re
 from os import remove
 from os.path import abspath, basename, join
 from pwem.objects import SetOfFSCs
-from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
 from pwem.protocols import EMProtocol
 from emantomo.convert import writeSetOfSubTomograms, getLastParticlesParams, updateSetOfSubTomograms, emanFSCsToScipion
 import emantomo
 import pwem.constants as emcts
-from pyworkflow.utils import createLink
-from tomo.protocols import ProtTomoBase
-from tomo.objects import AverageSubTomogram, SetOfSubTomograms, Coordinate3D
+from pyworkflow.utils import createLink, Message
+from tomo.objects import AverageSubTomogram, SetOfSubTomograms
+from .protocol_base import ProtEmantomoBase
 from ..constants import SUBTOMOGRAMS_DIR, SPT_00_DIR, SYMMETRY_HELP_MSG
-from ..utils import getPresentPrecedents
 
 
 class EmanTomoRefinementOutputs(enum.Enum):
@@ -50,7 +48,7 @@ class EmanTomoRefinementOutputs(enum.Enum):
     FSCs = SetOfFSCs
 
 
-class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
+class EmanProtTomoRefinement(ProtEmantomoBase):
     """
     This protocol wraps *e2spt_refine.py* EMAN2 program.
 
@@ -77,10 +75,11 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
     # --------------- DEFINE param functions ---------------
 
     def _defineParams(self, form):
-        form.addSection(label='Input')
+        form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputSetOfSubTomogram', params.PointerParam,
                       pointerClass='SetOfSubTomograms',
                       important=True,
+                      strict=True,
                       label='Input SubTomograms',
                       help='Select the set of subtomograms to perform the reconstruction.')
         form.addParam('inputRef', params.PointerParam,
@@ -90,6 +89,7 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       label='Input Ref SubTomogram',
                       help='3D reference for initial model generation.'
                            'No reference is used by default.')
+        self._addBinThreads(form)
 
         form.addSection(label='Optimization')
         form.addParam('niter', params.IntParam, default=5,
@@ -145,8 +145,6 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
                       label="Extra params",
                       help='Here you can add any extra parameters to run Eman subtomogram refinement. '
                            'Parameters should be written in Eman command line format (--param=val)')
-
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------- INSERT steps functions ----------------
 
@@ -210,15 +208,11 @@ class EmanProtTomoRefinement(EMProtocol, ProtTomoBase):
             args += ' --mask=%s' % abspath(self.maskFile.get().getFileName())
         if self.localfilter:
             args += ' --localfilter '
-        # if self.numberOfMpi > 1:
-        #     args += ' --parallel=mpi:%d:%s' % (self.numberOfMpi.get(), SCRATCHDIR)
-        # else:
-        #     args += ' --parallel=thread:%d' % self.numberOfThreads.get()
         if self.alignType != emcts.ALIGN_NONE:
             args += ' --refine --maxang=%f' % self.maxAng.get()
         if self.extraParams.get():
             args += ' ' + self.extraParams.get()
-        args += ' --threads=%d' % self.numberOfThreads.get()
+        args += ' --threads=%d' % self.binThreads.get()
 
         program = emantomo.Plugin.getProgram('e2spt_refine.py')
         self.runJob(program, args)

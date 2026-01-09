@@ -1,3 +1,15 @@
+v3.4.0:
+ Users:
+  - Protocols template matching and particle extraction from tomograms are now paralellized and semi-streamified.
+  - Protocol average now considers the symmetry.
+  - Extract subtomograms from tomograms protocol:
+        * Invert contrast and normalization set as True as default values.
+        * Consider the decimal part as shifts when extracting.
+        * Improve tsId matching and protocol execution.
+  - Tilt-series alignment and tomogram reconstruction: remove the interpolated tilt-series.
+  - Classic protocols whose input is a set of subtomograms now implement the strict PointerParam arg.
+ Developers:
+  - Add decorator to manage the db lock to the protocols particle extraction from tomograms and template matching.
 v3.3.5:
  Users: template matching protocol stores the coordinates score.
  Developers: viewer efficiency improved and coordinates-tomograms matching is now more robust.

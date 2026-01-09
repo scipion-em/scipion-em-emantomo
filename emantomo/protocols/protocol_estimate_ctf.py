@@ -33,6 +33,7 @@ from emantomo.objects import EmanMetaData
 from emantomo.protocols.protocol_base import ProtEmantomoBase, IN_TS
 from emantomo.utils import getPresentTsIdsInSet, genJsonFileName
 from pyworkflow.protocol import PointerParam, FloatParam, IntParam, BooleanParam
+from pyworkflow.utils import Message
 from tomo.objects import SetOfCTFTomoSeries, CTFTomoSeries, CTFTomo
 from emantomo.convert import loadJson, ts2Json
 
@@ -53,7 +54,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
+        form.addSection(label=Message.LABEL_INPUT)
         form.addParam(IN_TS, PointerParam,
                       pointerClass='SetOfTiltSeries',
                       label="Tilt Series",
@@ -91,7 +92,9 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
                       label='Step in Y direction',
                       default=40,
                       help='Number of tiles to generate on y-axis (same defocus)')
-        form.addParallelSection(threads=4, mpi=0)
+
+        self._addBinThreads(form)
+        form.addParallelSection(threads=1, mpi=0)
 
         # --------------------------- INSERT steps functions ----------------------
 
@@ -177,7 +180,7 @@ class EmanProtEstimateCTF(ProtEmantomoBase):
         args += '--nref %i ' % self.nref.get()
         args += '--stepx %i ' % self.stepx.get()
         args += '--stepy %i ' % self.stepy.get()
-        args += '--threads %i ' % self.numberOfThreads.get()
+        args += '--threads %i ' % self.binThreads.get()
         args += '--verbose 9 '
         return args
 

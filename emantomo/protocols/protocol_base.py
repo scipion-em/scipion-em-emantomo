@@ -36,14 +36,14 @@ from emantomo.constants import INFO_DIR, TOMOGRAMS_DIR, TS_DIR, SETS_DIR, PARTIC
     FSC_MASKED_TIGHT_BNAME, LST_LINE, PART3D_ID, INIT_MODEL_DIR, SPT_CLS_00_FIR
 from emantomo.convert import emanFSCsToScipion
 from emantomo.convert.lstConvert import EmanLstReader, EmanLstWriter
-from emantomo.objects import EmanParticle, EmanSetOfParticles
+from emantomo.objects import EmanParticle, EmanSetOfParticles, EmanMetaData
 from pwem.objects import SetOfFSCs
 from pwem.protocols import EMProtocol
 from pyworkflow import BETA
 from pyworkflow.object import Pointer, String
-from pyworkflow.utils import makePath, createLink
+from pyworkflow.protocol import IntParam
+from pyworkflow.utils import makePath, createLink, redStr, cyanStr
 from tomo.protocols import ProtTomoBase
-from tomo.utils import getNonInterpolatedTsFromRelations
 
 
 logger = logging.getLogger(__name__)
@@ -68,16 +68,34 @@ class ProtEmantomoBase(EMProtocol, ProtTomoBase):
         self.scaleFactor = 1.0
         self.voltage = 300.0
         self.sphAb = 2.7
+        self.failedItems = []
+
+    @staticmethod
+    def _addBinThreads(form):
+        form.addParam('binThreads', IntParam,
+                      label='Emantomo threads',
+                      default=6,
+                      important=True,
+                      help='Number of threads used by EMAN each time it is called in the protocol execution. For '
+                           'example, if 2 Scipion threads and 3 Emantomo threads are set, the tomograms will be '
+                           'processed in groups of 2 at the same time with a call of EMAN with 3 threads each, so '
+                           '6 threads will be used at the same time. Beware the memory of your machine has '
+                           'memory enough to load together the number of tomograms specified by Scipion threads.')
 
     # --------------------------- STEPS functions -----------------------------
-    def convertTsStep(self, mdObj):
+    def convertTsStep(self, mdObj: EmanMetaData):
         # The converted TS must be unbinned, because EMAN will read the sampling rate from its header. This is why
         # the TS associated to the CTF is the one considered first. Later, when generating the json, the TS alignment
         # parameters are read from the introduced TS and the shifts are scaled to at the unbinned scale
-        logger.info(f'Converting TS {mdObj.tsId} into HDF...')
-        inTsFName = mdObj.ts.getFirstItem().getFileName()
-        sRate = mdObj.ts.getSamplingRate()
-        self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
+        tsId = mdObj.tsId
+        try:
+            logger.info(cyanStr(f'Converting TS {tsId} into HDF...'))
+            inTsFName = mdObj.ts.getFirstItem().getFileName()
+            sRate = mdObj.ts.getSamplingRate()
+            self.convertOrLink(inTsFName, mdObj.tsId, TS_DIR, sRate)
+        except Exception as e:
+            self.failedItems.append(tsId)
+            logger.error(redStr(f'tsId = {tsId} -> input conversion failed with the exception -> {e}'))
 
     def createEmanPrjPostExtractionStep(self):
         inSubtomos = getattr(self, IN_SUBTOMOS).get()

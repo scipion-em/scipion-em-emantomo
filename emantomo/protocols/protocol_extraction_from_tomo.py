@@ -1,8 +1,8 @@
 # **************************************************************************
 # *
-# * Authors:     Adrian Quintana (adrian@eyeseetea.com) [1]
+# * Authors:    Scipion Team (scipion@cnb.csic.es)
 # *
-# * [1] EyeSeeTea Ltd, London, UK
+# *  BCU, Centro Nacional de Biotecnologia, CSIC
 # *
 # * This program is free software; you can redistribute it and/or modify
 # * it under the terms of the GNU General Public License as published by
@@ -26,22 +26,28 @@
 import copy
 import enum
 import glob
-from os.path import abspath, basename, join
+import logging
+import typing
+from os.path import abspath, join
+from typing import Tuple
+import numpy as np
 from emantomo import Plugin
 from emantomo.constants import PROC_NORMALIZE
 from pyworkflow.mapper.sqlite import ID
 from pwem.objects import Transform
-from pyworkflow import BETA
 from pyworkflow import utils as pwutils
 import pyworkflow.protocol.params as params
+from pyworkflow.object import Set
+from pyworkflow.protocol import STEPS_PARALLEL
+from pyworkflow.utils import Message, yellowStr, cyanStr
 from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
 from pwem.protocols import EMProtocol
-from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
+from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION, SCIPION
 from tomo.protocols import ProtTomoBase
-from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D
+from tomo.objects import SetOfCoordinates3D, SetOfSubTomograms, SubTomogram, TomoAcquisition, Coordinate3D, Tomogram
 
-# Tomogram type constants for particle extraction
-from tomo.utils import scaleTrMatrixShifts
+logger = logging.getLogger(__name__)
 
 SAME_AS_PICKING = 0
 OTHER = 1
@@ -55,15 +61,20 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
     """ Extraction for Tomo. Uses EMAN2 e2spt_boxer_old.py."""
     _label = 'Subtomograms extraction from tomogram'
     _possibleOutputs = OutputExtraction
+    stepsExecutionMode = STEPS_PARALLEL
     OUTPUT_PREFIX = _possibleOutputs.subtomograms.name
-    tomoFiles = []
-    lines = []
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.tomosDict = None
+        self.scaleFactor = None
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
-        form.addSection(label='Input')
+        form.addSection(label=Message.LABEL_INPUT)
         form.addParam('inputCoordinates', params.PointerParam, label="Coordinates/Subtomograms", important=True,
-                      pointerClass=[SetOfCoordinates3D, SetOfSubTomograms],  help='Choose coordinates or subtomograms derived from 3d coordinates.')
+                      pointerClass=[SetOfCoordinates3D, SetOfSubTomograms],
+                      help='Choose coordinates or subtomograms derived from 3d coordinates.')
 
         form.addParam('tomoSource', params.EnumParam,
                       choices=['same as picking', 'other'],
@@ -91,7 +102,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                            'introduced coordinates and the tomograms that will br used for the extraction.')
 
         form.addSection(label='Preprocess')
-        form.addParam('doInvert', params.BooleanParam, default=False,
+        form.addParam('doInvert', params.BooleanParam, default=True,
                       label='Invert contrast?',
                       help='Invert the contrast if your tomogram is black '
                            'over a white background.  Xmipp, Spider, Relion '
@@ -99,7 +110,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                            'background. Frealign (up to v9.07) requires black '
                            'particles over a white background')
 
-        form.addParam('doNormalize', params.BooleanParam, default=False,
+        form.addParam('doNormalize', params.BooleanParam, default=True,
                       label='Normalize subtomogram?',
                       help='Normalization processor applied to subtomograms before extraction.')
 
@@ -111,161 +122,110 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
                       display=params.EnumParam.DISPLAY_COMBO,
                       help='Use normalize.edgemean if the particles have a clear solvent background '
                            '(i.e., they are not part of a larger complex or embeded in a membrane)')
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
 
     def _insertAllSteps(self):
-        self._insertFunctionStep(self.writeSetOfCoordinates3D)
-        self._insertFunctionStep(self.extractParticles)
-        self._insertFunctionStep(self.convertOutput)
-        self._insertFunctionStep(self.createOutputStep)
+        self._initialize()
+        closeSetStepDeps = []
+        for tsId in self.tomosDict.keys():
+            pId = self._insertFunctionStep(self.writeSetOfCoordinates3D, tsId,
+                                           prerequisites=[],
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.extractParticles, tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.convertOutput, tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            pId = self._insertFunctionStep(self.createOutputStep, tsId,
+                                           prerequisites=pId,
+                                           needsGPU=False)
+            closeSetStepDeps.append(pId)
+        self._insertFunctionStep(self.closeOutputSet,
+                                 prerequisites=closeSetStepDeps,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
-    def _isInputASetOfSubtomograms(self):
-        """ returns true if the input is a set of subtomograms"""
-        return isinstance(self.inputCoordinates.get(), SetOfSubTomograms)
+    def _initialize(self):
+        matchingTsIds, nonMatchingTsIds = self._getMatchingTsIds()
+        if len(nonMatchingTsIds) > 0:
+            logger.warning(yellowStr(f'Some tsIds do not match: {nonMatchingTsIds}'))
+        self.tomosDict = {tomo.getTsId(): tomo.clone() for tomo in self.getInputTomograms()
+                          if tomo.getTsId() in matchingTsIds}
+        inCoords = self._getSetOfCoordinates()
+        # Calculate the scale factor
+        firstTomo = self.getInputTomograms().getFirstItem()
+        samplingRateInput = inCoords.getSamplingRate()
+        samplingRateTomo = firstTomo.getSamplingRate()
+        self.scaleFactor = samplingRateInput / samplingRateTomo
 
-    def _getSetOfCoordinates(self):
-        if self._isInputASetOfSubtomograms():
-            return self.inputCoordinates.get().getCoordinates3D()
-        else:
-            return self.inputCoordinates.get()
-
-    def writeSetOfCoordinates3D(self):
-
-        inputSet = self.inputCoordinates.get()
-        coordSet = self._getSetOfCoordinates()
+    def writeSetOfCoordinates3D(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Writing the coordinates of tomogram into EMAN format..."))
+        inputSet = self._getSetOfCoordinates()
+        tomo = self.tomosDict[tsId]
 
         # Calculate ratio/factor
-        samplingRateCoord = coordSet.getSamplingRate()
+        samplingRateCoord = inputSet.getSamplingRate()
         samplingRateTomo = self.getInputTomograms().getFirstItem().getSamplingRate()
         scale = samplingRateCoord / samplingRateTomo
 
-        # Store the tomograms to be use
-        tomoDict = dict()
-        for tomo in self.getInputTomograms():
-            tomoDict[tomo.getTsId()] = tomo.clone()
-
-        def onTomogramFinish(coordList):
-
-            self.info("Finishing conversion of tomogram %s." % tomoId)
-            if coordList:
-                self.lines.append(coordList)
-                self.tomoFiles.append(tomo.getFileName())
-                emanCoordFile.close()
-
-        # Variables for each tomogram "step"
-        tomoId = None
-        item_list = []
-        emanCoordFile = None
-
-        # Define iterator based on input type
-        if self._isInputASetOfSubtomograms():
-            iterator = inputSet.iterSubtomos
-            orderBy = [SubTomogram.VOL_NAME_FIELD, ID]
-        else:
-            iterator = inputSet.iterCoordinates
-            orderBy = [Coordinate3D.TOMO_ID_ATTR, ID]
-
         # Iterate in order based on tomogram/Ts id
-        for item in iterator(orderBy=orderBy):
+        with open(self._getCoordsFile(tsId), "w") as emanCoordFile:
+            for item in inputSet.iterCoordinates(volume=tomo, orderBy=[Coordinate3D.TOMO_ID_ATTR, ID]):
+                coord3D = self._getCoordinateFromItem(item)
+                xScaled = coord3D.getX(BOTTOM_LEFT_CORNER) * scale
+                yScaled = coord3D.getY(BOTTOM_LEFT_CORNER) * scale
+                zScaled = coord3D.getZ(BOTTOM_LEFT_CORNER) * scale
+                emanCoordFile.write(f"{xScaled:.3f}\t{yScaled:.3f}\t{zScaled:.3f}\n")
 
-            coord3D = self._getCoordinateFromItem(item)
-            currentTomoId = coord3D.getTomoId()
+    def extractParticles(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Extracting the particles from tomogram..."))
+        tomo = self.tomosDict[tsId]
+        args = '%s ' % abspath(tomo.getFileName())
+        args += "--coords %s --boxsize %i" % (f'{tsId}.coords', self.boxSize.get())
+        if self.doInvert:
+            args += ' --invert'
+        if self.doNormalize:
+            args += ' --normproc %s' % self.getEnumText('normproc')
+        # args += ' --cshrink %i' % (samplingRateTomo / samplingRateCoord)
 
-            # When changing the tomogram...
-            if currentTomoId != tomoId:
-                tomoId = currentTomoId
+        program = Plugin.getProgram('e2spt_boxer_old.py')
+        self.runJob(program, args, cwd=self._getExtraPath())
+        moveFile(self._getExtraPath(join('sptboxer_01', 'basename.hdf')),
+                 self._getExtraPath(f'{tsId}.hdf'))
+        cleanPath(self._getExtraPath("sptboxer_01"))
 
-                onTomogramFinish(item_list)
-
-                tomo = tomoDict.get(currentTomoId, None)
-                if tomo is None:
-                    self.info("Tomogram %s not found in input tomograms set. Coordinates for this tomogram will be skipped." % tomoId)
-                    item_list = []
-                    continue
-                else:
-                    # need to open a new file
-                    coordFile = self._getExtraPath(pwutils.replaceBaseExt(tomo.getFileName(), 'coords'))
-                    emanCoordFile = open(coordFile, "w")
-                    item_list = []
-
-
-            # On each coordinate ... if there is not a tomogram we skip it
-            if tomo is None:
-                continue
-
-            baseTomoName = basename(tomo.getFileName())
-            baseCoordVolume = basename(coord3D.getVolName())
-
-            # Is this check necessary providing the tomoId matches?
-            if baseTomoName == baseCoordVolume:
-                emanCoordFile.write("%d\t%d\t%d\n" % (coord3D.getX(BOTTOM_LEFT_CORNER) * scale,
-                                            coord3D.getY(BOTTOM_LEFT_CORNER) * scale,
-                                            coord3D.getZ(BOTTOM_LEFT_CORNER) * scale))
-                newItem = item.clone()
-                # Do we need the volume?? --> newItem.setVolume(coord3D.getVolume())
-                item_list.append(newItem)
-            else:
-                self.warning("Tomogram name '%s' does not match associated volume in the coordinate '%s'" % (baseTomoName, baseCoordVolume))
-
-        # Last iteration, call onTomogramChange
-        onTomogramFinish(item_list)
-
-    def extractParticles(self):
-        for tomo in self.tomoFiles:
-            args = '%s ' % abspath(tomo)
-            args += "--coords %s --boxsize %i" % (pwutils.replaceBaseExt(tomo, 'coords'), self.boxSize.get())
-            if self.doInvert:
-                args += ' --invert'
-            if self.doNormalize:
-                args += ' --normproc %s' % self.getEnumText('normproc')
-            # args += ' --cshrink %i' % (samplingRateTomo / samplingRateCoord)
-
-            program = Plugin.getProgram('e2spt_boxer_old.py')
-            self.runJob(program, args, cwd=self._getExtraPath(),
-                        numberOfMpi=1, numberOfThreads=1)
-            moveFile(self._getExtraPath(join('sptboxer_01', 'basename.hdf')),
-                     self._getExtraPath(pwutils.replaceBaseExt(tomo, 'hdf')))
-            cleanPath(self._getExtraPath("sptboxer_01"))
-
-    def convertOutput(self):
+    def convertOutput(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Unstacking the particles extracted from tomogram..."))
         program = Plugin.getProgram('e2proc3d.py')
-        for hdfFile in glob.glob(self._getExtraPath('*.hdf')):
-            args = ' --unstacking'
-            args += ' %s' % abspath(hdfFile)
-            args += ' %s' % abspath(self._getExtraPath(pwutils.replaceBaseExt(hdfFile, 'mrc')))
-            args += ' --apix %.3f' % self.getOutputSamplingRate()
-            self.runJob(program, args, cwd=self._getExtraPath(),
-                        numberOfMpi=1, numberOfThreads=1)
-            cleanPattern(hdfFile)
+        hdfFile = self._getOutHdfCoordsStack(tsId)
+        args = ' --unstacking'
+        args += ' %s' % hdfFile
+        args += ' %s' % self._getExtraPath(pwutils.replaceBaseExt(hdfFile, 'mrc'))
+        args += ' --apix %.3f' % self.getOutputSamplingRate()
+        self.runJob(program, args)
+        cleanPattern(hdfFile)
 
-    def createOutputStep(self):
-        # Note: using self.lines here prevents the protocol from continuing in case this step code fails!
-        outputSet = None
-        outputSubTomogramsSet = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
-        outputSubTomogramsSet.setSamplingRate(self.getOutputSamplingRate())
-        outputSubTomogramsSet.setCoordinates3D(self._getSetOfCoordinates())
-        acquisition = TomoAcquisition()
+    def createOutputStep(self, tsId: str):
+        logger.info(cyanStr(f"tsId = {tsId} - Registering the results..."))
+        tomo = self.tomosDict[tsId]
+        self._registerOutput(tomo)
 
-        firstTomo = self.getInputTomograms().getFirstItem()
-        acquisition.copyInfo(firstTomo.getAcquisition())
-        outputSubTomogramsSet.setAcquisition(acquisition)
+    @retry_on_sqlite_lock(log=logger)
+    def _registerOutput(self, tomo: Tomogram):
+        with self._lock:
+            outSubtomos = self._createOutputSet()
+            inCoords = self._getSetOfCoordinates()
+            coordSet = [item.clone() for item in inCoords.iterCoordinates(volume=tomo)]
+            self.readSetOfSubTomograms(tomo, outSubtomos, coordSet, self.scaleFactor)
 
-        samplingRateInput = self.inputCoordinates.get().getSamplingRate()
-        samplingRateTomo = firstTomo.getSamplingRate()
-        factor = samplingRateInput / samplingRateTomo
-        counter = 0
-
-        for item in self.getInputTomograms().iterItems():
-            for ind, tomoFile in enumerate(self.tomoFiles):
-                if basename(tomoFile) == basename(item.getFileName()):
-                    coordSet = self.lines[ind]
-                    outputSet, counter = self.readSetOfSubTomograms(tomoFile, outputSubTomogramsSet,
-                                                                    coordSet, factor, counter)
-
-        self._defineOutputs(**{OutputExtraction.subtomograms.name:outputSet})
-        self._defineSourceRelation(self._getSetOfCoordinates(), outputSet)
+    def closeOutputSet(self):
+        self._closeOutputSet()
+        outSubtomos = getattr(self, self._possibleOutputs.subtomograms.name, None)
+        if outSubtomos.getSize() == 0:
+            raise Exception("No particles were extracted!")
 
     # --------------------------- INFO functions --------------------------------
     def _methods(self):
@@ -301,75 +261,17 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def _validate(self):
         errors = []
-        if self.tomoSource.get() == SAME_AS_PICKING:
-            return errors
-        tomo_from_coords = self._getSetOfCoordinates().getPrecedents()
-        tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
-        coordFiles = [pwutils.removeBaseExt(file) for file in tomo_from_coords.getFiles()]
-        numberMatches = len(set(tomoFiles) & set(coordFiles))
-        if numberMatches == 0:
-            errors.append("Cannot relate Coordinate Tomograms and New Tomograms. In order to stablish a "
-                          "relation, the filename of the corresponding Coordinate Tomograms and New Tomogram "
-                          "files must be equal. For example, if a coordinate Coordinate Tomogram file is named Tomo_1.mrc, "
-                          "then the New Tomogram file to be associated to it should be named Tomo_1.ext "
-                          "(being 'ext' any valid extension - '.mrc', '.em'...).\n")
+        matches, _ = self._getMatchingTsIds()
+        if len(matches) == 0:
+            errors.append("Cannot relate coordinates tsIds and new tomograms tsIds.")
         return errors
 
-    def _warnings(self):
-        warnings = []
-        if self.tomoSource.get() != SAME_AS_PICKING:
-            precedentsSet = self._getSetOfCoordinates().getPrecedents()
-            if getattr(precedentsSet.getFirstItem(), '_tsId', None) and \
-                    getattr(self.inputTomograms.get().getFirstItem(), '_tsId', None):
-                # Match by id (tomoId, tsId)
-                tomoIds = [tomo.getTsId() for tomo in self.inputTomograms.get()]
-                coordPrecedentsIds = [tomo.getTsId() for tomo in precedentsSet]
-                numberMatches = len(set(tomoIds) & set(coordPrecedentsIds))  # Length of the intersection of both lists
-                maxNumberFound = max(len(tomoIds), len(coordPrecedentsIds))
-                if numberMatches < maxNumberFound:
-                    warnings.append("Couldn't find a correspondence between coordinates precedents and the introduced "
-                                    "tomograms in which the extraction is desired to be performed. These means that "
-                                    "the tsId label is different in both sets of tomograms, at least for some of them.")
-                    mismatchesIds = set(coordPrecedentsIds).difference(tomoIds)
-                    if mismatchesIds:
-                        warnings.append("The following tsIds will not be associated to any New Tomogram (tsIds):")
-                        for id in mismatchesIds:
-                            warnings.append("\t%s" % id)
-                        warnings.append("\n")
-            else:
-                # Match by filename
-                tomoFiles = [pwutils.removeBaseExt(file) for file in self.getInputTomograms().getFiles()]
-                coordFiles = [pwutils.removeBaseExt(file) for file in precedentsSet.getFiles()]
-                numberMatches = len(set(tomoFiles) & set(coordFiles))
-                maxNumberFound = max(len(tomoFiles), len(coordFiles))
-
-                if numberMatches < maxNumberFound:
-                    warnings.append("Couldn't find a correspondence between all tomogram files. "
-                                    "Association is performed in terms of the file name of the Coordinate Tomograms "
-                                    "and the New Tomograms (without the extension). For example, if a Coordinate "
-                                    "Tomogram file is named Tomo_1.mrc, then the New Tomogram file file to be "
-                                    "associated to it should be named Tomo_1.ext (being 'ext' any valid extension "
-                                    "- '.mrc', '.em'...).\n")
-                    mismatches_coords = set(coordFiles).difference(tomoFiles)
-                    if mismatches_coords:
-                        warnings.append("The following Coordinate Tomogram files will not be associated to any New "
-                                        "Tomogram (name without extension):")
-                        for file in mismatches_coords:
-                            warnings.append("\t%s" % file)
-                        warnings.append("\n")
-                    mismatches_tomos = set(tomoFiles).difference(coordFiles)
-                    if mismatches_tomos:
-                        warnings.append("The following New Tomogram files will not be associated to any Coordinate Tomogram "
-                                        "(name without extension):")
-                        for file in mismatches_tomos:
-                            warnings.append("\t%s" % file)
-                        warnings.append("\n")
-        return warnings
-
     # --------------------------- UTILS functions ----------------------------------
-    def _tomosOther(self):
-        """ Return True if other tomograms are used for extract. """
-        return self.tomoSource == OTHER
+    def _getSetOfCoordinates(self):
+        if self._isInputASetOfSubtomograms():
+            return self.inputCoordinates.get().getCoordinates3D()
+        else:
+            return self.inputCoordinates.get()
 
     def getInputTomograms(self):
         """ Return the tomogram associated to the 'SetOfCoordinates3D' or 'Other' tomograms. """
@@ -378,10 +280,26 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return self.inputTomograms.get()
 
-    @staticmethod
-    def _getCoordinateFromItem(item):
-        """ Returns the coordinate 3d either because the item is the Coordinate or is a subtomogram"""
+    def _isInputASetOfSubtomograms(self):
+        """ returns true if the input is a set of subtomograms"""
+        return isinstance(self.inputCoordinates.get(), SetOfSubTomograms)
 
+    def _tomosOther(self) -> bool:
+        """ Return True if other tomograms are used for extract. """
+        return self.tomoSource.get() == OTHER
+
+    def _getMatchingTsIds(self) -> Tuple[typing.Set, typing.Set]:
+        tomograms = self.getInputTomograms()
+        tomoIds = tomograms.getTSIds()
+        coords = self._getSetOfCoordinates()
+        coordsTomoIds = coords.getTSIds()
+        matches = set(tomoIds) & set(coordsTomoIds)
+        notMatches = set(tomoIds) ^ set(coordsTomoIds)
+        return matches, notMatches
+
+    @staticmethod
+    def _getCoordinateFromItem(item) -> Coordinate3D:
+        """ Returns the coordinate 3d either because the item is the Coordinate or is a subtomogram"""
         if isinstance(item, Coordinate3D):
             return item
         else:
@@ -395,34 +313,79 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         else:
             return item.getTransform().getMatrix()
 
-    def readSetOfSubTomograms(self, tomoFile, outputSubTomogramsSet, inputSet, factor, counter):
+    def readSetOfSubTomograms(self,
+                              tomo: Tomogram,
+                              outputSubTomogramsSet: SetOfSubTomograms,
+                              inputSet: list,
+                              scaleFactor: int):
         """
         Populates the set of subtomograms
 
-        :param tomoFile: tomogram file
+        :param tomo: Tomogram
         :param outputSubTomogramsSet: output set of subtomograms
         :param inputSet: Subtomograms or 3D coordinates set
-        :param factor: factor between the inputSet and the tomogram
-        :param counter: counter for eman hdf index
+        :param scaleFactor: factor between the inputSet and the tomogram
         """
-        outRegex = self._getExtraPath(pwutils.removeBaseExt(tomoFile) + '-*.mrc')
-        subtomoFileList = sorted(glob.glob(outRegex))
-        itemList = [item.clone() for item in inputSet] # Get the items (coords or subtomos) in a list)
+        tsId = tomo.getTsId()
+        logger.info(cyanStr('Registegring the subtomograms from tomogram %s' % tsId))
+        subtomoFileList = sorted(glob.glob(self._getExtraPath(f'{tsId}*.mrc')))
         for idx, subtomoFile in enumerate(subtomoFileList):
-            self.debug("Registering subtomogram %s - %s" % (counter, subtomoFile))
+            # logger.info("Registering subtomogram %s - %s" % (counter, subtomoFile))
             subtomogram = SubTomogram()
             transform = Transform()
             subtomogram.setLocation(subtomoFile)
-            currentItem = itemList[idx]
+            currentItem = inputSet[idx]
             coord = EmanProtTomoExtraction._getCoordinateFromItem(currentItem)
+
+            #########################################################################################
+            # EMAN work with the coordinates as integers, so we round them and add the decimal part
+            # as shifts to the transformation matrix, so all the information is preserved
+            origX = coord.getX(SCIPION)
+            origY = coord.getY(SCIPION)
+            origZ = coord.getZ(SCIPION)
+            roundCoordX = round(origX)
+            roundCoordY = round(origY)
+            roundCoordZ = round(origZ)
+            coord.setX(roundCoordX, SCIPION)
+            coord.setY(roundCoordY, SCIPION)
+            coord.setZ(roundCoordZ, SCIPION)
             subtomogram.setCoordinate3D(coord)
             trMatrix = copy.copy(EmanProtTomoExtraction._getMatrixFromItem(currentItem))
-            transform.setMatrix(scaleTrMatrixShifts(trMatrix, factor))
-            subtomogram.setTransform(transform, convention=TR_SCIPION)
-            subtomogram.setVolName(tomoFile)
-            outputSubTomogramsSet.append(subtomogram)
-            counter += 1
-        return outputSubTomogramsSet, counter
+            shifts = np.array([trMatrix[0, 3], trMatrix[1, 3], trMatrix[2, 3]])
+            scaledShifts = scaleFactor * shifts
+            trMatrix[0, 3] = scaledShifts[0] + roundCoordX - origX
+            trMatrix[1, 3] = scaledShifts[1] + roundCoordY - origY
+            trMatrix[2, 3] = scaledShifts[2] + roundCoordY - origY
+            #########################################################################################
 
-    def getOutputSamplingRate(self):
+            # transform.setMatrix(scaleTrMatrixShifts(trMatrix, scaleFactor))
+            transform.setMatrix(trMatrix)
+            subtomogram.setTransform(transform, convention=TR_SCIPION)
+            subtomogram.setVolName(tomo.getFileName())
+            outputSubTomogramsSet.append(subtomogram)
+
+    def getOutputSamplingRate(self) -> float:
         return self.getInputTomograms().getSamplingRate()
+
+    def _getCoordsFile(self, tsId: str) -> str:
+        return self._getExtraPath(f'{tsId}.coords')
+
+    def _getOutHdfCoordsStack(self, tsId) -> str:
+        return self._getExtraPath(f'{tsId}.hdf')
+
+    def _createOutputSet(self) -> SetOfSubTomograms:
+        outSubtomos = getattr(self, self._possibleOutputs.subtomograms.name, None)
+        if outSubtomos:
+            outSubtomos.enableAppend()
+        else:
+            outSubtomos = self._createSetOfSubTomograms(self._getOutputSuffix(SetOfSubTomograms))
+            outSubtomos.setSamplingRate(self.getOutputSamplingRate())
+            outSubtomos.setCoordinates3D(self._getSetOfCoordinates())
+            acquisition = TomoAcquisition()
+            firstTomo = self.getInputTomograms().getFirstItem()
+            acquisition.copyInfo(firstTomo.getAcquisition())
+            outSubtomos.setAcquisition(acquisition)
+            outSubtomos.setStreamState(Set.STREAM_OPEN)
+            self._defineOutputs(**{OutputExtraction.subtomograms.name: outSubtomos})
+            self._defineSourceRelation(self._getSetOfCoordinates(), outSubtomos)
+        return outSubtomos

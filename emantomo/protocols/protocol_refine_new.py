@@ -34,13 +34,12 @@ from emantomo.convert.lstConvert import EmanLstReader
 from emantomo.objects import EmanSetOfParticles
 from emantomo.protocols.protocol_refine_new_base import EmanProtRefineNewBase
 from pwem.convert.headers import fixVolume
-from pwem.emlib.image import ImageHandler
 from pwem.objects import SetOfFSCs
-from pyworkflow.protocol import PointerParam, IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
+from pyworkflow.protocol import IntParam, FloatParam, BooleanParam, StringParam, EnumParam, LEVEL_ADVANCED
 from pyworkflow.utils import Message
 from tomo.objects import AverageSubTomogram, SetOfSubTomograms
-from emantomo.protocols.protocol_base import IN_SUBTOMOS, REF_VOL
-from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, SPT_00_DIR
+from emantomo.protocols.protocol_base import IN_SUBTOMOS
+from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME
 
 # 3D maps filtering options
 WIENER = 'wiener'
@@ -75,14 +74,7 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
 
     def _defineParams(self, form):
         form.addSection(label=Message.LABEL_INPUT)
-        form.addParam(IN_SUBTOMOS, PointerParam,
-                      pointerClass='EmanSetOfParticles',
-                      label='Particles',
-                      important=True)
-        form.addParam(REF_VOL, PointerParam,
-                      pointerClass='Volume',
-                      allowsNull=True,
-                      label="Reference volume (opt.)")
+        self._addCommonInputParams(form)
         form.addParam('startRes', FloatParam,
                       default=50,
                       label='Refinement initial resolution (Å)',
@@ -176,7 +168,6 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
                       label="Extra params",
                       help="Here you can add any extra parameters to run Eman's  new subtomogram refinement. "
                            "Parameters should be written in Eman's command line format (--param val)")
-        form.addParallelSection(threads=4, mpi=0)
 
     # --------------- INSERT steps functions ----------------
     def _insertAllSteps(self):
@@ -275,7 +266,7 @@ class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
             args.append(f'--smooth={self.smooth.get():.2f}')
             args.append(f'--smoothN={self.smoothN.get()}')
         # Extra params
-        args.append(f'--parallel=thread:{self.numberOfThreads.get()}')
+        args.append(f'--parallel=thread:{self.binThreads.get()}')
         args.append(f'--threads={self.threadsPostProc.get()}')
         if self.make3dThread.get():
             args.append('--m3dthread')

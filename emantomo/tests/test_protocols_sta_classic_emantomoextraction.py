@@ -27,6 +27,7 @@ from pyworkflow.utils import magentaStr
 from tomo.constants import TR_EMAN
 from tomo.protocols import ProtTomoExtractCoords
 from tomo.protocols.protocol_extract_coordinates import Output3dCoordExtraction
+from tomo.tests import DataSetEmd10439
 from .test_eman_sta_classic_base import TestEmantomoStaClassicBase
 from ..protocols.protocol_extraction_from_tomo import OTHER
 
@@ -59,7 +60,9 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
     def runPreviousProtocols(cls):
         tomoImported = super().runImportTomograms()  # Import tomograms
         tomosBinned = super().runBinTomograms(tomoImported)  # Bin the tomogram to make it smaller
-        coordsImported = super().runImport3dCoords(tomosBinned)  # Import coordinates
+        coordsImported = super().runImport3dCoords(
+            tomosBinned,
+            cls.ds.getFile(DataSetEmd10439.coords39Sqlite.name))  # Import coordinates
 
         return tomoImported, coordsImported, tomosBinned
 
@@ -122,6 +125,8 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
                                          expectedSRate=self.origSRate,
                                          expectedBoxSize=self.boxSize,
                                          convention=TR_EMAN,
+                                         positionTol=1,
+                                         shiftTol=1,
                                          orientedParticles=True)  # The coords imported were picked with PySeg
 
     def test_extract3dCoordsToSmallerTomo(self):
@@ -136,6 +141,8 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
                                          expectedSRate=self.binnedSRate,
                                          expectedBoxSize=self.binnedBoxSize,
                                          convention=TR_EMAN,
+                                         positionTol=1,
+                                         shiftTol=1,
                                          orientedParticles=True)  # The coords imported were picked with PySeg
 
     def test_extract3dCoordsToTheSameTomo(self):
@@ -150,5 +157,7 @@ class TestEmanTomoExtractionStaClassic(TestEmantomoStaClassicBase):
                                          expectedSRate=self.binnedSRate,
                                          expectedBoxSize=self.binnedBoxSize,
                                          convention=TR_EMAN,
+                                         positionTol=1,
+                                         shiftTol=1,
                                          orientedParticles=True)  # The coords imported were picked with PySeg
 

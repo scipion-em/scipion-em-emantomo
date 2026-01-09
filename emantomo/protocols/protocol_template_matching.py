@@ -23,16 +23,25 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-import glob
+import logging
 from enum import Enum
-from os.path import basename, join
+from os.path import basename, join, exists
+from typing import List, Optional
+
+import numpy as np
 from emantomo import Plugin
 from emantomo.constants import SYMMETRY_HELP_MSG, REFERENCE_NAME, TOMOGRAMS_DIR
-from emantomo.convert import jsons2SetCoords3D
+from emantomo.convert import loadJson, readCoordinate3D
 from emantomo.protocols.protocol_base import ProtEmantomoBase, REF_VOL, IN_TOMOS
-from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam, GE, LE
-from pyworkflow.utils import Message
-from tomo.objects import SetOfCoordinates3D
+from pwem.emlib.image.image_readers import MRCImageReader
+from pyworkflow.object import Set, String
+from pyworkflow.protocol import PointerParam, StringParam, FloatParam, LEVEL_ADVANCED, IntParam, BooleanParam, GE, LE, \
+    STEPS_PARALLEL
+from pyworkflow.utils import Message, replaceExt, redStr, cyanStr
+from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
+from tomo.objects import SetOfCoordinates3D, Tomogram
+
+logger = logging.getLogger(__name__)
 
 
 class OutputsTemplateMatch(Enum):
@@ -47,11 +56,14 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
 
     _label = 'Template matching picking'
     _possibleOutputs = OutputsTemplateMatch
-    OUTPUT_PREFIX = _possibleOutputs.coordinates.name
+    stepsExecutionMode = STEPS_PARALLEL
+    program = Plugin.getProgram("e2spt_tempmatch.py")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.inTomos = None
+        self.inTomosDict = None
+        self.badTsIds = String()
+        self.zeroCoordsTsIds = String()
 
     # --------------------------- DEFINE param functions ----------------------
     def _defineParams(self, form):
@@ -67,6 +79,7 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                       important=True,
                       label="Reference volume",
                       help="This should be 'light contrast'.")
+        self._addBinThreads(form)
 
         form.addSection(label='options')
         form.addParam('nptcl', IntParam,
@@ -112,42 +125,92 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
         form.addParam('rmgold', BooleanParam,
                       default=True,
                       label='Remove particles near gold fiducials?')
-        form.addParallelSection(threads=4, mpi=0)
+        form.addParallelSection(threads=1, mpi=0)
 
     # --------------------------- INSERT steps functions ----------------------
     def _insertAllSteps(self):
         self._initialize()
-        self._insertFunctionStep(self.prepareEmanPrj)
-        self._insertFunctionStep(self.convertRefVolStep)
-        self._insertFunctionStep(self.templateMatchingStep)
-        self._insertFunctionStep(self.createOutputStep)
+        closeSetStepDeps = []
+        cInputId = self._insertFunctionStep(self.convertRefVolStep,
+                                            prerequisites=[],
+                                            needsGPU=False)
+        for tsId in self.inTomosDict.keys():
+            prjId = self._insertFunctionStep(self.prepareEmanPrj, tsId,
+                                             prerequisites=[cInputId],
+                                             needsGPU=False)
+            tmId = self._insertFunctionStep(self.templateMatchingStep, tsId,
+                                            prerequisites=prjId,
+                                            needsGPU=False)
+            cOutId = self._insertFunctionStep(self.createOutputStep, tsId,
+                                              prerequisites=tmId,
+                                              needsGPU=False)
+            closeSetStepDeps.append(cOutId)
+        self._insertFunctionStep(self.closeOutputSet,
+                                 prerequisites=closeSetStepDeps,
+                                 needsGPU=False)
 
     # --------------------------- STEPS functions -----------------------------
     def _initialize(self):
-        self.inTomos = getattr(self, IN_TOMOS).get()
+        self.inTomosDict = {tomo.getTsId(): tomo.clone() for tomo in getattr(self, IN_TOMOS).get()}
 
-    def prepareEmanPrj(self):
+    def prepareEmanPrj(self, tsId: str):
+        logger.info(cyanStr(f'tsId = {tsId}: preparing the EMAN project...'))
         super().createInitEmanPrjDirs()
-        sRate = self.inTomos.getSamplingRate()
-        for tomo in self.inTomos:
-            inTomoName = tomo.getFileName()
-            # Required to ensure that the sampling rate is correct in the header, as EMAN reads and compares it
-            # with the sampling rate of the reference volume to scale the data
-            self.convertOrLink(inTomoName, tomo.getTsId(), TOMOGRAMS_DIR, sRate)
+        tomo = self.inTomosDict[tsId]
+        sRate = tomo.getSamplingRate()
+        inTomoName = tomo.getFileName()
+        # Required to ensure that the sampling rate is correct in the header, as EMAN reads and compares it
+        # with the sampling rate of the reference volume to scale the data
+        self.convertOrLink(inTomoName, tsId, TOMOGRAMS_DIR, sRate)
 
-    def templateMatchingStep(self):
-        program = Plugin.getProgram("e2spt_tempmatch.py")
-        self.runJob(program, self._genTempMatchArgs(), cwd=self._getExtraPath())
+    def templateMatchingStep(self, tsId: str):
+        try:
+            logger.info(cyanStr(f'tsId = {tsId}: running the template matching...'))
+            self.runJob(self.program, self._genTempMatchArgs(tsId), cwd=self._getExtraPath())
+        except Exception as e:
+            tomo = self.inTomosDict[tsId]
+            logger.error(redStr(f'--------->Template matching failed for:'
+                         f'\n\ttsId = {tsId}, tomoName = {tomo.getFileName()}'), exc_info=e)
+            prevMsg = '' if not self.badTsIds.get() else self.badTsIds.get()
+            self.badTsIds.set(prevMsg + f' {tsId}')
 
-    def createOutputStep(self):
-        jsons2SetCoords3D(self, self.inTomos, self.getInfoDir())
+    def createOutputStep(self, tsId: str):
+        logger.info(cyanStr(f'tsId = {tsId}: registering the picked coordinates...'))
+        tomo = self.inTomosDict[tsId]
+        tomoJsonFile = join(self.getInfoDir(), f'{tomo.getTsId()}_info.json')
+        if not exists(tomoJsonFile):
+            logger.error(redStr(f'tsId = {tsId} --> Json file not found ({tomoJsonFile})'))
+            return
+
+        jsonBoxDict = loadJson(tomoJsonFile)
+        boxes = jsonBoxDict.get("boxes_3d", None)
+        if boxes:
+            self._registerOutput(tomo, boxes)
+        else:
+            logger.error(redStr(f'tsId = {tsId} --> No coordinates picked ({tomoJsonFile})'))
+            prevMsg = '' if not self.zeroCoordsTsIds.get() else self.zeroCoordsTsIds.get()
+            self.zeroCoordsTsIds.set(prevMsg + f' {tsId}')
+
+    @retry_on_sqlite_lock(log=logger)
+    def _registerOutput(self, tomo: Tomogram, boxes: Optional[List]):
+        with self._lock:
+            outCoords = self.createOutputSet()
+            for box in boxes:
+                newCoord = readCoordinate3D(box, tomo)
+                outCoords.append(newCoord)
+            outCoords.write()
+            self._store(outCoords)
+
+    def closeOutputSet(self):
+        self._closeOutputSet()
         # Throw an exception if no coordinates were registered
-        if len(getattr(self, 'coordinates', '')) == 0:
-            raise Exception('ERROR!!! No coordintes were registered.')
+        if len(getattr(self, self._possibleOutputs.coordinates.name, '')) == 0:
+            raise ValueError('ERROR!!! No coordinates were registered.')
 
     # --------------------------- UTILS functions -----------------------------
-    def _genTempMatchArgs(self):
-        args = [f" {self._genTomolist()}",
+    def _genTempMatchArgs(self, tsId: str) -> str:
+        convertedOrLinkedTomo = join(self.getTomogramsDir(), tsId + '.hdf')
+        args = [f" {self._getTomoName(convertedOrLinkedTomo)}",
                 f"--ref {REFERENCE_NAME}.hdf ",
                 f"--nptcl {self.nptcl.get()}",
                 f"--dthr {self.dthr.get():.2f}",
@@ -156,25 +219,67 @@ class EmanProtTemplateMatching(ProtEmantomoBase):
                 f"--maxvol {self.maxvol.get()}",
                 f"--delta {self.delta.get():.2f}",
                 f"--sym {self.symmetry.get()}",
-                f"--threads {self.numberOfThreads.get()}"]
+                f"--threads {self.binThreads.get()}"]
         if self.rmedge.get():
             args.append("--rmedge")
         if self.rmgold.get():
             args.append('--rmgold')
         return ' '.join(args)
 
-    def _genTomolist(self):
-        tomoFileList = [join(TOMOGRAMS_DIR, basename(tomoFile)) for tomoFile
-                        in glob.glob(join(self.getTomogramsDir(), '*'))]
-        return ' '.join(tomoFileList)
+    def createOutputSet(self) -> SetOfCoordinates3D:
+        outCoords = getattr(self, self._possibleOutputs.coordinates.name, None)
+        if outCoords:
+            outCoords.enableAppend()
+        else:
+            inTomosPointer = getattr(self, IN_TOMOS)
+            outCoords = SetOfCoordinates3D.create(self._getPath(), template="coordinates%s")
+            outCoords.setPrecedents(inTomosPointer)
+            outCoords.setSamplingRate(inTomosPointer.get().getSamplingRate())
+            outCoords.setBoxSize(self.getRefVol().getDim()[0])
+            outCoords.setStreamState(Set.STREAM_OPEN)
+
+            self._defineOutputs(**{self._possibleOutputs.coordinates.name: outCoords})
+            self._defineSourceRelation(inTomosPointer, outCoords)
+
+        return outCoords
+
+    @staticmethod
+    def _getTomoName(tomoFile: str) -> str:
+        return join(TOMOGRAMS_DIR, replaceExt(basename(tomoFile), 'hdf'))
 
     # -------------------------- INFO functions -------------------------------
     def _validate(self):
         errorMsg = []
-        tol = 1e-03
-        tomosSRate = self.getAttrib(IN_TOMOS).getSamplingRate()
-        refSRate = self.getAttrib(REF_VOL).getSamplingRate()
+        tol = 2e-02
+        inTomos = self.getAttrib(IN_TOMOS)
+        reference = self.getAttrib(REF_VOL)
+        tomosSRate = inTomos.getSamplingRate()
+        refSRate = reference.getSamplingRate()
+        refDims = MRCImageReader.getDimensions(reference.getFileName())
+        tomoXDims, tomoYDims, _, _ = zip(*[MRCImageReader.getDimensions(tomo.getFileName())
+                                                   for tomo in inTomos])
+        tomoXDims = np.array(tomoXDims)
+        tomoYDims = np.array(tomoYDims)
         if abs(tomosSRate - refSRate) >= tol:
             errorMsg.append(f'The sampling rate of the input tomograms [{tomosSRate} Å/pix] and the reference volume '
                             f'[{refSRate} Å/pix] are not equal within the specified tolerance [{tol} Å/pix].')
+        if refDims[0] < 32:
+            errorMsg.append(f'Box sizes below 32 px are not allowed.')
+        if np.any(tomoXDims < 900) or np.any(tomoYDims < 900):
+            errorMsg.append('The lowest value admitted for X, Y dimensions of the introduced tomograms is 900 px. '
+                            'This is because the lowest tomogram reconstruction allowed by native EMAN is around 1k '
+                            'px.')
         return errorMsg
+
+    def _summary(self):
+        msg = []
+        badTsIds = self.badTsIds.get()
+        zeroPickedTsIds = self.zeroCoordsTsIds.get()
+        if badTsIds:
+            msg.append(f'Some tomograms were not processed.\n'
+                       f'*{badTsIds}*'
+                       f'Check the log for more info\n')
+        if zeroPickedTsIds:
+            msg.append('Zero coordinates were picked in tomograms:\n'
+                       f'{zeroPickedTsIds}')
+        return msg
