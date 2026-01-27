@@ -1,3 +1,4 @@
+v3.4.1: deploy test.
 v3.4.0:
  Users:
   - Protocols template matching and particle extraction from tomograms are now paralellized and semi-streamified.
