@@ -1,3 +1,4 @@
+v3.4.2: fix - protocol crop tomograms now sets the sampling rate properly in the file header.
 v3.4.1: deploy test.
 v3.4.0:
  Users:

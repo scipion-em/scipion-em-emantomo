@@ -29,6 +29,7 @@ from os.path import join, basename
 from emantomo import Plugin
 from emantomo.constants import TOMOGRAMS_DIR
 from emantomo.protocols.protocol_base import IN_TOMOS, ProtEmantomoBase
+from pwem.convert.headers import setMRCSamplingRate
 from pwem.objects import Transform
 from pyworkflow.protocol.params import PointerParam, IntParam, GT
 from pyworkflow.utils import runJob, makePath, createLink
@@ -130,7 +131,9 @@ class EmanProtTomoClip(ProtEmantomoBase):
             self.outSet.setSamplingRate(sr)
         outTomo = Tomogram()
         outTomo.copyInfo(tomo)
-        outTomo.setFileName(self._getExtraPath(self._getOutFileName(tomo.getFileName())))
+        outFName = self._getExtraPath(self._getOutFileName(tomo.getFileName()))
+        setMRCSamplingRate(outFName, sr)
+        outTomo.setFileName(outFName)
         # Update the origin if necessary
         if self._shiftCenter():
             sizeAndCenter = self.tomoSizeAndCenterDict[tomo.getTsId()]
