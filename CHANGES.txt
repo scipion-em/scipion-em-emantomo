@@ -1,4 +1,7 @@
-v3.4.2: fix - protocol crop tomograms now sets the sampling rate properly in the file header.
+v3.4.2:
+ Users:
+  - Fix - protocol crop tomograms now sets the sampling rate properly in the file header.
+  - Add `tsId` property to `SubTomogram` and sync with coordinate data in extraction.
 v3.4.1: deploy test.
 v3.4.0:
  Users:
