@@ -262,6 +262,7 @@ class EmanProtTSExtraction(ProtEmantomoBase):
             subtomogram.setVolName(mdObj.tsId)
             scipionCoord, inCoords = self.getEmanMatchingCoord(emanCoord, inCoords)
             subtomogram.setCoordinate3D(scipionCoord)
+            subtomogram.setTsId(scipionCoord.getTomoId())
             M = scipionCoord.getMatrix()
             shift_x = M[0, 3]
             shift_y = M[1, 3]
