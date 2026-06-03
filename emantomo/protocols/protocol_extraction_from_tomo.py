@@ -28,7 +28,7 @@ import enum
 import glob
 import logging
 import typing
-from os.path import abspath, join
+from os.path import abspath, join, basename
 from typing import Tuple
 import numpy as np
 from emantomo import Plugin
@@ -40,7 +40,7 @@ import pyworkflow.protocol.params as params
 from pyworkflow.object import Set
 from pyworkflow.protocol import STEPS_PARALLEL
 from pyworkflow.utils import Message, yellowStr, cyanStr
-from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern
+from pyworkflow.utils.path import moveFile, cleanPath, cleanPattern, makePath
 from pwem.protocols import EMProtocol
 from pyworkflow.utils.retry_streaming import retry_on_sqlite_lock
 from tomo.constants import BOTTOM_LEFT_CORNER, TR_SCIPION, SCIPION
@@ -152,8 +152,8 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         matchingTsIds, nonMatchingTsIds = self._getMatchingTsIds()
         if len(nonMatchingTsIds) > 0:
             logger.warning(yellowStr(f'Some tsIds do not match: {nonMatchingTsIds}'))
-        self.tomosDict = {tomo.getTsId(): tomo.clone() for tomo in self.getInputTomograms()
-                          if tomo.getTsId() in matchingTsIds}
+        self.tomosDict = {tsId: tomo.clone() for tomo in self.getInputTomograms()
+                          if (tsId := tomo.getTsId()) in matchingTsIds}
         inCoords = self._getSetOfCoordinates()
         # Calculate the scale factor
         firstTomo = self.getInputTomograms().getFirstItem()
@@ -199,11 +199,15 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
 
     def convertOutput(self, tsId: str):
         logger.info(cyanStr(f"tsId = {tsId} - Unstacking the particles extracted from tomogram..."))
+        resultsDir = self._getUnstackedResultsDir(tsId)
+        makePath(resultsDir)
+        coordsFile = self._getCoordsFile(tsId)
+        moveFile(coordsFile, join(resultsDir, basename(coordsFile)))
         program = Plugin.getProgram('e2proc3d.py')
         hdfFile = self._getOutHdfCoordsStack(tsId)
         args = ' --unstacking'
         args += ' %s' % hdfFile
-        args += ' %s' % self._getExtraPath(pwutils.replaceBaseExt(hdfFile, 'mrc'))
+        args += ' %s' % join(resultsDir, pwutils.replaceBaseExt(hdfFile, 'mrc'))
         args += ' --apix %.3f' % self.getOutputSamplingRate()
         self.runJob(program, args)
         cleanPattern(hdfFile)
@@ -327,15 +331,15 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
         :param scaleFactor: factor between the inputSet and the tomogram
         """
         tsId = tomo.getTsId()
-        logger.info(cyanStr('Registegring the subtomograms from tomogram %s' % tsId))
-        subtomoFileList = sorted(glob.glob(self._getExtraPath(f'{tsId}*.mrc')))
+        logger.info(cyanStr('Registering the subtomograms from tomogram %s' % tsId))
+        subtomoFileList = sorted(glob.glob(join(self._getUnstackedResultsDir(tsId), '*.mrc')))
         for idx, subtomoFile in enumerate(subtomoFileList):
             # logger.info("Registering subtomogram %s - %s" % (counter, subtomoFile))
             subtomogram = SubTomogram()
             transform = Transform()
             subtomogram.setLocation(subtomoFile)
             currentItem = inputSet[idx]
-            coord = EmanProtTomoExtraction._getCoordinateFromItem(currentItem)
+            coord = self._getCoordinateFromItem(currentItem)
 
             #########################################################################################
             # EMAN work with the coordinates as integers, so we round them and add the decimal part
@@ -350,7 +354,7 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             coord.setY(roundCoordY, SCIPION)
             coord.setZ(roundCoordZ, SCIPION)
             subtomogram.setCoordinate3D(coord)
-            trMatrix = copy.copy(EmanProtTomoExtraction._getMatrixFromItem(currentItem))
+            trMatrix = copy.copy(self._getMatrixFromItem(currentItem))
             shifts = np.array([trMatrix[0, 3], trMatrix[1, 3], trMatrix[2, 3]])
             scaledShifts = scaleFactor * shifts
             trMatrix[0, 3] = scaledShifts[0] + roundCoordX - origX
@@ -389,3 +393,6 @@ class EmanProtTomoExtraction(EMProtocol, ProtTomoBase):
             self._defineOutputs(**{OutputExtraction.subtomograms.name: outSubtomos})
             self._defineSourceRelation(self._getSetOfCoordinates(), outSubtomos)
         return outSubtomos
+
+    def _getUnstackedResultsDir(self, tsId: str) -> str:
+        return self._getExtraPath(tsId)
