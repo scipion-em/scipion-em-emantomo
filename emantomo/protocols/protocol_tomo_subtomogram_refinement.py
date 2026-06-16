@@ -50,17 +50,187 @@ class EmanTomoRefinementOutputs(enum.Enum):
 
 class EmanProtTomoRefinement(ProtEmantomoBase):
     """
-    This protocol wraps *e2spt_refine.py* EMAN2 program.
+    Performs iterative subtomogram refinement and averaging using EMAN2.
+    The protocol refines a collection of subtomograms against a reference
+    volume in order to improve structural consistency, recover higher
+    resolution information, and generate biologically meaningful averaged
+    reconstructions from heterogeneous tomographic particle datasets.
 
-    Protocol to performs a conventional iterative subtomogram averaging
-    using the full set of particles.
-    It will take a set of subtomograms (particles) and a subtomogram(reference,
-    potentially coming from the initial model protocol)
-    and 3D reconstruct a subtomogram.
-    It also builds a set of subtomograms that contains the original particles
-    plus the score, coverage and align matrix per subtomogram .
+    AI Generated:
+
+    Subtomogram Refinement (EmanProtTomoRefinement) - User Manual
+        Overview
+
+        This protocol performs iterative subtomogram refinement and
+        averaging within a cryo-electron tomography workflow using EMAN2.
+        Its primary objective is to align and average individual
+        subtomograms so that common structural information is reinforced
+        while noise and random variability are progressively reduced.
+
+        In cryo-electron tomography, subtomogram averaging is one of the
+        most important strategies for improving the resolution of repeated
+        macromolecular complexes embedded within tomograms. Because each
+        subtomogram typically contains limited signal and substantial
+        missing-wedge distortions, iterative refinement becomes essential
+        for recovering biologically interpretable structures.
+
+        Biological Purpose
+
+        From a biological perspective, this protocol is designed for the
+        structural analysis of macromolecular assemblies observed directly
+        in cellular or native environments. Typical applications include
+        ribosomes, membrane complexes, viral components, cytoskeletal
+        assemblies, and other repeated particles extracted from tomograms.
+
+        The protocol allows refinement of particle orientations and
+        positions relative to an initial reference map. As refinement
+        progresses, the averaged reconstruction becomes increasingly
+        representative of the underlying biological structure while random
+        noise and alignment inaccuracies are minimized.
+
+        Inputs and General Workflow
+
+        The protocol requires a set of subtomograms together with an
+        initial reference volume. The reference serves as the starting
+        structural hypothesis that guides alignment and averaging during
+        iterative refinement.
+
+        In most workflows, the subtomograms originate from particle
+        extraction procedures performed on reconstructed tomograms. The
+        reference may come from an initial model, a low-resolution average,
+        a previously refined structure, or an external reconstruction.
+
+        During execution, the protocol repeatedly aligns subtomograms to
+        the reference, reconstructs updated averages, and evaluates the
+        consistency of the particle population. Through multiple iterations,
+        the refinement progressively improves the structural coherence of
+        the dataset.
+
+        Iterative Refinement Strategy
+
+        Iterative refinement is central to subtomogram averaging because
+        the quality of alignment strongly determines the final achievable
+        resolution. Each iteration attempts to improve angular assignment,
+        translational positioning, and consistency between particles.
+
+        The number of refinement iterations should be selected according
+        to dataset quality and structural complexity. Too few iterations
+        may produce under-refined maps, whereas excessive refinement can
+        increase the risk of overfitting or amplification of noise.
+
+        In practice, users commonly begin with conservative settings and
+        inspect the evolution of the reconstruction quality before extending
+        the refinement further.
+
+        Particle Selection and Data Quality
+
+        The protocol includes options for selecting only a fraction of the
+        particle population during refinement. This is biologically useful
+        because low-quality particles, damaged complexes, or strongly
+        heterogeneous conformations can negatively affect the final average.
+
+        Keeping only the most consistent particles often improves the
+        interpretability of the reconstruction, especially for datasets
+        containing substantial variability or low signal-to-noise ratios.
+
+        From a biological standpoint, particle exclusion should always be
+        interpreted carefully. Excessively aggressive filtering may remove
+        rare but meaningful structural states, whereas insufficient filtering
+        may blur the reconstruction through structural heterogeneity.
+
+        Symmetry and Structural Constraints
+
+        Symmetry definition is one of the most influential parameters in
+        subtomogram refinement. When the biological assembly possesses known
+        rotational or point-group symmetry, applying the appropriate
+        symmetry can substantially improve the effective signal and the
+        quality of the final reconstruction.
+
+        However, incorrect symmetry assignment can introduce severe
+        structural artifacts and misleading biological interpretations.
+        Symmetry should therefore only be imposed when supported by
+        experimental evidence or prior structural knowledge.
+
+        The protocol also supports masking strategies that focus refinement
+        on biologically relevant regions of the structure. Proper masking
+        can improve alignment stability and reduce the influence of solvent
+        noise or flexible peripheral domains.
+
+        Gold-Standard Refinement
+
+        The protocol supports gold-standard refinement strategies intended
+        to reduce overfitting and provide more reliable resolution
+        estimation. In this approach, the dataset is divided into
+        independent subsets that are refined separately before comparison.
+
+        Gold-standard refinement is particularly important for publication-
+        quality reconstructions because it provides a more rigorous
+        assessment of structural reproducibility and resolution.
+
+        Local filtering options may also be used to improve interpretability
+        in regions with variable local resolution. Flexible domains or
+        poorly sampled regions frequently benefit from adaptive filtering
+        approaches.
+
+        Tilt Geometry and Missing Wedge Effects
+
+        Cryo-electron tomography data are intrinsically affected by missing
+        wedge artifacts due to limited angular acquisition ranges. The
+        protocol allows explicit control over tilt limitations so that
+        reconstruction and refinement remain consistent with the geometry
+        of the original acquisition.
+
+        From a biological perspective, understanding missing wedge effects
+        is essential because anisotropic resolution may influence the
+        apparent shape and visibility of structural features. Careful
+        interpretation is therefore required, especially for elongated or
+        membrane-associated complexes.
+
+        Outputs and Interpretation
+
+        The protocol generates a refined subtomogram average representing
+        the consensus structure derived from the aligned particle set. This
+        average can be used for visualization, segmentation, interpretation,
+        docking, or further high-resolution analysis.
+
+        The workflow also produces updated subtomogram metadata containing
+        refined alignment information and particle quality measures. These
+        outputs are valuable for downstream classification, particle
+        cleaning, or additional refinement cycles.
+
+        Fourier shell correlation curves are additionally generated to
+        support resolution estimation and reconstruction quality assessment.
+        These measurements help determine the reliability and interpretability
+        of structural features observed in the final average.
+
+        Practical Recommendations
+
+        In practical workflows, it is often beneficial to begin refinement
+        using a low-resolution reference and relatively conservative angular
+        searches. Once alignment stabilizes, refinement parameters can be
+        progressively tightened to improve structural detail.
+
+        For heterogeneous datasets, combining careful particle selection
+        with biologically meaningful masking usually produces the largest
+        improvements in map quality. Conversely, applying overly restrictive
+        constraints too early may bias the reconstruction or suppress real
+        structural variability.
+
+        Users should visually inspect intermediate averages throughout the
+        refinement process to ensure that the reconstruction evolves toward
+        biologically plausible conformations.
+
+        Final Perspective
+
+        Subtomogram refinement is one of the central computational steps in
+        cryo-electron tomography because it transforms noisy individual
+        particles into interpretable structural averages. Successful
+        refinement depends not only on computational optimization, but also
+        on biologically informed decisions regarding symmetry, masking,
+        particle selection, and structural heterogeneity. Careful refinement
+        strategy and critical interpretation are therefore essential for
+        obtaining reliable in situ structural information.
     """
-
     _outputClassName = 'SubTomogramRefinement'
     _label = 'subtomogram refinement'
     _possibleOutputs = EmanTomoRefinementOutputs

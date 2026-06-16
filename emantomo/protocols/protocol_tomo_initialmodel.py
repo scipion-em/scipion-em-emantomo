@@ -40,12 +40,173 @@ class OutputsInitModel(Enum):
 
 class EmanProtTomoInitialModel(EMProtocol, ProtTomoBase):
     """
-    This protocol wraps *e2spt_sgd.py* EMAN2 program.
+    Generates an initial 3D subtomogram model from a collection of aligned or non-aligned subtomograms using stochastic gradient descent strategies implemented in EMAN2. The protocol is intended for cryo-electron tomography workflows where an initial reference structure is required before high-resolution refinement. It produces a biologically meaningful starting map that can later be refined through subtomogram averaging and iterative alignment procedures.
 
-    It will take a set of subtomograms (particles) and a subtomogram(reference)
-    and build a subtomogram suitable for use as initial models in tomography.
-    It also builds a set of subtomograms that contains the original particles
-    plus the score, coverage and align matrix per subtomogram .
+    AI Generated:
+
+    Initial Model Generation (EmanProtTomoInitialModel) - User Manual
+        Overview
+
+        The Initial Model Generation protocol creates a low- to medium-resolution
+        starting structure from a set of subtomograms. In subtomogram averaging
+        workflows, obtaining a reliable initial model is one of the most critical
+        steps because the quality of the starting reference strongly influences the
+        success of downstream refinement and classification procedures.
+
+        The protocol is designed for situations in which the user has extracted
+        subtomograms representing repeated copies of the same biological object
+        within tomograms. Typical applications include macromolecular complexes,
+        membrane-associated assemblies, viral components, ribosomes, or other
+        cellular structures studied directly in situ. The generated model serves
+        as an unbiased or weakly biased approximation of the underlying structure
+        and provides the foundation for subsequent refinement stages.
+
+        Inputs and Biological Context
+
+        The protocol requires a set of subtomograms as the primary input. These
+        particles should ideally represent the same molecular species or conformational
+        state. Excessive heterogeneity within the dataset can reduce the quality of
+        the generated model and may lead to blurred or biologically ambiguous
+        structures.
+
+        An optional reference volume can also be provided. This reference is useful
+        when prior structural knowledge exists or when the user wants to guide the
+        reconstruction toward a known structural state. In exploratory analyses,
+        however, users may prefer to avoid a strong reference in order to minimize
+        model bias and allow the reconstruction to emerge more directly from the data.
+
+        Since subtomogram averaging is highly sensitive to voxel size consistency
+        and box dimensions, all inputs should share compatible sampling rates and
+        dimensions. Mismatched geometry between particles, masks, and references
+        may compromise reconstruction quality and biological interpretability.
+
+        Symmetry Considerations
+
+        Symmetry can play an important role in improving the quality of the initial
+        model. Biological assemblies with known rotational or point-group symmetry,
+        such as viral capsids or oligomeric protein complexes, often benefit from
+        symmetry application because averaging equivalent views enhances signal and
+        suppresses noise.
+
+        Nevertheless, symmetry should only be applied when biologically justified.
+        Incorrect symmetry assumptions may artificially distort the reconstruction
+        and hide meaningful asymmetric features. For uncertain systems, beginning
+        with no symmetry is often the safest strategy.
+
+        Masking and Structural Focus
+
+        The protocol optionally allows the use of a three-dimensional mask. From a
+        biological perspective, masking is highly valuable because it restricts the
+        reconstruction focus to the region of interest while suppressing unrelated
+        density and surrounding noise.
+
+        This becomes especially important for membrane proteins, flexible complexes,
+        or crowded cellular environments where neighboring densities may interfere
+        with convergence. A carefully designed mask centered on the stable structural
+        core generally improves robustness and produces more interpretable initial
+        maps.
+
+        Excessively tight masks, however, may remove biologically relevant regions,
+        whereas overly broad masks may fail to suppress background noise effectively.
+        Selecting an appropriate mask therefore requires balancing structural focus
+        with preservation of meaningful density.
+
+        Stochastic Gradient Descent Reconstruction
+
+        The reconstruction strategy is based on stochastic gradient descent methods,
+        which iteratively improve the model using subsets of particles across multiple
+        optimization cycles. This approach is computationally efficient and generally
+        well suited for large cryo-electron tomography datasets.
+
+        The batch size determines how many subtomograms contribute simultaneously
+        during each optimization update. Larger batch sizes may improve stability
+        and convergence behavior but also require greater computational resources.
+        Smaller batches introduce more stochastic variability, which can sometimes
+        help avoid convergence toward suboptimal solutions.
+
+        The learning rate controls how aggressively the reconstruction evolves during
+        optimization. Conservative values typically produce more stable convergence,
+        whereas excessively large values may destabilize the reconstruction process.
+        In most biological workflows, moderate default settings provide a good balance
+        between stability and reconstruction speed.
+
+        Iterative Refinement and Filtering
+
+        The number of iterations and batches determines the total extent of optimization.
+        Increasing these parameters may improve structural consistency and map quality,
+        particularly for noisy datasets, but also increases runtime and computational
+        demand.
+
+        Frequency filtering can be applied between iterations to stabilize the early
+        stages of reconstruction. This is particularly useful when dealing with highly
+        noisy subtomograms or low particle counts. By emphasizing low-resolution
+        structural information during early optimization, the protocol promotes the
+        emergence of globally consistent shapes before attempting to recover finer
+        details.
+
+        Fourier Space Optimization
+
+        The protocol optionally performs optimization in Fourier space. For many
+        cryo-electron tomography datasets, Fourier-based optimization improves
+        computational efficiency and may enhance convergence stability during early
+        model generation stages.
+
+        From a biological perspective, the main objective remains the recovery of
+        reliable large-scale structural organization rather than immediate recovery
+        of fine high-resolution details. Initial models are expected to represent
+        the general architecture of the complex rather than final atomic-quality maps.
+
+        Particle Shrinking and Computational Efficiency
+
+        The protocol allows downsampling of subtomograms before reconstruction. This
+        option is often beneficial for very large box sizes because initial model
+        generation primarily depends on recovering broad structural features rather
+        than fine detail.
+
+        Shrinking substantially reduces computational cost and may improve convergence
+        speed. In practical biological workflows, users frequently begin with reduced
+        particle sizes during initial model generation and later return to the full
+        resolution data during refinement.
+
+        Outputs and Interpretation
+
+        The main output is an averaged subtomogram volume representing the reconstructed
+        initial model. This volume can subsequently be used as the reference for
+        subtomogram refinement, alignment optimization, or classification workflows.
+
+        Biologically, the resulting structure should be interpreted as an approximate
+        consensus representation of the input particles. Flexible regions may appear
+        blurred, and heterogeneous populations may produce partially averaged features.
+        Visual inspection and iterative refinement are therefore essential for assessing
+        model quality and biological plausibility.
+
+        Practical Recommendations
+
+        In most practical tomography workflows, it is advisable to begin with a clean,
+        homogeneous subset of particles whenever possible. Strong heterogeneity often
+        complicates convergence and reduces interpretability of the resulting model.
+
+        When prior structural information is limited, users commonly start without a
+        reference and avoid imposing symmetry. Once a stable initial model is obtained,
+        more advanced refinement strategies can progressively improve resolution and
+        structural accuracy.
+
+        For noisy datasets, combining moderate filtering, appropriate masking, and
+        particle shrinking often yields the most stable reconstructions. Users should
+        visually inspect intermediate and final maps to confirm that the emerging
+        structure remains biologically meaningful.
+
+        Final Perspective
+
+        Initial model generation is one of the foundational steps in subtomogram
+        averaging because it establishes the structural framework used throughout
+        later refinement procedures. Reliable initial models improve alignment
+        stability, reduce the risk of reconstruction bias, and increase the likelihood
+        of recovering biologically accurate structures from noisy tomographic data.
+
+        Successful use of this protocol depends on careful dataset preparation,
+        thoughtful symmetry selection, biologically appropriate masking, and realistic
+        expectations regarding the low-resolution nature of early-stage reconstructions.
     """
 
     _label = 'Initial model'
