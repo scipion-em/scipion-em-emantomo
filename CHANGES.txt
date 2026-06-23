@@ -1,3 +1,9 @@
+v3.4.2:
+ Users:
+  - Fix - protocol crop tomograms now sets the sampling rate properly in the file header.
+  - Add `tsId` property to `SubTomogram` and sync with coordinate data in extraction.
+  - Generate the unstacked subtomograms in a different subfolder for each subtomogram to prevent wrong file
+    listing using glob when both working in parallel and/or tsId that are substring of other tsIds.
 v3.4.1: deploy test.
 v3.4.0:
  Users:
