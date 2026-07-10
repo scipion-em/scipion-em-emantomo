@@ -1,3 +1,4 @@
+v3.4.2: Allowing I or icos for icosahedral symmetry
 v3.4.1: deploy test.
 v3.4.0:
  Users:
