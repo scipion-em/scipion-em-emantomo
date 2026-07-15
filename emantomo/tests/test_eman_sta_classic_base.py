@@ -23,9 +23,6 @@
 # *  e-mail address 'scipion@cnb.csic.es'
 # *
 # **************************************************************************
-from xmipp3.constants import MASK3D_CYLINDER
-from xmipp3.protocols import XmippProtCreateMask3D
-from xmipp3.protocols.protocol_preprocess.protocol_create_mask3d import SOURCE_GEOMETRY
 from emantomo.protocols import EmanProtTomoExtraction, EmanProtSubTomoAverage
 from emantomo.protocols.protocol_average_subtomos import OutputsAverageSubtomos
 from emantomo.protocols.protocol_extraction_from_tomo import SAME_AS_PICKING, OutputExtraction, OTHER
@@ -69,24 +66,6 @@ class TestEmantomoStaClassicBase(TestBaseCentralizedLayer):
                                                            boxSize=cls.binnedBoxSize)
 
     # --------------- RUNS functions -----------------------
-    @classmethod
-    def runCreate3dMask(cls):
-        print(magentaStr("\n==> Generating the 3D mask:"))
-        protCreateParticleMask = cls.newProtocol(XmippProtCreateMask3D,
-                                                 source=SOURCE_GEOMETRY,
-                                                 samplingRate=cls.binnedSRate,
-                                                 size=cls.binnedBoxSize,
-                                                 geo=MASK3D_CYLINDER,
-                                                 radius=6,
-                                                 shiftCenter=True,
-                                                 centerZ=3,
-                                                 height=15,
-                                                 doSmooth=True)
-        cls.launchProtocol(protCreateParticleMask)
-        genMask = getattr(protCreateParticleMask, 'outputMask', None)
-        cls.assertIsNotNone(genMask, 'the 3D mask was not generated')
-        return genMask
-
     @classmethod
     def runImportTomograms(cls):
         # Import tomograms

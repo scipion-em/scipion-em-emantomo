@@ -112,6 +112,7 @@ class EmanParticle(SubTomogram):
         self._stack3dHdf = String(stack3dHdf)
         self._emanScore = Float(emanScore)
         self._absIndex = Integer(absIndex)
+        self._tsId = String()
 
     def setInfoJson(self, val):
         self._infoJson.set(val)
@@ -134,6 +135,9 @@ class EmanParticle(SubTomogram):
     def setAbsIndex(self, val):
         self._absIndex.set(val)
 
+    def setTsId(self, val):
+        self._tsId.set(val)
+
     def getInfoJson(self):
         return self._infoJson.get()
 
@@ -154,6 +158,9 @@ class EmanParticle(SubTomogram):
 
     def getAbsIndex(self):
         return self._absIndex.get()
+
+    def getTsId(self):
+        return self._tsId.get()
 
 
 class EmanSetOfParticles(SetOfSubTomograms):
