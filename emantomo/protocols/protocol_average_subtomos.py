@@ -129,8 +129,14 @@ class EmanProtSubTomoAverage(ProtEmantomoBase):
         self.runJob(program, args, cwd=self._getExtraPath())
 
     def computeAverageStep(self):
+        symType = self.symmetry.get()
+        if symType =='I' or symType =='i':
+            symType = 'icos'
+        if symType =='0':
+            symType = 'oct'
+
         args = "--keep 1 --wedgesigma=%f --sym %s --threads %i " % (self.msWedge.get(),
-                                                                    self.symmetry.get(),
+                                                                    symType,
                                                                     self.binThreads.get())
         if self.skipPostProc.get():
             args += '--skippostp '

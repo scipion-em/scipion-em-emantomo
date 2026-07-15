@@ -1,3 +1,4 @@
+v3.4.3: Allowing I or icos for icosahedral symmetry
 v3.4.2:
  Users:
   - Fix - protocol crop tomograms now sets the sampling rate properly in the file header.
