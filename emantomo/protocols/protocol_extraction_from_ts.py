@@ -55,7 +55,201 @@ class outputObjects(Enum):
 
 
 class EmanProtTSExtraction(ProtEmantomoBase):
-    """Extract 2D subtilt particles from the tilt series, and reconstruct 3D subvolumes."""
+    """
+    Extracts 2D tilt-series particle projections and reconstructs 3D subtomograms from cryo-electron tomography data.
+
+    AI Generated:
+
+    Extraction from Tilt Series (EmanProtTSExtraction) — User Manual
+        Overview
+
+        The Extraction from Tilt Series protocol is designed to generate
+        subtomograms from cryo-electron tomography experiments by extracting
+        particle projections directly from aligned tilt series and reconstructing
+        them into individual 3D subvolumes. The protocol integrates tomography
+        geometry, contrast transfer information, and particle coordinates in
+        order to produce particle-centered reconstructions suitable for
+        downstream subtomogram averaging, classification, or structural analysis.
+
+        In practical cryo-ET workflows, this protocol is commonly used after
+        tomogram reconstruction and particle picking. Users typically begin with
+        either a set of 3D particle coordinates or an existing set of
+        subtomograms associated with tomographic volumes. The protocol then
+        revisits the original tilt-series data to extract the corresponding 2D
+        particle images and reconstruct cleaner or standardized 3D particles
+        using EMAN tomography tools.
+
+        Biological Purpose and Typical Applications
+
+        Subtomogram extraction is an essential step in structural analysis of
+        macromolecular complexes in situ. By reconstructing individual particles
+        from the original tilt images, the protocol preserves experimental
+        geometry and allows subsequent averaging workflows to improve signal and
+        reveal structural details.
+
+        This approach is particularly valuable when studying heterogeneous
+        assemblies, membrane-associated complexes, viral particles, ribosomes,
+        cytoskeletal filaments, or macromolecular machinery embedded in crowded
+        cellular environments. Because the extraction is tied directly to the
+        original tilt-series geometry, the resulting particles maintain spatial
+        consistency with the tomographic acquisition.
+
+        Inputs and Experimental Consistency
+
+        The protocol requires three principal inputs: particle coordinates or
+        existing subtomograms, aligned tilt series, and corresponding CTF tilt
+        series information. These datasets must refer to the same tomographic
+        acquisitions. Correct correspondence between coordinates, tilt series,
+        and CTF estimations is essential for successful reconstruction.
+
+        The tilt series should already contain alignment information and should
+        normally represent non-interpolated aligned data. Using improperly
+        aligned tilt series may introduce geometric inconsistencies that reduce
+        reconstruction quality or generate inaccurate particle orientations.
+
+        Coordinates may originate from manual picking, template matching,
+        segmentation workflows, or previous subtomogram processing steps. When
+        subtomograms are provided as input, the protocol reuses their associated
+        coordinates to maintain spatial continuity.
+
+        Particle Size and Binning
+
+        One of the most important parameters is the extraction box size, which
+        determines the physical region reconstructed around each particle. The
+        selected box should fully contain the biological structure of interest
+        together with enough surrounding contextual density to avoid edge
+        artifacts.
+
+        The protocol also allows particle binning during extraction. Binning
+        reduces image dimensions and computational cost while increasing signal-
+        to-noise ratio. This is especially useful during exploratory analyses or
+        when processing large datasets. Smaller binned particles are faster to
+        reconstruct and easier to align, although excessive binning may remove
+        high-resolution information.
+
+        In biological practice, moderate binning is commonly used during initial
+        subtomogram averaging iterations, whereas final refinements often employ
+        lower binning or fully unbinned particles.
+
+        Tilt Selection and Data Quality
+
+        The protocol includes options to restrict the angular range of the tilt
+        images used during reconstruction. Excluding extremely tilted images may
+        improve reconstruction stability because very high tilts usually contain
+        lower signal quality, stronger distortions, and increased effective
+        sample thickness.
+
+        Users may also retain only a fraction of the best tilt images according
+        to reconstruction quality criteria. This selective approach can improve
+        particle consistency, particularly in datasets affected by motion,
+        contamination, charging, or variable acquisition quality.
+
+        From a biological perspective, careful tilt selection can substantially
+        improve the interpretability of flexible or low-contrast complexes.
+
+        Removal of Fiducials and High-Contrast Features
+
+        Cryo-electron tomography datasets frequently contain fiducial gold beads
+        or other highly contrasted contaminants used during tilt-series
+        alignment. The protocol provides a contrast-based filtering mechanism to
+        exclude problematic 2D particle projections that overlap with such
+        features.
+
+        This option is especially useful when particles are located close to
+        fiducials or dense cellular structures. Removing contaminated
+        projections can significantly improve the quality of the reconstructed
+        subtomograms and reduce artifacts during averaging.
+
+        However, overly aggressive filtering may discard valid particle data and
+        reduce particle completeness. Biological users should therefore inspect
+        reconstruction quality carefully when enabling this feature.
+
+        Padding and Particle Isolation
+
+        The extraction workflow optionally supports additional padding around
+        particle projections. Padding may help when particles are deeply buried
+        within crowded environments or neighboring densities interfere with
+        reconstruction quality.
+
+        Increasing padding improves contextual isolation of the particle but also
+        increases memory consumption and computational cost. In practice, modest
+        padding values are often sufficient for most cellular cryo-ET datasets.
+
+        Coordinate Consistency and Geometric Accuracy
+
+        During processing, the protocol preserves the relationship between
+        particle coordinates, tomograms, and reconstructed subtomograms. This is
+        particularly important for workflows involving particle transformations,
+        iterative refinements, or coordinate-based biological interpretation.
+
+        The protocol also manages coordinate scaling associated with binning and
+        tilt-series sampling differences. This ensures that reconstructed
+        particles remain geometrically consistent with the original tomographic
+        coordinate system.
+
+        In addition, optional inversion of the tomogram Z axis is available to
+        accommodate differences between reconstruction conventions used by
+        various tomography software packages.
+
+        Landmark and Projection Information
+
+        Besides producing reconstructed subtomograms, the protocol generates
+        landmark-style projection information derived from the extracted 2D tilt
+        particles. These landmarks are mainly intended for visualization,
+        validation, and inspection purposes.
+
+        Such projection models can help users verify that particle extraction
+        correctly follows the experimental geometry across the tilt series and
+        can reveal problematic particles, missing projections, or alignment
+        inconsistencies.
+
+        Outputs and Downstream Analysis
+
+        The primary output is a set of reconstructed subtomograms suitable for
+        downstream cryo-ET analysis. These particles can subsequently be used
+        for subtomogram alignment, classification, averaging, or structural
+        interpretation within larger tomography workflows.
+
+        Each output particle preserves its relationship to the originating tilt
+        series and tomogram, facilitating traceability and reproducibility in
+        large-scale studies.
+
+        Additional visualization-oriented outputs containing projection landmark
+        information are also generated to support quality assessment and data
+        inspection.
+
+        Practical Recommendations
+
+        For routine cryo-ET processing, users should begin with conservative
+        binning and moderate box sizes while validating reconstruction quality
+        visually. If particles are located in crowded cellular environments,
+        enabling padding and carefully tuning fiducial filtering often improves
+        downstream averaging.
+
+        When processing heterogeneous or flexible assemblies, maintaining
+        accurate coordinate consistency is especially important because small
+        geometric mismatches can strongly affect alignment quality in later
+        subtomogram averaging steps.
+
+        Biological interpretation should always consider the missing wedge,
+        variable tilt-image quality, and the possibility of reconstruction
+        artifacts introduced by incomplete angular coverage.
+
+        Final Perspective
+
+        The Extraction from Tilt Series protocol provides a complete bridge
+        between tomographic particle coordinates and reconstructed subtomograms.
+        By combining experimental geometry, tilt-series alignment, CTF
+        information, and particle extraction into a unified workflow, the
+        protocol enables robust generation of subtomograms suitable for modern
+        in situ structural biology analyses.
+
+        In cryo-electron tomography workflows, accurate extraction is a critical
+        prerequisite for meaningful subtomogram averaging and reliable biological
+        interpretation. Careful selection of extraction parameters, tilt-image
+        quality, and particle geometry therefore has a direct impact on the
+        final structural results.
+    """
 
     _label = 'Extraction from TS'
     _possibleOutputs = outputObjects

@@ -54,14 +54,167 @@ class MWDataObj:
 
 class EmanProtTomoFillMW(ProtEmantomoBase):
     """
-    This protocol is a wrapper of *e2tomo_mwfill*.
+    Restores missing wedge information in tomographic reconstructions using a
+    deep learning strategy based on EMAN2 tools. The protocol improves the
+    interpretability of tomograms affected by incomplete angular sampling by
+    generating more isotropic structural information across different viewing
+    directions.
 
-    This program can be used to fill in the missing wedge of a SetOfTomograms with useful information
-    based on a neural network.
+    AI Generated:
 
-    Fill the missing wedge of Tomograms with somewhat meaningful information using a deep learning based tool.
-    The idea is similar to a "style transform" that makes the features in the x-z 2D slice views similar to
-    the x-y slice views.'
+    Tomogram Missing Wedge Filling (EmanProtTomoFillMW) — User Manual
+        Overview
+
+        The Tomogram Missing Wedge Filling protocol is designed to reduce the
+        visual and structural artifacts produced by the missing wedge effect in
+        cryo-electron tomography datasets. In tomographic reconstruction, the
+        limited tilt range imposed during acquisition leaves regions of Fourier
+        space unsampled, creating anisotropic resolution and distortions that
+        can complicate visualization, segmentation, interpretation, and
+        downstream analysis.
+
+        This protocol applies a deep learning based strategy that attempts to
+        infer biologically meaningful information within the missing wedge
+        region. Rather than performing a classical reconstruction refinement,
+        the method learns structural patterns from existing tomographic content
+        and transfers this information into poorly sampled orientations. The
+        resulting tomograms often display improved continuity of membranes,
+        filaments, macromolecular assemblies, and cellular densities.
+
+        Biological Purpose and Typical Applications
+
+        In biological cryo-electron tomography workflows, the missing wedge can
+        strongly distort elongated or directional structures. Membranes may
+        appear artificially stretched, filaments can become fragmented, and
+        structural interpretation along the Z direction may become unreliable.
+        This protocol is intended to alleviate these limitations and provide
+        tomograms that are easier to inspect visually and more suitable for
+        segmentation, annotation, particle picking, or qualitative biological
+        interpretation.
+
+        Typical applications include cellular tomography, membrane remodeling
+        studies, cytoskeletal organization, organelle visualization, and
+        exploratory subtomogram analysis. The protocol is particularly useful
+        when downstream tasks depend heavily on visual continuity and isotropic
+        appearance of structural features.
+
+        General Workflow
+
+        The protocol takes a set of tomograms as input. One tomogram from the
+        dataset is automatically selected for neural network training, and the
+        learned representation is subsequently applied to the remaining
+        tomograms in the set. This approach assumes that the tomograms share
+        sufficiently similar imaging characteristics and biological content.
+
+        During training, the method extracts many small volumetric regions from
+        the selected tomogram. These examples are used to learn correlations
+        between well-sampled and poorly sampled directions. Once training is
+        completed, the model predicts improved information for the missing wedge
+        regions of all tomograms in the dataset.
+
+        The protocol preserves the original tomographic geometry and sampling
+        while generating corrected output volumes suitable for visualization and
+        further processing.
+
+        Training Volume Selection
+
+        Because only one tomogram is used for training, choosing a homogeneous
+        dataset is biologically important. The best results are usually obtained
+        when all tomograms originate from similar acquisition conditions,
+        contain related biological structures, and share comparable contrast and
+        noise properties.
+
+        If the dataset contains highly heterogeneous specimens, the learned
+        representation may not generalize well across all tomograms. In such
+        cases, splitting the dataset into biologically consistent subsets before
+        processing may improve the quality of the results.
+
+        Box Size and Structural Context
+
+        The box size parameter determines the size of the volumetric regions
+        used during neural network training. Smaller box sizes focus on local
+        texture and fine structural details, whereas larger box sizes capture
+        broader contextual information and extended biological features.
+
+        For compact macromolecular environments, moderate box sizes are often
+        sufficient. Larger structures such as membranes, vesicles, or filament
+        networks may benefit from larger contextual windows. Excessively large
+        boxes, however, may increase computational cost and reduce training
+        efficiency.
+
+        Number of Samples and Learning Stability
+
+        The number of extracted samples influences how extensively the protocol
+        explores structural variability within the tomogram. Increasing the
+        number of samples generally improves robustness and representation of
+        biological diversity, particularly in crowded cellular environments.
+
+        However, larger sample counts also increase processing time and GPU
+        memory usage. In many routine workflows, intermediate values provide a
+        practical balance between reconstruction quality and computational cost.
+
+        Learning Rate Considerations
+
+        The learning rate controls how rapidly the neural network adapts during
+        optimization. Conservative learning rates typically produce more stable
+        and biologically coherent results, especially in noisy tomographic
+        datasets. Larger values may accelerate convergence but can also produce
+        unstable or overly artificial reconstructions.
+
+        For most biological applications, the default configuration is a
+        reasonable starting point. Advanced users may adjust the learning rate
+        when working with particularly noisy data or highly specialized imaging
+        conditions.
+
+        GPU Usage and Computational Requirements
+
+        The protocol relies on GPU acceleration for neural network training and
+        prediction. Processing speed depends strongly on GPU memory and hardware
+        capabilities. Since training and inference can be computationally
+        intensive, users should ensure that sufficient GPU resources are
+        available before execution.
+
+        The protocol is intended primarily for exploratory enhancement and
+        interpretation rather than direct quantitative reconstruction accuracy.
+        Biological conclusions should therefore always be validated against the
+        original tomograms whenever possible.
+
+        Outputs and Interpretation
+
+        The protocol produces a new set of tomograms with reduced missing wedge
+        artifacts. These corrected tomograms retain the metadata and structural
+        organization of the original dataset while presenting more isotropic
+        visual information.
+
+        The outputs are often easier to interpret visually and may improve
+        downstream segmentation or annotation tasks. Nevertheless, users should
+        remember that the restored information is computationally inferred
+        rather than experimentally measured. Features introduced by the neural
+        network should therefore be interpreted cautiously, especially in
+        regions with very limited original information.
+
+        Practical Recommendations
+
+        In routine biological practice, it is advisable to begin with default
+        parameters and visually compare the corrected tomograms against the
+        original data. The protocol is particularly valuable when the missing
+        wedge strongly interferes with visualization of membranes, filaments,
+        or directional assemblies.
+
+        For homogeneous datasets acquired under stable conditions, the protocol
+        can substantially improve interpretability. In contrast, highly diverse
+        datasets may require separate processing groups to avoid inconsistent
+        predictions.
+
+        Final Perspective
+
+        Missing wedge correction represents an important complementary tool in
+        cryo-electron tomography analysis. Although it does not replace the
+        original experimental information, it can significantly enhance the
+        usability and interpretability of tomographic datasets. Careful
+        biological validation, comparison with raw reconstructions, and
+        thoughtful interpretation remain essential for reliable scientific
+        conclusions.
     """
     _label = 'tomo fill missing wedge'
     _possibleOutputs = fillMWOutputs

@@ -47,8 +47,170 @@ class EmanMultiRefineNewOutputs(Enum):
 
 class EmanProtMultiRefinementNew(ProtEmantomoBase):
     """
-    This protocol wraps *e2spt_refinemulti_new.py* EMAN2 program.
-    Multi-reference classification for the new (2021) SPT refinement protocol.
+    Performs multi-reference subtomogram classification and refinement using
+    the EMAN2 subtomogram averaging framework. The protocol is designed to
+    separate heterogeneous particle populations into structurally meaningful
+    classes while preserving alignment information and producing refined
+    three-dimensional class averages. It is particularly useful in cryo-electron
+    tomography workflows where multiple conformational states, compositional
+    differences, or flexible assemblies coexist within the same dataset.
+
+    AI Generated:
+
+    Multi-reference Classification (EmanProtMultiRefinementNew) — User Manual
+        Overview
+
+        The Multi-reference Classification protocol performs iterative
+        classification and refinement of subtomograms using multiple structural
+        references. Its main purpose is to identify and separate distinct
+        structural states within heterogeneous cryo-electron tomography datasets.
+        Instead of producing a single consensus average, the protocol organizes
+        particles into biologically interpretable groups that each converge
+        toward an independent three-dimensional reconstruction.
+
+        In practical cryo-ET studies, biological samples often contain multiple
+        conformations, assembly intermediates, ligand-bound states, or damaged
+        particles. Multi-reference refinement allows these populations to be
+        separated computationally so that each state can be analyzed
+        independently. This is especially important for flexible complexes,
+        molecular machines, membrane-associated assemblies, and cellular
+        structures displaying continuous or discrete variability.
+
+        Inputs and Classification Strategy
+
+        The protocol requires a set of aligned subtomograms as the primary
+        input. These particles are expected to already possess approximate
+        orientations and shifts from previous subtomogram refinement steps.
+        Optionally, one or more reference volumes may be provided to guide the
+        classification process.
+
+        The protocol supports several biologically relevant workflows. When no
+        references are supplied, the classification can begin from internally
+        generated initial averages, allowing exploratory analysis of unknown
+        heterogeneity. When a single reference is supplied together with several
+        target classes, the protocol generates multiple competing initial models
+        derived from the same structure. This strategy is useful when subtle
+        conformational differences are expected but no prior structural states
+        are available. Alternatively, users may directly provide multiple
+        reference volumes representing known or hypothesized structural states.
+
+        From a biological perspective, the quality and diversity of the initial
+        references strongly influence classification stability. References that
+        are too similar may lead to poor separation, whereas references that are
+        excessively different from the particles may bias the refinement toward
+        unrealistic solutions.
+
+        Resolution Control and Biological Interpretation
+
+        The classification procedure operates within a user-defined resolution
+        range. Restricting the maximum resolution is particularly important
+        because classification is not performed under strict gold-standard
+        validation conditions. Conservative resolution limits generally improve
+        robustness and reduce the risk of overfitting.
+
+        Lower-resolution classification often captures large conformational
+        rearrangements and domain motions more reliably than aggressive
+        high-resolution refinement. For many biological studies, beginning with
+        moderate resolution limits provides more stable and interpretable class
+        separation before proceeding to higher-resolution refinement of selected
+        classes.
+
+        The minimum resolution parameter allows the exclusion of very low
+        frequency information when necessary. This can help reduce the influence
+        of global shape differences or tomographic artifacts that are not
+        biologically meaningful.
+
+        Symmetry and Symmetry Breaking
+
+        Symmetry can be applied during averaging to improve signal-to-noise
+        ratio when the biological assembly is known to possess rotational or
+        point-group symmetry. Proper symmetry application can significantly
+        enhance reconstruction quality and improve convergence.
+
+        However, biological systems frequently display partial symmetry,
+        asymmetry, or localized deviations from ideal symmetry. The protocol
+        therefore supports symmetry breaking strategies that allow asymmetric
+        features to emerge during classification. This capability is especially
+        valuable for studying ligand occupancy, asymmetric maturation pathways,
+        or functional transitions within otherwise symmetric complexes.
+
+        Alignment and Local Refinement
+
+        The protocol optionally performs local alignment refinement during
+        classification. When enabled, particles undergo constrained orientation
+        and translational optimization around their previous alignment
+        parameters. This improves class consistency while preserving the
+        continuity of the refinement process.
+
+        Local alignment is particularly effective when the input particles are
+        already reasonably aligned from previous subtomogram averaging steps.
+        Small angular and translational searches typically provide the best
+        balance between stability and refinement precision.
+
+        If alignment refinement is disabled, the protocol focuses exclusively on
+        classification using the previously assigned orientations. This mode is
+        useful when users wish to preserve an existing alignment solution or
+        avoid excessive refinement drift during exploratory heterogeneity
+        analysis.
+
+        Masking and Focused Classification
+
+        The protocol supports masks for both reference preparation and alignment
+        refinement. These masks are among the most biologically important tools
+        for controlling classification behavior because they determine which
+        structural regions contribute most strongly to particle assignment.
+
+        Reference masks are applied before classification and can emphasize
+        conserved structural regions while suppressing solvent or highly mobile
+        domains. Alignment masks focus the local refinement procedure onto
+        selected structural regions during iterative optimization.
+
+        Focused classification becomes especially important for flexible
+        assemblies, membrane proteins with variable peripheral domains, or
+        complexes containing mobile subunits. In such systems, carefully chosen
+        masks often determine whether subtle conformational states can be
+        separated successfully.
+
+        Practical Considerations
+
+        Reliable classification requires that all particles, references, and
+        masks share consistent voxel size and box dimensions. Mismatches in
+        sampling or dimensions can introduce instability and reduce biological
+        interpretability.
+
+        In practical workflows, users commonly begin with a modest number of
+        classes and moderate resolution limits. Overclassification may fragment
+        the dataset into noisy subclasses that lack biological significance,
+        whereas too few classes may obscure meaningful structural variability.
+
+        Classification results should always be interpreted together with visual
+        inspection, particle distribution, and biological context. A class with
+        very few particles or poorly resolved structural features may represent
+        noise, preferred orientations, or alignment artifacts rather than a true
+        molecular state.
+
+        Outputs and Biological Meaning
+
+        The protocol produces refined class averages together with updated
+        aligned particle sets and class assignments. Each resulting class
+        represents a subset of particles sharing similar structural features and
+        orientations.
+
+        Biologically, these outputs can reveal conformational landscapes,
+        assembly intermediates, ligand-dependent structural rearrangements, or
+        previously hidden molecular states. The aligned particles can also serve
+        as inputs for additional rounds of focused refinement or downstream
+        structural interpretation.
+
+        Final Perspective
+
+        Multi-reference subtomogram classification is one of the most powerful
+        strategies for studying structural heterogeneity in cryo-electron
+        tomography. Rather than forcing all particles into a single consensus
+        reconstruction, the protocol enables the separation and interpretation
+        of distinct biological states. Successful application depends on careful
+        reference selection, conservative refinement settings, thoughtful mask
+        design, and critical biological interpretation of the resulting classes.
     """
 
     _label = 'Multi-reference classification pppt'

@@ -58,10 +58,151 @@ class EmanRefineNewOutputs(Enum):
 
 class EmanProtTomoRefinementNew(EmanProtRefineNewBase):
     """
-    This protocol wraps *e2spt_refine_new.py* EMAN2 program.
-    This refinement protocol performs subtomogram, subtilt and defocus refinement. The 2D subtilt particles are used
-    instead of 3D subvolumes in the subtomogram refinement step. Moreover, this program now can model the localized 2D
-    particle motion by considering the motion trajectory of each particle along with its neighbor.
+    Performs advanced subtomogram refinement for cryo-electron tomography datasets using EMAN2 refinement strategies.
+    The protocol is designed to improve the quality, consistency, and interpretability of subtomogram averages by
+    combining particle alignment, subtilt refinement, defocus correction, and local motion modeling within a unified
+    iterative workflow. It supports both initial refinement from raw subtomograms and continuation of previous
+    refinements, making it suitable for progressive optimization of challenging biological datasets.
+
+    AI Generated:
+
+    Tomogram Refinement New (EmanProtTomoRefinementNew) - User Manual
+        Overview
+
+        This protocol refines subtomogram datasets by combining multiple levels of alignment and correction in order
+        to improve structural resolution and map quality. The refinement process integrates 3D subtomogram alignment,
+        2D subtilt refinement, and defocus optimization into a coordinated workflow that progressively enhances the
+        agreement between particles and the reconstructed average.
+
+        Unlike traditional subtomogram refinement approaches that rely primarily on 3D subvolumes, this protocol
+        places strong emphasis on the use of 2D subtilt information during refinement. This strategy improves the
+        ability to recover high-resolution structural information while also enabling more accurate correction of
+        particle-specific imaging effects and local motion trajectories.
+
+        For biological users, this protocol is particularly useful when studying macromolecular complexes directly
+        within tomographic environments, including in situ cellular structures, membrane-associated assemblies, and
+        heterogeneous molecular populations. The refinement process is intended to maximize structural consistency
+        while preserving biologically meaningful conformational information.
+
+        Inputs and Refinement Strategy
+
+        The protocol requires a set of subtomograms extracted from tomographic data. Optionally, a reference volume
+        can be provided to guide the refinement toward a known structural state. When no external reference is used,
+        refinement may begin from internally generated information or from previous alignment results.
+
+        Iterative refinement is controlled through a sequence of refinement modes. These modes define which types of
+        corrections are applied during each stage of the workflow. The protocol supports rotational and translational
+        refinement of particles, subtilt alignment, combined subtilt orientation refinement, and defocus correction.
+        Users can combine these operations flexibly depending on the biological complexity of the sample and the
+        expected level of structural variability.
+
+        Early refinement stages are typically performed at lower resolution in order to establish stable global
+        alignment. Later stages progressively incorporate higher-resolution information as the refinement converges.
+        This gradual refinement strategy helps reduce overfitting and improves robustness when processing noisy or
+        heterogeneous tomographic datasets.
+
+        Symmetry and Structural Constraints
+
+        Symmetry can be imposed during refinement when the biological assembly is known to possess rotational or
+        point-group symmetry. Correct symmetry specification can significantly improve signal recovery and map quality.
+        However, applying incorrect symmetry may introduce structural artifacts or obscure biologically important
+        asymmetries.
+
+        For asymmetric complexes or flexible assemblies, it is generally safest to use no symmetry. Symmetry should
+        only be introduced when it is strongly supported by prior structural or biochemical evidence.
+
+        Particle Selection and Quality Control
+
+        The protocol includes particle quality filtering mechanisms that progressively remove poorly aligned particles
+        and unstable subtilt images. This filtering strategy is biologically important because low-quality particles,
+        excessive drift, or unreliable tilt images can strongly degrade the final reconstruction.
+
+        Users can adjust how aggressively particles are removed during refinement. Conservative filtering preserves
+        more data and may help with small datasets, whereas stricter filtering often improves the final map quality
+        for large datasets by excluding inconsistent particles.
+
+        In practical cryo-ET workflows, users should monitor whether particle removal reflects genuine low-quality
+        data or instead removes biologically meaningful structural variability. Excessively strict filtering may
+        unintentionally bias the refinement toward a dominant conformation.
+
+        Local Refinement and Motion Modeling
+
+        The protocol supports local refinement strategies intended for cases where particles are already approximately
+        aligned. Local refinement restricts the angular and translational search space around previous alignment
+        solutions, allowing faster convergence and more precise optimization.
+
+        A major feature of this workflow is local motion modeling. Particle motion is estimated using information from
+        neighboring particles in order to produce smoother and biologically more realistic trajectory corrections.
+        This approach is particularly useful in crowded cellular environments or thick tomographic samples where local
+        beam-induced motion and deformation can vary across the specimen.
+
+        Smoother motion models generally improve stability but may oversimplify highly flexible regions. Conversely,
+        less constrained motion modeling may preserve local variability but can become more sensitive to noise.
+        Choosing appropriate smoothing parameters therefore depends on both particle density and the expected
+        biological flexibility of the sample.
+
+        Resolution Control and Filtering
+
+        The refinement process allows users to control the resolution range used during alignment. Lower-resolution
+        limits help stabilize early iterations, while higher-resolution limits determine how much fine structural
+        information contributes to the refinement.
+
+        The protocol also supports several filtering strategies for reconstructed maps. These include global and local
+        filtering approaches as well as Wiener-based methods derived from FSC information. Local filtering is often
+        advantageous for heterogeneous or flexible structures because it adapts filtering strength according to local
+        map quality.
+
+        From a biological perspective, aggressive filtering can improve visual appearance but may also suppress weak
+        structural features. Users should therefore interpret highly filtered regions cautiously, especially when
+        studying flexible domains or transient conformations.
+
+        Gold-Standard Refinement
+
+        The protocol supports gold-standard refinement strategies that independently process separate particle subsets.
+        This procedure is essential for reliable resolution estimation and for minimizing overfitting during iterative
+        refinement.
+
+        Gold-standard processing is especially important in cryo-ET because tomographic data often contain strong
+        noise, incomplete angular sampling, and variable particle quality. Independent refinement of particle halves
+        provides more realistic FSC estimation and improves confidence in the final reported resolution.
+
+        Outputs and Interpretation
+
+        The protocol produces several biologically important outputs. These include the final refined average map,
+        independently refined half maps, aligned subtomograms, and FSC curves describing reconstruction quality.
+
+        The refined average represents the consensus structural state recovered from the particle population. Half
+        maps are primarily used for validation and local resolution analysis. The aligned particle set can be reused
+        in downstream classification, focused refinement, or variability analysis workflows.
+
+        FSC curves provide an estimate of structural resolution, but they should always be interpreted alongside map
+        interpretability and biological consistency. Apparent numerical resolution improvements do not necessarily
+        imply biologically meaningful structural detail.
+
+        Practical Recommendations
+
+        For most cryo-ET workflows, refinement should begin with conservative settings and broad searches during early
+        iterations. Once stable alignment is achieved, local refinement and motion correction can be introduced to
+        improve high-resolution consistency.
+
+        Flexible cellular assemblies often benefit from moderate filtering and careful local motion modeling. In
+        contrast, highly symmetric and rigid complexes can typically tolerate stronger refinement constraints and
+        symmetry enforcement.
+
+        Users should visually inspect intermediate maps throughout refinement rather than relying solely on numerical
+        metrics. Abrupt changes in map appearance, strong anisotropy, or loss of recognizable structural features may
+        indicate overfitting, incorrect symmetry, or unstable refinement parameters.
+
+        Final Perspective
+
+        Subtomogram refinement is one of the most biologically significant stages of cryo-electron tomography
+        analysis because it transforms noisy tomographic particles into interpretable structural information. Reliable
+        refinement depends not only on computational optimization but also on biologically informed decisions
+        regarding symmetry, particle quality, local flexibility, and motion behavior.
+
+        Careful refinement parameter selection, iterative validation, and thoughtful interpretation of reconstructed
+        densities are essential for obtaining biologically meaningful subtomogram averages suitable for structural
+        analysis and downstream interpretation.
     """
 
     _label = 'subtomogram refinement pppt'

@@ -47,10 +47,178 @@ class OutputsInitModelNew(Enum):
 
 class EmanProtTomoInitialModelNew(EmanProtRefineNewBase):
     """
-    This protocol wraps *e2spt_sgd_new.py* EMAN2 program.
-    It generates an initial model from subtomograms using stochastic gradient descent.
-    """
+    Generates one or more initial 3D subtomogram models using stochastic
+    gradient descent optimization within the EMAN2 subtomogram refinement
+    framework. The protocol is intended for early stages of cryo-electron
+    tomography workflows where no reliable starting structure is available
+    or where multiple candidate structural states must be explored before
+    refinement and classification.
 
+    AI Generated:
+
+    Initial Model Generation (EmanProtTomoInitialModelNew) — User Manual
+        Overview
+
+        The Initial Model Generation protocol reconstructs low-resolution
+        three-dimensional reference maps directly from aligned subtomograms.
+        Its primary goal is to provide biologically meaningful starting
+        structures that can later be refined, classified, or interpreted in
+        downstream subtomogram averaging workflows. In cryo-electron tomography,
+        generating a stable initial model is often one of the most critical
+        steps because the quality of the starting reference strongly influences
+        the success of subsequent refinement procedures.
+
+        From a biological perspective, this protocol is especially useful when
+        studying complexes with unknown conformations, poorly characterized
+        assemblies, or heterogeneous populations for which no high-quality
+        external reference exists. It can also be used to generate several
+        independent candidate structures in parallel when structural variability
+        is expected.
+
+        Inputs and Biological Context
+
+        The protocol requires a set of subtomograms that have already undergone
+        preprocessing and approximate alignment. Ideally, the particles should
+        correspond to the same biological assembly and should share similar box
+        dimensions and voxel sizes. Excessive heterogeneity, severe misalignment,
+        or strong contamination may prevent the optimization from converging to
+        biologically interpretable structures.
+
+        Optionally, a reference volume may be provided to guide the optimization.
+        This can be useful when a low-resolution map, homologous structure, or
+        previously reconstructed average already exists. However, biological care
+        is required because an overly strong or biased starting reference may
+        influence the reconstruction toward a preferred structural solution.
+
+        Stochastic Gradient Descent Optimization
+
+        The protocol uses stochastic gradient descent as the central optimization
+        strategy for reconstructing the initial model. Rather than processing the
+        entire dataset simultaneously, the method iteratively updates the model
+        using subsets of particles. This approach is computationally efficient
+        and often improves robustness when handling large subtomogram datasets.
+
+        For biological users, this iterative optimization process allows the
+        reconstruction to progressively capture common structural features while
+        suppressing random noise. The resulting maps are typically low to medium
+        resolution representations that are suitable as starting points for later
+        high-resolution refinement.
+
+        Number of Classes and Structural Heterogeneity
+
+        The protocol can generate either a single consensus structure or multiple
+        independent classes. Producing several classes is particularly valuable
+        when the sample contains conformational variability, compositional
+        heterogeneity, or multiple assembly states.
+
+        In practical biological applications, requesting multiple classes may
+        reveal distinct structural populations that would otherwise be averaged
+        together. However, increasing the number of classes also divides the
+        available particle information among several reconstructions, which may
+        reduce stability when the dataset is small.
+
+        Symmetry Considerations
+
+        Users may define a symmetry group to constrain the reconstruction. This
+        can substantially improve convergence and signal quality when the target
+        assembly is known to possess rotational or point-group symmetry.
+
+        From a biological standpoint, symmetry should only be imposed when it is
+        strongly supported by prior structural evidence. Applying incorrect
+        symmetry may artificially distort flexible regions, suppress asymmetric
+        features, or generate misleading structural interpretations.
+
+        Resolution Targets and Model Interpretation
+
+        The target resolution parameter controls the expected level of structural
+        detail during optimization. In most initial model generation workflows,
+        relatively modest resolutions are sufficient because the objective is to
+        recover the global architecture rather than fine molecular detail.
+
+        Biological users should interpret the resulting structures primarily as
+        low-resolution organizational maps. Flexible regions, small domains, or
+        weakly occupied features may not be accurately represented at this stage.
+        The generated models are intended to guide refinement rather than serve
+        as final structural interpretations.
+
+        Batch Size and Particle Retention
+
+        The optimization process operates on subsets of particles grouped into
+        batches. Larger batches generally improve statistical stability and can
+        accelerate convergence when sufficient computational resources are
+        available. Smaller batches may introduce additional stochastic behavior
+        but can sometimes help avoid poor local optima.
+
+        The protocol also allows retaining only a fraction of particles during
+        optimization. Biologically, this may help suppress outliers, damaged
+        particles, or rare contaminants that could otherwise bias the initial
+        reconstruction. However, overly aggressive particle rejection may discard
+        meaningful structural variability.
+
+        Learning Rate and Optimization Stability
+
+        The learning rate controls how strongly each optimization step modifies
+        the evolving reconstruction. This parameter strongly influences the
+        balance between convergence speed and stability.
+
+        Higher learning rates may accelerate reconstruction but can lead to
+        unstable behavior or structural artifacts if updates become too large.
+        Lower learning rates generally provide more conservative optimization and
+        smoother convergence but may require more iterations. In challenging
+        biological datasets, moderate learning rates are often the safest choice.
+
+        Binning and Computational Efficiency
+
+        The protocol optionally supports shrinking or binning the input particles
+        prior to reconstruction. Binning reduces the effective box size and
+        lowers computational demands, which is especially useful during early
+        exploratory stages or when processing very large subtomograms.
+
+        From a biological perspective, binning sacrifices high-frequency detail
+        but usually preserves the overall architecture needed for reliable
+        initial model estimation. Many workflows begin with strongly binned data
+        and later refine the structures using progressively higher resolutions.
+
+        Outputs and Their Interpretation
+
+        Depending on the selected configuration, the protocol produces either a
+        single average subtomogram or a set of independently reconstructed
+        averages. These outputs represent candidate structural models suitable
+        for downstream alignment, refinement, classification, or visualization.
+
+        When multiple classes are generated, each class should be interpreted as
+        a potential structural state rather than definitive evidence of
+        biological heterogeneity. Visual inspection, refinement consistency, and
+        independent biological validation remain essential.
+
+        Practical Recommendations
+
+        In routine cryo-electron tomography workflows, it is generally advisable
+        to begin with conservative parameters and a modest target resolution.
+        Using a single class is often appropriate for homogeneous datasets,
+        whereas heterogeneous samples may benefit from generating several
+        candidate structures in parallel.
+
+        Applying known symmetry can substantially improve reconstruction quality,
+        but only when biologically justified. If convergence appears unstable,
+        increasing the number of iterations, adjusting the learning rate, or
+        reducing structural heterogeneity through improved particle selection may
+        improve the results.
+
+        Initial models should always be inspected visually before proceeding to
+        high-resolution refinement. Features inconsistent with known biology,
+        severe fragmentation, or excessive symmetry artifacts may indicate
+        problems in preprocessing, alignment, or optimization settings.
+
+        Final Perspective
+
+        Initial model generation is a foundational step in subtomogram averaging
+        because it establishes the structural framework for all later refinement
+        and interpretation. Careful selection of optimization parameters,
+        thoughtful handling of heterogeneity, and biologically realistic symmetry
+        assumptions are essential for obtaining reliable starting structures that
+        can support meaningful downstream structural analysis.
+    """
     _label = 'Initial model pppt'
     _possibleOutputs = OutputsInitModelNew
 

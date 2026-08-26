@@ -51,7 +51,170 @@ from tomo.utils import getNonInterpolatedTsFromRelations
 
 
 class EmanProtTomoConvNet(ProtTomoPicking, ProtEmantomoBase):
-    """Eman Deep Learning based picking for Tomography
+    """
+    Performs deep learning based particle picking on tomographic data using
+    EMAN tomography tools. The protocol identifies candidate particles directly
+    within reconstructed tomograms and generates a set of 3D coordinates that
+    can be used for downstream subtomogram extraction, classification, or
+    refinement workflows.
+
+    AI Generated:
+
+    Tomogram ConvNet Picking (EmanProtTomoConvNet) - User Manual
+        Overview
+
+        The Tomogram ConvNet Picking protocol provides an interactive deep
+        learning approach for detecting particles inside cryo-electron
+        tomograms. Its main objective is to accelerate particle identification
+        in complex cellular or in situ environments where manual annotation
+        would otherwise be extremely time consuming. The protocol integrates
+        EMAN neural network based particle detection tools into tomography
+        workflows and produces sets of 3D coordinates suitable for subsequent
+        subtomogram averaging procedures.
+
+        In biological cryo-electron tomography, particle picking is often one
+        of the most challenging steps because tomograms contain low signal,
+        missing wedge artifacts, crowded environments, and heterogeneous
+        structures. Automated neural network assisted picking can greatly
+        improve throughput while still allowing users to supervise and validate
+        the detected coordinates interactively.
+
+        Inputs and Biological Context
+
+        The protocol requires a set of tomograms as input. These tomograms are
+        expected to represent reconstructed cellular or purified specimen
+        volumes where the target particles are visible at least partially.
+        Typical use cases include ribosome localization inside cells, membrane
+        protein detection, viral particle identification, or extraction of
+        macromolecular complexes from crowded cytoplasmic environments.
+
+        The protocol is especially useful when datasets contain many tomograms
+        with repetitive structures that can be recognized visually by a neural
+        network model. Since tomographic datasets often exhibit anisotropic
+        resolution due to the missing wedge, automated detection may still
+        require careful biological inspection to avoid false positives or
+        missed particles.
+
+        Deep Learning Assisted Picking
+
+        The neural network based strategy attempts to recognize structural
+        patterns within tomographic slices and volumes in a manner similar to
+        modern image recognition approaches. Rather than relying only on
+        thresholding or template matching, the method uses learned structural
+        features to identify candidate particles.
+
+        From a biological perspective, this approach is advantageous for
+        flexible complexes, crowded intracellular regions, or specimens with
+        variable contrast where classical template matching may fail. However,
+        successful picking still depends strongly on tomogram quality, contrast
+        transfer correction, reconstruction quality, and the visual consistency
+        of the target structure.
+
+        Interactive Workflow
+
+        The protocol launches an interactive graphical environment for particle
+        annotation and verification. This allows the user to supervise the
+        neural network predictions and refine the selection interactively.
+
+        In practical biological workflows, users commonly inspect several
+        representative tomograms first to verify that the detected coordinates
+        correspond to meaningful macromolecular structures. This step is
+        essential because automated detection methods can occasionally identify
+        contaminants, fiducials, membrane edges, or reconstruction artifacts as
+        particles.
+
+        The interactive strategy provides an effective balance between
+        automation and expert supervision. High throughput screening can be
+        achieved while preserving biological confidence in the resulting
+        coordinate sets.
+
+        GPU Acceleration and Performance
+
+        The protocol supports GPU acceleration for neural network execution.
+        This significantly improves processing speed and makes the method
+        practical for large tomographic datasets. GPU execution is particularly
+        important when working with high resolution tomograms or large numbers
+        of volumes.
+
+        Although CPU execution may still be possible in some environments, GPU
+        acceleration is generally recommended for routine use. The quality of
+        the results is not determined by the GPU itself, but computational
+        performance and responsiveness improve substantially during interactive
+        analysis.
+
+        Coordinate Generation and Box Size
+
+        The protocol produces a set of 3D particle coordinates associated with
+        the original tomograms. These coordinates define the particle centers
+        and can later be used for subtomogram extraction.
+
+        The selected box size determines the dimensions of the extracted
+        subtomograms in downstream processing. Biologically, the box should be
+        large enough to fully contain the macromolecular complex together with
+        a reasonable margin of surrounding density. Boxes that are too small
+        may truncate important structural regions, whereas excessively large
+        boxes increase computational cost and introduce unnecessary background
+        noise.
+
+        The protocol also supports assigning group identifiers to coordinates.
+        This can be useful when combining multiple particle populations or
+        distinguishing biologically distinct structures inside the same
+        tomographic dataset.
+
+        Tomogram Requirements and Practical Considerations
+
+        Reliable neural network based picking depends strongly on tomogram
+        quality. Well aligned tilt series, appropriate reconstruction methods,
+        and adequate contrast restoration generally improve particle detection.
+        Poorly reconstructed tomograms or datasets with strong artifacts may
+        reduce detection accuracy substantially.
+
+        Square tomograms are recommended for compatibility with the EMAN
+        processing environment. Users should also verify that voxel sizes and
+        coordinate conventions remain consistent throughout the tomography
+        workflow to avoid extraction or alignment problems later.
+
+        In crowded cellular environments, it is often advisable to visually
+        inspect representative regions after picking to estimate the false
+        positive rate. Some biological targets with strong conformational
+        variability or weak contrast may still require partial manual curation.
+
+        Outputs and Their Interpretation
+
+        The primary output is a set of 3D particle coordinates linked to the
+        input tomograms. These coordinates preserve the spatial context of the
+        detected particles and can be directly used for subtomogram extraction,
+        averaging, classification, or visualization.
+
+        The output coordinates should be interpreted as candidate particle
+        locations rather than definitive biological assignments. Downstream
+        subtomogram classification and averaging remain essential to separate
+        true particles from contaminants or incorrect detections.
+
+        Practical Recommendations
+
+        For routine biological workflows, it is advisable to begin with a box
+        size slightly larger than the expected particle diameter and visually
+        inspect the detected coordinates before large scale extraction. When
+        processing heterogeneous cellular tomograms, validating picks on a few
+        representative tomograms often prevents propagation of systematic
+        detection errors.
+
+        GPU acceleration is recommended whenever available, particularly for
+        large datasets or interactive annotation sessions. Users should also
+        monitor particle density carefully, since extremely dense coordinate
+        distributions may indicate over-picking caused by noise or membrane
+        features.
+
+        Final Perspective
+
+        Deep learning based particle picking represents a major advancement for
+        cryo-electron tomography workflows because it reduces manual effort and
+        enables large scale in situ structural studies. Nevertheless, automated
+        detection should always be interpreted within the biological context of
+        the sample. Careful validation of coordinates, appropriate box size
+        selection, and integration with downstream classification workflows are
+        essential for obtaining biologically reliable subtomogram datasets.
     """
     _label = 'tomo boxer convnet'
     _devStatus = BETA

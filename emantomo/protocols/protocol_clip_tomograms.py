@@ -42,8 +42,97 @@ class clipTomogramsOuts(Enum):
 
 
 class EmanProtTomoClip(ProtEmantomoBase):
-    """Make the output have this size by padding/clipping and re-centered using e2proc3d.py. Both
-    new center and new dimensions are referred to the original position and dimensions, respectively."""
+    """
+    Adjusts tomogram dimensions and spatial positioning by clipping or padding volumetric data while preserving
+    the biological region of interest within a consistent coordinate system.
+
+    AI Generated:
+
+    Tomogram Clipping and Re-Centering (EmanProtTomoClip) — User Manual
+        Overview
+
+        The Tomogram Clipping protocol modifies the dimensions and center position of tomograms in order to
+        standardize datasets for downstream cryo-electron tomography analysis. Its main objective is to generate
+        volumes with consistent sizes and spatial alignment while preserving the biologically relevant structures
+        contained within the tomograms.
+
+        In practical cryo-ET workflows, tomograms frequently originate from different acquisition sessions,
+        reconstruction pipelines, or preprocessing strategies. As a result, their dimensions and coordinate
+        systems may vary considerably. This protocol provides a controlled way to crop excessive regions,
+        reduce unnecessary empty space, or expand volumes through padding so that subsequent processing steps
+        can operate on standardized inputs.
+
+        Biological Motivation
+
+        Standardizing tomogram dimensions is particularly important when combining datasets for subtomogram
+        averaging, particle picking, template matching, neural network segmentation, or comparative structural
+        analysis. Large differences in volume dimensions often complicate automated processing pipelines and
+        may introduce inconsistencies during alignment or classification.
+
+        Re-centering is equally important from a biological perspective. Cellular structures, macromolecular
+        assemblies, or regions of interest are not always positioned near the geometric center of the tomogram.
+        By defining a new center position, the protocol allows the user to focus the resulting volume on the
+        biologically relevant area while excluding unnecessary regions dominated by noise or empty solvent.
+
+        Inputs and General Workflow
+
+        The protocol requires a set of tomograms as input. Each tomogram is processed independently, allowing
+        datasets with heterogeneous dimensions to be standardized within the same workflow. The protocol
+        preserves the original voxel sampling rate so that downstream quantitative interpretation remains
+        biologically meaningful.
+
+        Users may optionally define new dimensions along the X, Y, and Z axes. When dimensions are reduced,
+        the tomogram is clipped around the selected center region. When dimensions are increased, the protocol
+        pads the tomogram to create a larger output volume. If dimensions are left undefined, the original
+        size along those axes is preserved.
+
+        The protocol also allows users to define a new center coordinate. This capability is especially useful
+        when the structure of interest is displaced from the original tomogram center or when preparing focused
+        subregions for detailed analysis. If no new center is specified, the original center of the tomogram
+        is retained.
+
+        Choosing Appropriate Dimensions
+
+        Selecting appropriate output dimensions is biologically important because excessive clipping may remove
+        meaningful structural information. In cellular tomography, relevant contextual features such as membranes,
+        neighboring complexes, or cytoskeletal elements may extend beyond the immediate target region. Users
+        should therefore ensure that the selected dimensions preserve the biological context required for the
+        intended analysis.
+
+        Conversely, unnecessarily large tomograms increase storage requirements and computational cost. Reducing
+        empty regions often improves efficiency in downstream subtomogram extraction, alignment, and averaging.
+        A balanced strategy is typically recommended, preserving sufficient contextual information while avoiding
+        excessive empty space.
+
+        Re-Centering and Coordinate Interpretation
+
+        When a new center is introduced, the protocol updates the spatial origin of the resulting tomogram so
+        that coordinate consistency is maintained throughout the workflow. This behavior is particularly relevant
+        for particle coordinates, segmentation masks, or annotations that depend on accurate spatial referencing.
+
+        From a biological perspective, careful interpretation of the new center is important. Re-centering does
+        not modify the biological structure itself, but it changes the spatial frame in which the tomogram is
+        represented. This is especially relevant when comparing tomograms across experiments or integrating
+        information with external coordinate systems.
+
+        Practical Recommendations
+
+        In most cryo-ET workflows, it is advisable to inspect tomograms visually before selecting clipping
+        parameters. Regions containing fiducials, reconstruction artifacts, or large empty solvent regions are
+        often suitable candidates for exclusion. At the same time, users should avoid aggressive cropping that
+        may truncate flexible domains, membrane boundaries, or neighboring structural features.
+
+        For subtomogram averaging projects, generating tomograms with standardized dimensions can simplify
+        extraction and improve reproducibility across datasets. For focused biological studies, re-centering
+        around the region of interest often facilitates visualization and downstream interpretation.
+
+        Final Perspective
+
+        Tomogram clipping and re-centering are not merely geometric manipulations but important preprocessing
+        operations that influence the biological interpretability and computational efficiency of cryo-electron
+        tomography workflows. Careful selection of dimensions and spatial centers helps preserve meaningful
+        structural information while producing cleaner and more standardized datasets for downstream analysis.
+    """
     IN_TOMOGRAMS_DIR = 'inTomograms'
     _possibleOutputs = clipTomogramsOuts
     _label = 'clip tomograms'

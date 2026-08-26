@@ -66,13 +66,184 @@ class outputObjects(Enum):
 
 class EmanProtTsAlignTomoRec(ProtEmantomoBase):
     """
-    This protocol wraps *e2tomogram.py* EMAN2 program.
+    This protocol performs tilt-series alignment and tomogram reconstruction
+    using the EMAN2 tomography workflow. It is intended for cryo-electron
+    tomography experiments in which a series of tilted projection images must
+    first be geometrically aligned and then reconstructed into 3D tomograms
+    suitable for visualization, particle picking, subtomogram averaging, or
+    structural interpretation.
 
-    Tilt series alignment and tomogram reconstruction.
-    Tomograms are not normally reconstructed at full resolution, generally limited to 1k x 1k or 2k x 2k,
-    but the tilt-series are aligned at full resolution. For high resolution subtomogram averaging, the raw
-    tilt-series data is used, based on coordinates from particle picking in the downsampled tomograms.
-    On a typical workstation reconstruction takes about 4-5 minutes per tomogram.
+    AI Generated:
+
+    Alignment and Reconstruction (EmanProtTsAlignTomoRec) - User Manual
+        Overview
+
+        This protocol provides an integrated workflow for aligning tilt
+        series and reconstructing tomograms from cryo-electron tomography
+        data using EMAN2. The protocol is designed to support both routine
+        tomographic reconstruction and more advanced preprocessing workflows
+        for subtomogram averaging and structural analysis.
+
+        In cryo-electron tomography, the quality of the final tomogram depends
+        strongly on the accuracy of tilt-series alignment. Small alignment
+        errors propagate into reconstruction artifacts, reduced contrast, and
+        loss of high-resolution information. This protocol addresses these
+        challenges by combining landmark tracking, geometric refinement, and
+        tomographic reconstruction within a unified processing pipeline.
+
+        Biological Purpose
+
+        From a biological perspective, tomographic reconstruction enables the
+        visualization of macromolecular complexes in their native cellular or
+        biochemical environment. Unlike single-particle cryo-EM, tomography
+        preserves spatial organization and structural context, making it
+        especially valuable for studying membrane systems, organelles,
+        cytoskeletal assemblies, viral infection processes, and in situ
+        molecular architecture.
+
+        The protocol is suitable both for exploratory tomographic analysis and
+        for preparing datasets intended for downstream subtomogram averaging.
+        In many workflows, the reconstructed tomograms are primarily used for
+        particle localization, while the original aligned tilt images retain
+        the highest-resolution information for subsequent refinement.
+
+        Inputs and General Workflow
+
+        The protocol requires one or more tilt series as input. Each tilt
+        series consists of projection images acquired at different tilt
+        angles around a rotation axis. The protocol can perform alignment,
+        reconstruction, or both sequentially depending on the experimental
+        requirements.
+
+        During alignment, the protocol estimates geometric corrections across
+        the tilt series so that all projections are brought into a consistent
+        coordinate system. Once alignment is complete, the corrected images
+        are used to reconstruct 3D tomograms.
+
+        The workflow supports both newly acquired datasets and previously
+        aligned data. This flexibility is useful when tomograms need to be
+        regenerated with different reconstruction parameters without repeating
+        alignment.
+
+        Tilt-Series Alignment
+
+        Alignment is based on landmark tracking strategies that identify and
+        follow recognizable image features throughout the tilt series. These
+        landmarks may correspond to fiducial markers such as gold beads or to
+        intrinsic structural features in fiducial-less datasets.
+
+        The number of landmarks is one of the most biologically important
+        parameters because it determines the robustness of the geometric
+        refinement. Increasing the number of landmarks generally improves
+        stability, particularly for large or heterogeneous samples, although
+        very noisy datasets may benefit from more conservative settings.
+
+        The protocol also supports patch tracking prior to landmark-based
+        refinement. This option can improve alignment quality in difficult
+        datasets where fiducials are sparse or absent. Larger tracking regions
+        are often beneficial for thick cellular samples or low-contrast data.
+
+        Tilt Angle Management
+
+        Accurate tilt angles are essential for meaningful tomographic
+        reconstruction. The protocol allows either direct use of tilt angles
+        stored in metadata or automatic estimation by EMAN2.
+
+        When reliable microscope metadata is available, using the imported
+        tilt angles generally provides more reproducible results. Automatic
+        estimation can nevertheless be useful when metadata is incomplete,
+        inconsistent, or unavailable.
+
+        The tilt-axis angle is another critical parameter because it defines
+        the geometric orientation of the acquisition axis. Incorrect tilt-axis
+        estimation frequently produces elongation artifacts or distortions in
+        reconstructed tomograms. The protocol therefore allows manual control
+        of the tilt-axis orientation when necessary.
+
+        Tomogram Reconstruction
+
+        After alignment, the protocol reconstructs tomograms at user-selected
+        output sizes. In practical cryo-ET workflows, tomograms are often
+        reconstructed at reduced resolution for efficient visualization and
+        particle picking, while the original tilt images remain available for
+        higher-resolution downstream analysis.
+
+        The reconstruction stage includes several options intended to improve
+        tomogram quality and reduce common artifacts. These include tile-based
+        reconstruction, padding strategies, filtering, bead removal, and
+        correction of global rotational effects.
+
+        Tile-based reconstruction is particularly useful for large fields of
+        view or thick samples because it reduces memory usage and can improve
+        local reconstruction quality. Additional tile sampling may further
+        reduce edge artifacts, although it increases computational cost.
+
+        Thickness and Filtering
+
+        The tomogram thickness parameter determines the reconstructed extent
+        along the Z direction. Choosing an appropriate thickness is important
+        biologically because excessive thickness increases noise and storage
+        requirements, while insufficient thickness may truncate meaningful
+        structural information.
+
+        Resolution filtering provides a controlled way to suppress high-
+        frequency noise in the reconstructed tomogram. Moderate filtering is
+        often beneficial during exploratory interpretation or particle picking,
+        whereas aggressive filtering may obscure fine structural details.
+
+        Fiducial and Artifact Handling
+
+        In datasets containing fiducial markers, high-density beads can create
+        reconstruction artifacts that interfere with interpretation or
+        automated segmentation. The protocol therefore includes optional bead
+        suppression based on density thresholds.
+
+        Additional correction options address common tomographic artifacts such
+        as global rotation, drift along the X axis, and boundary distortions
+        in thick specimens. These adjustments can substantially improve the
+        interpretability of cellular tomograms.
+
+        Outputs and Interpretation
+
+        The protocol produces aligned tilt series, reconstructed tomograms, or
+        both depending on the selected workflow. The aligned tilt series
+        preserve geometric corrections and can serve as input for further
+        refinement or subtomogram averaging pipelines.
+
+        The tomograms represent volumetric reconstructions of the original
+        specimen and can be used for visualization, annotation, segmentation,
+        particle localization, or structural interpretation.
+
+        When alignment is performed, geometric transformations and refined
+        angular information are preserved so that downstream processing remains
+        consistent with the corrected acquisition geometry.
+
+        Practical Recommendations
+
+        For most biological datasets, it is advisable to begin with moderate
+        alignment settings and inspect the reconstructed tomograms visually
+        before attempting more aggressive optimization. Fiducial-rich datasets
+        generally align robustly with default parameters, whereas fiducial-less
+        cellular data may require larger tracking regions or patch tracking.
+
+        When reconstructing thick samples, enabling additional tiling and
+        padding often improves boundary behavior. Conversely, for thin or
+        well-behaved specimens, simpler reconstruction settings may provide
+        faster execution with comparable quality.
+
+        In subtomogram averaging workflows, lower-resolution tomograms are
+        commonly sufficient for particle picking and coordinate extraction.
+        The aligned tilt images should then be retained for high-resolution
+        refinement stages.
+
+        Final Perspective
+
+        Tomographic alignment and reconstruction are foundational steps in
+        cryo-electron tomography because they directly determine the geometric
+        and structural quality of the final 3D volumes. Careful control of
+        tilt geometry, landmark tracking, reconstruction thickness, and
+        artifact suppression is essential for generating biologically reliable
+        tomograms suitable for downstream structural interpretation.
     """
 
     _label = 'Alignment and reconstruction'
