@@ -1,4 +1,4 @@
 scipion-pyworkflow >= 3.11.6
 scipion-em-tomo >= 3.11.3
 scipion-em-eman2
-h5py==3.8.0
+h5py>=3.8.0
